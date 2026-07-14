@@ -5,6 +5,8 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth.routes.js');
 const userRoutes = require('./routes/user.routes.js');
 
+const adminRoutes = require('./routes/admin.routes.js');
+
 
 const app = express();
 
@@ -20,6 +22,8 @@ app.get('/', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+
+app.use('/api/admin', adminRoutes);
 
 // Global error handler (catches anything not caught in controllers)
 app.use((err, req, res, next) => {
