@@ -1,4 +1,4 @@
-const { getGymsService, gymDetails, createGym, UpdateDetails, checkOwnership } = require("../services/gym.service");
+const { getGymsService, gymDetails, createGym, UpdateDetails, checkOwnership, isAvailable } = require("../services/gym.service");
 
 const GetGyms = async (req, res) => {
     try {
@@ -116,10 +116,33 @@ const updateGym = async (req, res) => {
 }
 
 
+
+const checkAvailability = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { slot_start, slot_end } = req.query;
+        //check availability...
+        const available = await isAvailable(id, slot_start, slot_end);
+
+        return res.status(200).json({
+            success: true,
+            available
+        })
+    } catch (error) {
+        console.log("Availability Check Error: ", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to check availability"
+        })
+    }
+}
+
+
 module.exports = {
     GetGyms,
     getGymDetails,
     addGym,
-    updateGym
+    updateGym,
+    checkAvailability
 }
 
