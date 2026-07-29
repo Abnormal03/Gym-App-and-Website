@@ -4,11 +4,12 @@ const prisma = require('../config/prisma.js');
 const getMe = async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
-            where: { id: req.user.userId },
+            where: { id: req.user.id },
             select: { id: true, name: true, email: true, phone: true, photoUrl: true, createdAt: true }
         });
         res.json({ success: true, user });
     } catch (error) {
+        console.log('Get User Error: ', error.message);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
@@ -19,7 +20,7 @@ const updateMe = async (req, res) => {
         const { name, phone, photoUrl, fcmToken } = req.body;
 
         const user = await prisma.user.update({
-            where: { id: req.user.userId },
+            where: { id: req.user.id },
             data: { name, phone, photoUrl, fcmToken },
             select: { id: true, name: true, email: true, phone: true, photoUrl: true }
         });

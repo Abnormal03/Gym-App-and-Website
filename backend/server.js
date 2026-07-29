@@ -5,6 +5,12 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth.routes.js');
 const userRoutes = require('./routes/user.routes.js');
 
+const adminRoutes = require('./routes/admin.routes.js');
+const gymRoutes = require('./routes/gym.routes.js');
+
+const packageRoutes = require('./routes/packages.routes.js');
+
+
 
 const app = express();
 
@@ -13,13 +19,18 @@ app.use(express.json());
 
 app.get('/', (req, res) => {
     res.status(200).json({
-        status: "healthy"
+        success: true,
+        server: "running"
     })
 })
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+
+app.use('/api/admin', adminRoutes);
+app.use('/api/gyms', gymRoutes);
+app.use('/api/packages', packageRoutes);
 
 // Global error handler (catches anything not caught in controllers)
 app.use((err, req, res, next) => {
