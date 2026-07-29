@@ -1,4 +1,4 @@
-const { getPackages, createPackage: package, updatePackage: update } = require("../services/packages.service");
+const { getPackages, createPackage: package, updatePackage: update, isActive: checkActive, deletePackage: deactivate } = require("../services/packages.service");
 
 const gymPackages = async (req, res) => {
     try {
@@ -58,10 +58,38 @@ const updatePackage = async (req, res) => {
         })
 
     } catch (error) {
-        console.log("createPackage error: ", error.message);
+        console.log("updatePackage error: ", error.message);
         return res.status(400).json({
             success: false,
-            message: "Failed to create package"
+            message: "Failed to update package"
+        });
+    }
+}
+
+
+const deletePackage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const isActive = await checkActive(id);
+
+        let deleted;
+        if (isActive) {
+            deleted = await deactivate(id);
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: "Package is not active."
+            })
+        }
+        res.status(200).json({
+            success: true,
+            deleted
+        })
+    } catch (error) {
+        console.log("deletePackage error: ", error.message);
+        return res.status(400).json({
+            success: false,
+            message: "Failed to delete package"
         });
     }
 }
@@ -70,5 +98,6 @@ const updatePackage = async (req, res) => {
 module.exports = {
     gymPackages,
     createPackage,
-    updatePackage
+    updatePackage,
+    deletePackage
 }

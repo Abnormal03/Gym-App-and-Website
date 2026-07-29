@@ -37,6 +37,41 @@ const verifyGymOwner = async (req, res, next) => {
     }
 }
 
+
+const verifyPackageOwner = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { id: userId } = req.user;
+
+        const pkg = prisma.package.findFirst({
+            where: {
+                id: Number(id),
+                gym: {
+                    is: {
+                        adminId: userId
+                    }
+                }
+            }
+        })
+
+        if (!pkg) {
+            return res.status(400).json({
+                success: false,
+                message: "Package does not exits!"
+            })
+        }
+
+        next();
+    } catch (error) {
+        console.log("Verify pkg Middleware Error: ", error.message);
+        return res.status(400).json({
+            success: false,
+            message: "Package Admin Only Access"
+        })
+    }
+}
+
 module.exports = {
-    verifyGymOwner
+    verifyGymOwner,
+    verifyPackageOwner
 }
