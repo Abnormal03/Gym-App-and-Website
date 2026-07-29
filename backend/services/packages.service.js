@@ -30,7 +30,25 @@ const createPackage = async (packageData) => {
 }
 
 
+const updatePackage = async (id, packageData) => {
+    try {
+        const updatedPackage = await prisma.package.update({
+            where: {
+                id: Number(id)
+            },
+            data: packageData
+        })
+
+        return updatedPackage;
+    } catch (error) {
+        console.log("Update Package Service Error: ", error.message);
+        throw new Error(error.message || "Failed to update package.");
+    }
+}
+
+
 module.exports = {
     getPackages,
-    createPackage
+    createPackage,
+    updatePackage
 }

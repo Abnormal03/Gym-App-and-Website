@@ -41,7 +41,7 @@ const getGymDetails = async (req, res) => {
         console.log('Gym Detail Error: ', error.message);
 
         return res.status(500).json({
-            success: true,
+            success: false,
             message: "Failed to get Gym Details"
         })
     }
@@ -53,7 +53,7 @@ const addGym = async (req, res) => {
         const { name, address, latitude, longitude, openingTime, closingTime, capacity, photos, amenities } = req.body;
         const { id } = req.user;
 
-        if (!name || !address || !longitude || !latitude ||
+        if (!name || !address || longitude === undefined || latitude === undefined ||
             !openingTime || !closingTime || !capacity
         ) {
             return res.status(400).json({
@@ -80,17 +80,10 @@ const addGym = async (req, res) => {
 const updateGym = async (req, res) => {
     try {
         const { id } = req.params;
-        const { gymId, name, address, latitude, longitude, openingTime, closingTime, capacity, photos, amenities } = req.body;
+        const { name, address, latitude, longitude, openingTime, closingTime, capacity, photos, amenities } = req.body;
         const { id: userId } = req.user;
 
-        if (!gymId) {
-            return res.status(400).json({
-                success: false,
-                message: "Gym Id is required field"
-            })
-        }
-
-        const checkOwner = await checkOwnership(userId, gymId);
+        const checkOwner = await checkOwnership(userId, id);
 
         if (!checkOwner) {
             return res.status(403).json({

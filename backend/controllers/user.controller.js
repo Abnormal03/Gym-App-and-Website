@@ -20,7 +20,7 @@ const updateMe = async (req, res) => {
         const { name, phone, photoUrl, fcmToken } = req.body;
 
         const user = await prisma.user.update({
-            where: { id: req.user.userId },
+            where: { id: req.user.id },
             data: { name, phone, photoUrl, fcmToken },
             select: { id: true, name: true, email: true, phone: true, photoUrl: true }
         });

@@ -1,4 +1,4 @@
-const { getPackages, createPackage: package } = require("../services/packages.service");
+const { getPackages, createPackage: package, updatePackage: update } = require("../services/packages.service");
 
 const gymPackages = async (req, res) => {
     try {
@@ -46,7 +46,29 @@ const createPackage = async (req, res) => {
 }
 
 
+const updatePackage = async (req, res) => {
+    try {
+        const packageData = req.body;
+        const { id } = req.params;
+
+        const updatedPackage = await update(id, packageData);
+        return res.status(200).json({
+            success: true,
+            package: updatedPackage
+        })
+
+    } catch (error) {
+        console.log("createPackage error: ", error.message);
+        return res.status(400).json({
+            success: false,
+            message: "Failed to create package"
+        });
+    }
+}
+
+
 module.exports = {
     gymPackages,
-    createPackage
+    createPackage,
+    updatePackage
 }

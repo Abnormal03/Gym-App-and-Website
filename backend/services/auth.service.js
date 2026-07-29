@@ -56,7 +56,8 @@ const createUser = async ({ name, email, phone, password }) => {
 
         return user;
     } catch (error) {
-        console.log(error.message || "unable to create ")
+        console.log("Create User Error:", error.message);
+        throw new Error(error.message || "unable to create user");
     }
 }
 

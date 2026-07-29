@@ -20,6 +20,13 @@ const verifyGymOwner = async (req, res, next) => {
             }
         })
 
+        if (!gym) {
+            return res.status(403).json({
+                success: false,
+                message: "Access Denied"
+            });
+        }
+
         next();
     } catch (error) {
         console.log("Verify Middleware Error: ", error.message);

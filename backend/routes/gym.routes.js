@@ -8,7 +8,7 @@ router.get('/', protect, GetGyms);
 
 router.get('/:id', protect, getGymDetails);
 
-router.get('/:id/avalability', protect, checkAvailability);
+router.get('/:id/availability', protect, checkAvailability);
 
 router.post('/', protect, adminOnly, addGym)
 

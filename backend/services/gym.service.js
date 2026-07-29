@@ -158,7 +158,9 @@ const isAvailable = async (id, slot_start, slot_end) => {
             }
         });
 
-        console.log({ overlapping, gymCapacity })
+        if (!gymCapacity) {
+            throw new Error("Gym Not Found");
+        }
 
         if (gymCapacity.capacity > overlapping) {
             return true
