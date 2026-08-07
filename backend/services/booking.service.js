@@ -7,8 +7,7 @@ const allowedTransitions = {
   cancelled: [],
 };
 const isAdmin = (role) => role === "gym_admin" || role === "platform_admin";
-// CREATE BOOKING
-// CREATE BOOKING
+
 const createBooking = async ({
   userId,
   gymId,

@@ -10,6 +10,7 @@ const gymRoutes = require("./routes/gym.routes.js");
 
 const packageRoutes = require("./routes/packages.routes.js");
 const bookingRoutes = require("./routes/booking.routes.js");
+const paymentRoutes = require("./routes/payment.routes");
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/gyms", gymRoutes);
 app.use("/api/packages", packageRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Global error handler (catches anything not caught in controllers)
 app.use((err, req, res, next) => {
