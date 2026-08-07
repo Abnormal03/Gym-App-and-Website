@@ -1,0 +1,129 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  phone     String?
+  password  String
+  photoUrl  String?
+  fcmToken  String?
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
+  payments  Payment[]
+}
+
+model GymAdmin {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  gyms      Gym[]
+}
+
+model Gym {
+  id          Int       @id @default(autoincrement())
+  adminId     Int
+  admin       GymAdmin  @relation(fields: [adminId], references: [id])
+  name        String
+  address     String
+  latitude    Float?
+  longitude   Float?
+  openingTime String // stored as "HH:MM", e.g. "06:00"
+  closingTime String
+  capacity    Int
+  photos      String[]
+  amenities   String[]
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  packages    Package[]
+  bookings    Booking[]
+}
+
+model Package {
+  id           Int         @id @default(autoincrement())
+  gymId        Int
+  gym          Gym         @relation(fields: [gymId], references: [id])
+  name         String // e.g. "Monthly Premium"
+  type         PackageType @default(daily) // 'daily' | 'weekly' | 'monthly' | 'annual'
+  price        Float
+  durationDays Int
+  benefits     String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  bookings     Booking[]
+}
+
+enum PackageType {
+  daily
+  weekly
+  monthly
+  annual
+}
+
+model Booking {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  user      User          @relation(fields: [userId], references: [id])
+  gymId     Int
+  gym       Gym           @relation(fields: [gymId], references: [id])
+  packageId Int?
+  package   Package?      @relation(fields: [packageId], references: [id])
+  slotStart DateTime
+  slotEnd   DateTime
+  status    BookingStatus @default(pending)
+  // 'pending' | 'confirmed' | 'cancelled' | 'checked_in'
+  qrCode    String?       @unique
+  createdAt DateTime      @default(now())
+  payment   Payment?
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+  checked_in
+}
+
+model Payment {
+  id               Int           @id @default(autoincrement())
+  userId           Int
+  user             User          @relation(fields: [userId], references: [id])
+  bookingId        Int           @unique
+  booking          Booking       @relation(fields: [bookingId], references: [id])
+  amount           Float
+  currency         String        @default("ETB")
+  status           PaymentStatus @default(pending)
+  // 'pending' | 'success' | 'failed' | 'refunded'
+  chapaTxRef       String?       @unique
+  chapaCheckoutUrl String?
+  createdAt        DateTime      @default(now())
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  refunded
+}
+
+model Trainer {
+  id        Int      @id @default(autoincrement())
+  gymId     Int
+  name      String?
+  bio       String?
+  createdAt DateTime @default(now())
+}
