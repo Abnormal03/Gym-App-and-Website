@@ -2,8 +2,15 @@ const paymentService = require("../services/payment.service");
 
 const initializePaymentController = async (req, res) => {
   try {
+    console.log("BODY:", req.body);
+    console.log("USER:", req.user);
+
+    const bookingId = Number(req.body.bookingId);
+
+    console.log("BOOKING ID:", bookingId);
+
     const payment = await paymentService.initializePayment(
-      Number(req.body.bookingId),
+      bookingId,
       req.user.id,
     );
 
