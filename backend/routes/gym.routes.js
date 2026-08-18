@@ -1,5 +1,5 @@
 const express = require('express');
-const { GetGyms, getGymDetails, addGym, updateGym } = require('../controllers/gym.controller');
+const { GetGyms, getGymDetails, addGym, updateGym, checkAvailability } = require('../controllers/gym.controller');
 const { protect, adminOnly } = require('../middleware/auth.middleware');
 
 const router = express.Router();
@@ -7,6 +7,8 @@ const router = express.Router();
 router.get('/', protect, GetGyms);
 
 router.get('/:id', protect, getGymDetails);
+
+router.get('/:id/availability', protect, checkAvailability);
 
 router.post('/', protect, adminOnly, addGym)
 

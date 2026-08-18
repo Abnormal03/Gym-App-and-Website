@@ -136,10 +136,49 @@ const UpdateDetails = async ({ id, name, address, latitude, longitude, openingTi
 }
 
 
+const isAvailable = async (id, slot_start, slot_end) => {
+    try {
+        //get the number of bookings at a given time 
+        const overlapping = await prisma.booking.count({
+            where: {
+                gymId: Number(id),
+                status: "confirmed",
+                slotStart: { lt: new Date(slot_end) },
+                slotEnd: { gt: new Date(slot_start) },
+            },
+        });
+
+        //get the capacity of the gym...
+        const gymCapacity = await prisma.gym.findFirst({
+            where: {
+                id: Number(id)
+            },
+            select: {
+                capacity: true
+            }
+        });
+
+        if (!gymCapacity) {
+            throw new Error("Gym Not Found");
+        }
+
+        if (gymCapacity.capacity > overlapping) {
+            return true
+        }
+        return false;
+
+    } catch (error) {
+        console.log("Availability Check Service Error: ", error.message);
+        throw new Error(error.message || "Failed to check availability");
+    }
+}
+
+
 module.exports = {
     getGymsService,
     gymDetails,
     createGym,
     UpdateDetails,
-    checkOwnership
+    checkOwnership,
+    isAvailable
 }

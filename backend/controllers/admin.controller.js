@@ -61,8 +61,14 @@ const getUserById = async (req, res) => {
       where: {
         id: Number(id),
       },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        createdAt: true,
+      },
     });
-
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -128,6 +134,12 @@ const getAdminProfile = async (req, res) => {
     const admin = await prisma.gymAdmin.findUnique({
       where: {
         id: req.user.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
       },
     });
 
