@@ -1,22 +1,17 @@
 const express = require("express");
-const router = express.Router();
 
 const {
   initializePaymentController,
-  chapaWebhookController,
+  chapaCallbackController,
   verifyPaymentController,
 } = require("../controllers/payment.controller");
 
 const { protect } = require("../middleware/auth.middleware");
 
-router.post("/initialize", protect, initializePaymentController);
-router.get("/verify/:txRef", protect, verifyPaymentController);
+const router = express.Router();
 
-// CHAPA webhook
-router.post(
-  "/webhook",
-  express.raw({ type: "application/json" }),
-  chapaWebhookController,
-);
+router.post("/initialize", protect, initializePaymentController);
+router.get("/callback", chapaCallbackController);
+router.get("/verify/:txRef", protect, verifyPaymentController);
 
 module.exports = router;
