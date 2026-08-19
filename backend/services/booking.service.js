@@ -128,8 +128,9 @@ const getMyBookings = async (userId) => {
     },
   });
 };
+
 // GET BOOKING BY ID
-// GET BOOKING BY ID
+
 const getBookingById = async (id, userId, role) => {
   const booking = await prisma.booking.findUnique({
     where: {
