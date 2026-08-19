@@ -6,8 +6,8 @@ const allowedTransitions = {
   checked_in: [],
   cancelled: [],
 };
+const isAdmin = (role) => role === "gym_admin" || role === "platform_admin";
 
-// CREATE BOOKING
 const createBooking = async ({
   userId,
   gymId,
@@ -15,83 +15,102 @@ const createBooking = async ({
   slotStart,
   slotEnd,
 }) => {
-  return await prisma.$transaction(async (tx) => {
-    // Lock gym row to prevent race condition
-    await tx.$queryRaw`
-      SELECT id
-      FROM "Gym"
-      WHERE id = ${gymId}
-      FOR UPDATE
-    `;
+  userId = Number(userId);
+  gymId = Number(gymId);
 
-    const gym = await tx.gym.findUnique({
-      where: {
-        id: gymId,
-      },
-    });
+  if (packageId) {
+    packageId = Number(packageId);
+  }
 
-    if (!gym) {
-      throw new Error("Gym not found");
-    }
+  const start = new Date(slotStart);
+  const end = new Date(slotEnd);
 
-    if (packageId) {
-      const pkg = await tx.package.findUnique({
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw new Error("Invalid booking date");
+  }
+
+  if (start >= end) {
+    throw new Error("slotStart must be before slotEnd");
+  }
+
+  return await prisma.$transaction(
+    async (tx) => {
+      // Check gym exists
+      const gym = await tx.gym.findUnique({
         where: {
-          id: packageId,
+          id: gymId,
         },
       });
 
-      if (!pkg) {
-        throw new Error("Package not found");
+      if (!gym) {
+        throw new Error("Gym not found");
       }
-    }
 
-    const start = new Date(slotStart);
-    const end = new Date(slotEnd);
+      // Check package belongs to gym
+      if (packageId) {
+        const pkg = await tx.package.findFirst({
+          where: {
+            id: packageId,
+            gymId: gymId,
+          },
+        });
 
-    if (start >= end) {
-      throw new Error("slotStart must be before slotEnd");
-    }
+        if (!pkg) {
+          throw new Error("Package not found for this gym");
+        }
+      }
 
-    // Capacity check
-    const bookedCount = await tx.booking.count({
-      where: {
-        gymId,
+      // Check overlapping bookings
+      const bookedCount = await tx.booking.count({
+        where: {
+          gymId,
 
-        slotStart: {
-          lt: end,
+          slotStart: {
+            lt: end,
+          },
+
+          slotEnd: {
+            gt: start,
+          },
+
+          status: {
+            not: "cancelled",
+          },
+        },
+      });
+
+      const capacity = gym.capacity || 1;
+
+      if (bookedCount >= capacity) {
+        throw new Error("Selected slot is fully booked");
+      }
+
+      // Create booking
+      const booking = await tx.booking.create({
+        data: {
+          userId,
+          gymId,
+          packageId: packageId || null,
+          slotStart: start,
+          slotEnd: end,
         },
 
-        slotEnd: {
-          gt: start,
+        include: {
+          gym: true,
+          package: true,
         },
+      });
 
-        status: {
-          not: "cancelled",
-        },
-      },
-    });
-
-    const capacity = gym.capacity ?? 1;
-
-    if (bookedCount >= capacity) {
-      throw new Error("Selected slot is fully booked");
-    }
-
-    return await tx.booking.create({
-      data: {
-        userId,
-        gymId,
-        packageId,
-        slotStart: start,
-        slotEnd: end,
-      },
-    });
-  });
+      return booking;
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
+    },
+  );
 };
 
 // GET USER BOOKINGS
-
 const getMyBookings = async (userId) => {
   return await prisma.booking.findMany({
     where: {
@@ -129,7 +148,8 @@ const getBookingById = async (id, userId, role) => {
     throw new Error("Booking not found");
   }
 
-  if (booking.userId !== userId && role !== "admin") {
+  // Owner or admin can view booking
+  if (booking.userId !== userId && !isAdmin(role)) {
     throw new Error("Access denied");
   }
 
@@ -137,7 +157,6 @@ const getBookingById = async (id, userId, role) => {
 };
 
 // STATUS CHANGE
-
 const changeBookingStatus = async (id, newStatus) => {
   const booking = await prisma.booking.findUnique({
     where: {
@@ -171,10 +190,8 @@ const changeBookingStatus = async (id, newStatus) => {
     },
   });
 };
-
 // CANCEL BOOKING
-
-const cancelBooking = async (id, userId) => {
+const cancelBooking = async (id, userId, role) => {
   const booking = await prisma.booking.findUnique({
     where: {
       id,
@@ -185,7 +202,8 @@ const cancelBooking = async (id, userId) => {
     throw new Error("Booking not found");
   }
 
-  if (booking.userId !== userId) {
+  // User can cancel own booking, admin can cancel any booking
+  if (booking.userId !== userId && !isAdmin(role)) {
     throw new Error("Access denied");
   }
 
@@ -193,9 +211,8 @@ const cancelBooking = async (id, userId) => {
 };
 
 // CONFIRM BOOKING
-
 const confirmBooking = async (id, role) => {
-  if (role !== "admin") {
+  if (!isAdmin(role)) {
     throw new Error("Admin access required");
   }
 
@@ -203,9 +220,8 @@ const confirmBooking = async (id, role) => {
 };
 
 // CHECK IN BOOKING
-
 const checkInBooking = async (id, role) => {
-  if (role !== "admin") {
+  if (!isAdmin(role)) {
     throw new Error("Admin access required");
   }
 

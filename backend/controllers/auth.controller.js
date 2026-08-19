@@ -20,30 +20,44 @@ const register = async (req, res) => {
     const { name, email, phone, password } = req.body;
 
     if (!name || !email || !password) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Name, email and password are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Name, email and password are required",
+      });
     }
 
     const { exist } = await checkExist(email);
+
     if (exist) {
-      return res
-        .status(409)
-        .json({ success: false, message: "Email already in use" });
+      return res.status(409).json({
+        success: false,
+        message: "Email already in use",
+      });
     }
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = await createUser({ name, email, phone, password: hashed });
+    const user = await createUser({
+      name,
+      email,
+      phone,
+      password: hashed,
+    });
 
     const token = generateToken(user.id, "member");
 
-    res.status(201).json({ success: true, user, token });
+    return res.status(201).json({
+      success: true,
+      user,
+      token,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("REGISTER ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 

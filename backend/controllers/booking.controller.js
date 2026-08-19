@@ -1,7 +1,55 @@
 const bookingService = require("../services/booking.service");
 
-// CREATE
+// Validate ID helper
+const validateId = (id) => {
+  const numberId = Number(id);
 
+  if (!Number.isInteger(numberId) || numberId <= 0) {
+    throw new Error("Invalid ID");
+  }
+
+  return numberId;
+};
+
+// Error handler
+const handleError = (res, error) => {
+  console.error(error.message);
+
+  switch (error.message) {
+    case "Gym not found":
+    case "Package not found":
+    case "Package not found for this gym":
+    case "Booking not found":
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+
+    case "Invalid ID":
+    case "Invalid booking date":
+    case "slotStart must be before slotEnd":
+    case "Selected slot is fully booked":
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+
+    case "Access denied":
+    case "Admin access required":
+      return res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+
+    default:
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+  }
+};
+
+// CREATE BOOKING
 const createBookingController = async (req, res) => {
   try {
     const booking = await bookingService.createBooking({
@@ -9,128 +57,126 @@ const createBookingController = async (req, res) => {
       ...req.body,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-
       booking,
     });
   } catch (error) {
-    res.status(400).json({
-      message: error.message,
-    });
+    return handleError(res, error);
   }
 };
 
-// MY BOOKINGS
-
+// GET MY BOOKINGS
 const getMyBookingsController = async (req, res) => {
   try {
     const bookings = await bookingService.getMyBookings(req.user.id);
-    res.json(bookings);
-  } catch (error) {
-    res.status(500).json({
-      message: error.message,
+
+    return res.status(200).json({
+      success: true,
+      bookings,
     });
+  } catch (error) {
+    return handleError(res, error);
   }
 };
 
-// GET BY ID
-
+// GET BOOKING BY ID
 const getBookingByIdController = async (req, res) => {
   try {
     const booking = await bookingService.getBookingById(
-      Number(req.params.id),
+      validateId(req.params.id),
       req.user.id,
       req.user.role,
     );
 
-    res.json(booking);
-  } catch (error) {
-    const status = error.message === "Booking not found" ? 404 : 403;
-
-    res.status(status).json({
-      message: error.message,
+    return res.status(200).json({
+      success: true,
+      booking,
     });
+  } catch (error) {
+    return handleError(res, error);
   }
 };
 
-// CANCEL
-
+// CANCEL BOOKING
 const cancelBookingController = async (req, res) => {
   try {
     const booking = await bookingService.cancelBooking(
-      Number(req.params.id),
+      validateId(req.params.id),
       req.user.id,
+      req.user.role,
     );
 
-    res.json(booking);
-  } catch (error) {
-    res.status(400).json({
-      message: error.message,
+    return res.status(200).json({
+      success: true,
+      booking,
     });
+  } catch (error) {
+    return handleError(res, error);
   }
 };
 
-// CONFIRM
-
+// CONFIRM BOOKING
 const confirmBookingController = async (req, res) => {
   try {
     const booking = await bookingService.confirmBooking(
-      Number(req.params.id),
+      validateId(req.params.id),
       req.user.role,
     );
 
-    res.json(booking);
-  } catch (error) {
-    res.status(400).json({
-      message: error.message,
+    return res.status(200).json({
+      success: true,
+      booking,
     });
+  } catch (error) {
+    return handleError(res, error);
   }
 };
 
-// CHECK IN
-
+// CHECK-IN BOOKING
 const checkInBookingController = async (req, res) => {
   try {
     const booking = await bookingService.checkInBooking(
-      Number(req.params.id),
+      validateId(req.params.id),
       req.user.role,
     );
 
-    res.json(booking);
-  } catch (error) {
-    res.status(400).json({
-      message: error.message,
+    return res.status(200).json({
+      success: true,
+      booking,
     });
+  } catch (error) {
+    return handleError(res, error);
   }
 };
 
-// GYM BOOKINGS
-
+// GET BOOKINGS FOR A GYM
 const getGymBookingsController = async (req, res) => {
   try {
     const bookings = await bookingService.getGymBookings(
-      Number(req.params.gymId),
+      validateId(req.params.gymId),
     );
 
-    res.json(bookings);
-  } catch (error) {
-    res.status(404).json({
-      message: error.message,
+    return res.status(200).json({
+      success: true,
+      bookings,
     });
+  } catch (error) {
+    return handleError(res, error);
   }
 };
 
-// STATS
-
+// GET BOOKING STATISTICS
 const getBookingStatsController = async (req, res) => {
   try {
     const stats = await bookingService.getBookingStats();
-    res.json(stats);
-  } catch (error) {
-    res.status(500).json({
-      message: error.message,
+
+    return res.status(200).json({
+      success: true,
+      stats,
     });
+  } catch (error) {
+    return handleError(res, error);
   }
 };
 
