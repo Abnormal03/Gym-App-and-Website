@@ -1,11 +1,6 @@
 const prisma = require("../config/prisma");
+const { allowedTransitions } = require("../config/bookingTransitions");
 
-const allowedTransitions = {
-  pending: ["confirmed", "cancelled"],
-  confirmed: ["checked_in", "cancelled"],
-  checked_in: [],
-  cancelled: [],
-};
 const isAdmin = (role) => role === "gym_admin" || role === "platform_admin";
 
 const createBooking = async ({
@@ -35,7 +30,6 @@ const createBooking = async ({
 
   return await prisma.$transaction(
     async (tx) => {
-      // Check gym exists
       const gym = await tx.gym.findUnique({
         where: {
           id: gymId,
@@ -46,7 +40,6 @@ const createBooking = async ({
         throw new Error("Gym not found");
       }
 
-      // Check package belongs to gym
       if (packageId) {
         const pkg = await tx.package.findFirst({
           where: {
@@ -60,7 +53,6 @@ const createBooking = async ({
         }
       }
 
-      // Check overlapping bookings
       const bookedCount = await tx.booking.count({
         where: {
           gymId,
@@ -85,7 +77,6 @@ const createBooking = async ({
         throw new Error("Selected slot is fully booked");
       }
 
-      // Create booking
       const booking = await tx.booking.create({
         data: {
           userId,
@@ -110,7 +101,6 @@ const createBooking = async ({
   );
 };
 
-// GET USER BOOKINGS
 const getMyBookings = async (userId) => {
   return await prisma.booking.findMany({
     where: {
@@ -129,8 +119,6 @@ const getMyBookings = async (userId) => {
   });
 };
 
-// GET BOOKING BY ID
-
 const getBookingById = async (id, userId, role) => {
   const booking = await prisma.booking.findUnique({
     where: {
@@ -148,7 +136,6 @@ const getBookingById = async (id, userId, role) => {
     throw new Error("Booking not found");
   }
 
-  // Owner or admin can view booking
   if (booking.userId !== userId && !isAdmin(role)) {
     throw new Error("Access denied");
   }
@@ -156,7 +143,6 @@ const getBookingById = async (id, userId, role) => {
   return booking;
 };
 
-// STATUS CHANGE
 const changeBookingStatus = async (id, newStatus) => {
   const booking = await prisma.booking.findUnique({
     where: {
@@ -190,7 +176,7 @@ const changeBookingStatus = async (id, newStatus) => {
     },
   });
 };
-// CANCEL BOOKING
+
 const cancelBooking = async (id, userId, role) => {
   const booking = await prisma.booking.findUnique({
     where: {
@@ -202,7 +188,6 @@ const cancelBooking = async (id, userId, role) => {
     throw new Error("Booking not found");
   }
 
-  // User can cancel own booking, admin can cancel any booking
   if (booking.userId !== userId && !isAdmin(role)) {
     throw new Error("Access denied");
   }
@@ -210,7 +195,6 @@ const cancelBooking = async (id, userId, role) => {
   return changeBookingStatus(id, "cancelled");
 };
 
-// CONFIRM BOOKING
 const confirmBooking = async (id, role) => {
   if (!isAdmin(role)) {
     throw new Error("Admin access required");
@@ -219,7 +203,6 @@ const confirmBooking = async (id, role) => {
   return changeBookingStatus(id, "confirmed");
 };
 
-// CHECK IN BOOKING
 const checkInBooking = async (id, role) => {
   if (!isAdmin(role)) {
     throw new Error("Admin access required");
@@ -227,8 +210,6 @@ const checkInBooking = async (id, role) => {
 
   return changeBookingStatus(id, "checked_in");
 };
-
-// GET GYM BOOKINGS
 
 const getGymBookings = async (gymId) => {
   const gym = await prisma.gym.findUnique({
@@ -257,8 +238,6 @@ const getGymBookings = async (gymId) => {
     },
   });
 };
-
-// STATISTICS
 
 const getBookingStats = async () => {
   const totalBookings = await prisma.booking.count();
