@@ -1,5 +1,4 @@
 const express = require("express");
-const router = express.Router();
 
 const {
   initializePaymentController,
@@ -7,6 +6,8 @@ const {
 } = require("../controllers/payment.controller");
 
 const { protect } = require("../middleware/auth.middleware");
+
+const router = express.Router();
 
 router.post("/initialize", protect, initializePaymentController);
 router.get("/verify/:txRef", protect, verifyPaymentController);

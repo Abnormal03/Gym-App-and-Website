@@ -12,7 +12,6 @@ const bookingTransitionsFromPayment = {
   pending: ["confirmed", "cancelled"],
 };
 
-// INITIALIZE PAYMENT
 const initializePayment = async (bookingId, userId) => {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -71,7 +70,6 @@ const initializePayment = async (bookingId, userId) => {
     throw new Error("Chapa did not return a checkout URL");
   }
 
-  // upsert: a booking may retry payment after a failed attempt
   return await prisma.payment.upsert({
     where: { bookingId },
     update: {
@@ -91,7 +89,6 @@ const initializePayment = async (bookingId, userId) => {
   });
 };
 
-// VERIFY A TRANSACTION DIRECTLY WITH CHAPA (source of truth — never trust webhook body alone)
 const verifyChapaTransaction = async (txRef) => {
   console.log("Sending to Chapa verify:", txRef);
 
@@ -107,7 +104,6 @@ const verifyChapaTransaction = async (txRef) => {
   return response.data;
 };
 
-// VERIFY WEBHOOK SIGNATURE (constant-time compare, raw body required)
 const isValidWebhookSignature = (rawBody, signatureHeader) => {
   if (!signatureHeader || !CHAPA_WEBHOOK_SECRET) {
     return false;
@@ -128,14 +124,18 @@ const isValidWebhookSignature = (rawBody, signatureHeader) => {
   return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 };
 
-// HANDLE INCOMING WEBHOOK
 const handleChapaWebhook = async (rawBody, signatureHeader) => {
   if (!isValidWebhookSignature(rawBody, signatureHeader)) {
     throw new Error("Invalid webhook signature");
   }
 
   const event = JSON.parse(rawBody.toString("utf8"));
+
+  console.log("CHAPA WEBHOOK PAYLOAD:", JSON.stringify(event, null, 2));
+
   const txRef = event.tx_ref;
+
+  console.log("WEBHOOK TX REF:", txRef);
 
   if (!txRef) {
     throw new Error("Webhook payload missing tx_ref");
@@ -149,16 +149,22 @@ const handleChapaWebhook = async (rawBody, signatureHeader) => {
     throw new Error(`No payment found for tx_ref ${txRef}`);
   }
 
-  // Idempotency — webhooks can be delivered more than once
   if (payment.status === "success") {
     return payment;
   }
 
-  // Never trust event.status from the payload directly — re-verify server-side
   const verification = await verifyChapaTransaction(txRef);
+
+  console.log(
+    "CHAPA VERIFICATION RESPONSE:",
+    JSON.stringify(verification, null, 2),
+  );
+
   const isSuccess =
     verification?.status === "success" &&
     verification?.data?.status === "success";
+
+  console.log("PAYMENT SUCCESS:", isSuccess);
 
   if (!isSuccess) {
     // return await prisma.payment.update({
@@ -220,8 +226,86 @@ const handleChapaWebhook = async (rawBody, signatureHeader) => {
   return result;
 };
 
+const processSuccessfulPayment = async (txRef) => {
+  console.log("=================================");
+  console.log("PROCESSING PAYMENT:", txRef);
+  console.log("=================================");
+
+  const payment = await prisma.payment.findUnique({
+    where: {
+      chapaTxRef: txRef,
+    },
+  });
+
+  if (!payment) {
+    throw new Error(`Payment not found for tx_ref: ${txRef}`);
+  }
+
+  console.log("DATABASE PAYMENT:", payment);
+  const verification = await verifyChapaTransaction(txRef);
+
+  console.log("CHAPA VERIFICATION:", JSON.stringify(verification, null, 2));
+
+  const chapaStatus = verification?.data?.status;
+
+  console.log("CHAPA STATUS:", chapaStatus);
+
+  if (chapaStatus !== "success") {
+    throw new Error(`Payment is not successful. Chapa status: ${chapaStatus}`);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedPayment = await tx.payment.update({
+      where: {
+        id: payment.id,
+      },
+      data: {
+        status: "success",
+      },
+    });
+
+    const booking = await tx.booking.findUnique({
+      where: {
+        id: payment.bookingId,
+      },
+    });
+
+    if (!booking) {
+      throw new Error("Booking not found");
+    }
+
+    console.log("BOOKING BEFORE UPDATE:", booking);
+
+    if (booking.status === "pending") {
+      const updatedBooking = await tx.booking.update({
+        where: {
+          id: payment.bookingId,
+        },
+        data: {
+          status: "confirmed",
+          qrCode: crypto.randomUUID(),
+        },
+      });
+
+      console.log("BOOKING AFTER UPDATE:", updatedBooking);
+
+      return {
+        payment: updatedPayment,
+        booking: updatedBooking,
+      };
+    }
+
+    return {
+      payment: updatedPayment,
+      booking,
+    };
+  });
+
+  return result;
+};
 module.exports = {
   initializePayment,
   verifyChapaTransaction,
+  processSuccessfulPayment,
   handleChapaWebhook,
 };
