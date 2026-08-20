@@ -8,11 +8,8 @@ const adminRoutes = require("./routes/admin.routes.js");
 const gymRoutes = require("./routes/gym.routes.js");
 const packageRoutes = require("./routes/packages.routes.js");
 const bookingRoutes = require("./routes/booking.routes.js");
-const paymentRoutes = require("./routes/payment.routes.js");
-
-const {
-  chapaWebhookController,
-} = require("./controllers/payment.controller.js");
+const paymentRoutes = require("./routes/payment.routes");
+const { chapaWebhookController } = require("./controllers/payment.controller.js");
 
 const app = express();
 

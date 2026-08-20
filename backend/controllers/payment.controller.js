@@ -165,8 +165,9 @@ const chapaWebhookController = async (req, res) => {
         "Webhook processing failed",
     });
   }
-};
 
+  res.sendStatus(200);
+};
 const verifyPaymentController = async (req, res) => {
   try {
     const txRef = req.params.txRef;
