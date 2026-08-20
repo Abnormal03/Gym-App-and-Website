@@ -9,7 +9,7 @@ const CHAPA_CALLBACK_URL = process.env.CHAPA_CALLBACK_URL;
 const CHAPA_RETURN_URL = process.env.CHAPA_RETURN_URL;
 
 const bookingTransitionsFromPayment = {
-  pending: ["confirmed"],
+  pending: ["confirmed", "cancelled"],
 };
 
 // INITIALIZE PAYMENT
@@ -161,10 +161,35 @@ const handleChapaWebhook = async (rawBody, signatureHeader) => {
     verification?.data?.status === "success";
 
   if (!isSuccess) {
-    return await prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: "failed" },
-    });
+    // return await prisma.payment.update({
+    //   where: { id: payment.id },
+    //   data: { status: "failed" },
+    // });
+
+    const failedResult = await prisma.$transaction(async (tx) => {
+      const updatedPayment = await prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: "failed" },
+      });
+
+      const booking = await tx.booking.findUnique({
+        where: { id: payment.bookingId },
+      });
+
+      const allowedNext = bookingTransitionsFromPayment[booking.status] || [];
+
+      if (allowedNext.includes("cancelled")) {
+        await tx.booking.update({
+          where: { id: payment.bookingId },
+          data: {
+            status: "cancelled"
+          },
+        });
+      }
+      return updatedPayment;
+    })
+
+    return failedResult;
   }
 
   const result = await prisma.$transaction(async (tx) => {

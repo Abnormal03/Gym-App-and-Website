@@ -32,12 +32,17 @@ const initializePaymentController = async (req, res) => {
 
 const chapaWebhookController = async (req, res) => {
   try {
+    console.log("chapa webhook triggered!");
     await paymentService.handleChapaWebhook(
       req.body,
       req.headers["x-chapa-signature"] || req.headers["chapa-signature"],
     );
   } catch (error) {
     console.error("Chapa webhook error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Unable to process payment."
+    })
   }
 
   res.sendStatus(200);

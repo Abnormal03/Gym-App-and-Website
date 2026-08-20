@@ -11,10 +11,20 @@ const gymRoutes = require("./routes/gym.routes.js");
 const packageRoutes = require("./routes/packages.routes.js");
 const bookingRoutes = require("./routes/booking.routes.js");
 const paymentRoutes = require("./routes/payment.routes");
+const { chapaWebhookController } = require("./controllers/payment.controller.js");
 
 const app = express();
 
 app.use(cors());
+
+// CHAPA webhook
+app.post(
+  "/webhook/chapa",
+  express.raw({ type: "application/json" }),
+  chapaWebhookController
+);
+
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
