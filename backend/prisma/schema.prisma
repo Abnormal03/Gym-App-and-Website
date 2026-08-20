@@ -109,6 +109,7 @@ enum PackageType {
 enum BookingStatus {
   pending
   confirmed
+  payment_failed
   cancelled
   checked_in
 }

@@ -18,16 +18,30 @@ const app = express();
 
 app.use(cors());
 
+// ========================================
+// CHAPA WEBHOOK
+// MUST COME BEFORE express.json()
+// ========================================
 app.post(
   "/api/payments/webhook",
   express.raw({
     type: "application/json",
   }),
+  (req, res, next) => {
+    req.rawBody = req.body;
+    next();
+  },
   chapaWebhookController,
 );
 
+// ========================================
+// NORMAL JSON REQUESTS
+// ========================================
 app.use(express.json());
 
+// ========================================
+// ROUTES
+// ========================================
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
@@ -36,6 +50,9 @@ app.use("/api/packages", packageRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
 
+// ========================================
+// HEALTH CHECK
+// ========================================
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
@@ -43,6 +60,9 @@ app.get("/", (req, res) => {
   });
 });
 
+// ========================================
+// ERROR HANDLER
+// ========================================
 app.use((err, req, res, next) => {
   console.error(err.stack);
 
@@ -52,7 +72,11 @@ app.use((err, req, res, next) => {
   });
 });
 
+// ========================================
+// SERVER
+// ========================================
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
