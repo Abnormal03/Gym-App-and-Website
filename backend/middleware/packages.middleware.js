@@ -13,7 +13,7 @@ const verifyGymOwner = async (req, res, next) => {
     }
 
     try {
-        const gym = await prisma.gym.findUnique({
+        const gym = await prisma.gym.findFirst({
             where: {
                 id: Number(gymId),
                 adminId: Number(id)
@@ -43,21 +43,21 @@ const verifyPackageOwner = async (req, res, next) => {
         const { id } = req.params;
         const { id: userId } = req.user;
 
-        const pkg = prisma.package.findFirst({
+        const pkg = await prisma.package.findFirst({
             where: {
                 id: Number(id),
                 gym: {
                     is: {
-                        adminId: userId
+                        adminId: Number(userId)
                     }
                 }
             }
         })
 
         if (!pkg) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
-                message: "Package does not exits!"
+                message: "Package does not exist"
             })
         }
 

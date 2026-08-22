@@ -104,10 +104,10 @@ const chapaWebhookController = async (req, res) => {
     });
   } catch (error) {
     console.error("Chapa webhook error:", error.message);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Unable to process payment."
-    })
+    });
   }
 
   res.sendStatus(200);

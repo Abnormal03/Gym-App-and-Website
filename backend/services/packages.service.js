@@ -2,9 +2,15 @@ const prisma = require("../config/prisma")
 
 const getPackages = async (id) => {
     try {
+        const gymId = Number(id);
+
+        if (!Number.isInteger(gymId) || gymId <= 0) {
+            throw new Error("Invalid gym id");
+        }
+
         const packages = await prisma.package.findMany({
             where: {
-                gymId: Number(id),
+                gymId,
                 isActive: true
             }
         })
@@ -17,10 +23,17 @@ const getPackages = async (id) => {
 }
 
 
-const createPackage = async (packageData) => {
+const createPackage = async ({ gymId, name, description, price, durationDays, sessions }) => {
     try {
         const newPackage = await prisma.package.create({
-            data: packageData
+            data: {
+                gymId: Number(gymId),
+                name,
+                description,
+                price,
+                durationDays,
+                sessions
+            }
         });
 
         return newPackage;
@@ -77,13 +90,17 @@ const deletePackage = async (id) => {
 
 const isActive = async (id) => {
     try {
-        const package = await prisma.package.findUnique({
+        const pkg = await prisma.package.findUnique({
             where: {
                 id: Number(id)
             }
         })
 
-        return package.isActive;
+        if (!pkg) {
+            throw new Error("Package not found");
+        }
+
+        return pkg.isActive;
     } catch (error) {
         console.log("IsActive Service Error: ", error.message);
         throw new Error(error.message || "Failed to check activity.")

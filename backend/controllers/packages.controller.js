@@ -1,16 +1,9 @@
-const { getPackages, createPackage: package, updatePackage: update, isActive: checkActive, deletePackage: deactivate } = require("../services/packages.service");
+const { getPackages, createPackage: createPackageService, updatePackage: updatePackageService, isActive: checkActive, deletePackage: deactivate } = require("../services/packages.service");
 
 const gymPackages = async (req, res) => {
     try {
         const { gym_id } = req.query;
         const packages = await getPackages(gym_id);
-
-        if (packages.length === 0) {
-            return res.status(200).json({
-                success: true,
-                message: "No packages found for this gym"
-            })
-        }
 
         return res.status(200).json({
             success: true,
@@ -29,7 +22,7 @@ const gymPackages = async (req, res) => {
 const createPackage = async (req, res) => {
     try {
         const packageData = req.body;
-        const newPackage = await package(packageData);
+        const newPackage = await createPackageService(packageData);
 
         return res.status(201).json({
             success: true,
@@ -51,7 +44,7 @@ const updatePackage = async (req, res) => {
         const packageData = req.body;
         const { id } = req.params;
 
-        const updatedPackage = await update(id, packageData);
+        const updatedPackage = await updatePackageService(id, packageData);
         return res.status(200).json({
             success: true,
             package: updatedPackage

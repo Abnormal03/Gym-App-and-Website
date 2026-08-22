@@ -29,12 +29,14 @@ const getGymsService = async () => {
 const gymDetails = async (id) => {
     try {
         const now = new Date();
-        const gymDetail = await prisma.gym.findFirst({
+        const gymDetail = await prisma.gym.findUnique({
             where: {
                 id: Number(id)
             },
             include: {
-                packages: true,
+                packages: {
+                    where: { isActive: true }
+                },
                 _count: {
                     select: {
                         bookings: {
@@ -49,7 +51,7 @@ const gymDetails = async (id) => {
             }
         })
 
-        if (!gymDetail) {
+        if (!gymDetail || !gymDetail.isActive) {
             throw new Error("Gym Not Found");
         }
 
@@ -63,15 +65,26 @@ const gymDetails = async (id) => {
 
 const createGym = async ({ name, address, latitude, longitude, openingTime, closingTime, capacity, photos, amenities, adminId }) => {
     try {
+        const numericCapacity = Number(capacity);
+        const numericLatitude = Number(latitude);
+        const numericLongitude = Number(longitude);
+
+        if (!Number.isInteger(numericCapacity) || numericCapacity <= 0) {
+            throw new Error("capacity must be a positive integer");
+        }
+
+        if (Number.isNaN(numericLatitude) || Number.isNaN(numericLongitude)) {
+            throw new Error("latitude and longitude must be numbers");
+        }
         const gym = await prisma.gym.create({
             data: {
                 name,
                 address,
-                longitude,
-                latitude,
+                longitude: numericLongitude,
+                latitude: numericLatitude,
                 openingTime,
                 closingTime,
-                capacity,
+                capacity: numericCapacity,
                 amenities,
                 photos,
                 adminId
@@ -138,13 +151,24 @@ const UpdateDetails = async ({ id, name, address, latitude, longitude, openingTi
 
 const isAvailable = async (id, slot_start, slot_end) => {
     try {
+        const start = new Date(slot_start);
+        const end = new Date(slot_end);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            throw new Error("Invalid slot range");
+        }
+
+        if (start >= end) {
+            throw new Error("Invalid slot range");
+        }
+
         //get the number of bookings at a given time 
         const overlapping = await prisma.booking.count({
             where: {
                 gymId: Number(id),
                 status: "confirmed",
-                slotStart: { lt: new Date(slot_end) },
-                slotEnd: { gt: new Date(slot_start) },
+                slotStart: { lt: end },
+                slotEnd: { gt: start },
             },
         });
 
@@ -157,6 +181,10 @@ const isAvailable = async (id, slot_start, slot_end) => {
                 capacity: true
             }
         });
+
+        if (!gymCapacity) {
+            throw new Error("Gym Not Found");
+        }
 
         if (!gymCapacity) {
             throw new Error("Gym Not Found");

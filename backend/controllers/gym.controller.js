@@ -31,7 +31,16 @@ const GetGyms = async (req, res) => {
 const getGymDetails = async (req, res) => {
     try {
         const { id } = req.params;
-        const details = await gymDetails(id);
+        const gymId = Number(id);
+
+        if (!Number.isInteger(gymId) || gymId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid gym id"
+            })
+        }
+
+        const details = await gymDetails(gymId);
 
         res.status(200).json({
             success: true,
@@ -39,6 +48,13 @@ const getGymDetails = async (req, res) => {
         })
     } catch (error) {
         console.log('Gym Detail Error: ', error.message);
+
+        if (error.message === "Gym Not Found") {
+            return res.status(404).json({
+                success: false,
+                message: error.message
+            })
+        }
 
         return res.status(500).json({
             success: false,
@@ -63,7 +79,7 @@ const addGym = async (req, res) => {
         }
         const newGym = await createGym({ name, address, latitude, longitude, openingTime, closingTime, capacity, photos, amenities, adminId: id });
 
-        res.status(200).json({
+        return res.status(201).json({
             success: true,
             gym: newGym
         })
@@ -114,6 +130,14 @@ const checkAvailability = async (req, res) => {
     try {
         const { id } = req.params;
         const { slot_start, slot_end } = req.query;
+
+        if (!slot_start || !slot_end) {
+            return res.status(400).json({
+                success: false,
+                message: "slot_start and slot_end are required"
+            })
+        }
+
         //check availability...
         const available = await isAvailable(id, slot_start, slot_end);
 
