@@ -1,4 +1,5 @@
 application/.env
+application/node_modules
 backend/generated
 backend/.env
 backend/node_modules
