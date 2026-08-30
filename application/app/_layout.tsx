@@ -9,8 +9,8 @@ export default function RootLayout() {
   const segments = useSegments();
 
   useEffect(() => {
-    hydrate(); // load saved token on app start
-  }, []);
+    void hydrate();
+  }, [hydrate]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -22,7 +22,7 @@ export default function RootLayout() {
     } else if (user && inAuthGroup) {
       router.replace("/(tabs)"); // logged in → go to home
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, segments, router]);
 
   if (isLoading) return <></>;
 

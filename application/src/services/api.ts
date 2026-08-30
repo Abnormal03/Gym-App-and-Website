@@ -1,26 +1,31 @@
+// src/services/api.ts
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { readItem } from './auth.storage';
 
 const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Automatically attach the JWT token to every request
+// Attach JWT token to every request automatically
 api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const token = await readItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
-// Automatically handle 401 (expired token) globally
+// Unwrap response.data and normalize errors
 api.interceptors.response.use(
-  (response) => response.data,  // unwrap .data so callers get clean objects
+  (response) => response.data,
   (error) => {
-    if (error.response?.status === 401) {
-      // clear auth and redirect to login (call logout from store here)
-    }
-    return Promise.reject(error.response?.data?.message || 'Something went wrong');
+    const message =
+      error.response?.data?.message ||
+      error.message ||
+      'Something went wrong';
+    return Promise.reject(message);
   }
 );
 
