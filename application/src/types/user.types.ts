@@ -1,7 +1,7 @@
 export interface User {
     id: number;
     name: string;
-    phone: number;
+    phone?: number;
     email: string;
     photoUrl?: string;
     fcmToken?: string;

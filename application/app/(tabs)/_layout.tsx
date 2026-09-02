@@ -1,12 +1,58 @@
 // app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
+import { Text, type ColorValue } from "react-native";
+
+const tabIcon = (label: string, color: ColorValue, active = false) => (
+  <Text style={{ color, fontSize: 21, opacity: active ? 1 : 0.8 }}>
+    {label}
+  </Text>
+);
 
 export default function TabLayout() {
   return (
-    <Tabs>
-      <Tabs.Screen name="index" options={{ title: "Home" }} />
-      {/* <Tabs.Screen name="bookings" options={{ title: "Bookings" }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile" }} /> */}
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarStyle: {
+          backgroundColor: "#161B22",
+          borderTopWidth: 0,
+          height: 78,
+          paddingTop: 8,
+          paddingBottom: 12,
+        },
+        tabBarActiveTintColor: "#FFFFFF",
+        tabBarInactiveTintColor: "#9CA3AF",
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Train",
+          tabBarIcon: ({ color, focused }) => tabIcon("⚒", color, focused),
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: "Stats",
+          tabBarIcon: ({ color, focused }) => tabIcon("▥", color, focused),
+        }}
+      />
+      <Tabs.Screen
+        name="social"
+        options={{
+          title: "Social",
+          tabBarIcon: ({ color, focused }) => tabIcon("♟", color, focused),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color, focused }) => tabIcon("♙", color, focused),
+        }}
+      />
     </Tabs>
   );
 }
