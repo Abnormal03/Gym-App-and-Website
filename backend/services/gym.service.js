@@ -186,14 +186,11 @@ const isAvailable = async (id, slot_start, slot_end) => {
             throw new Error("Gym Not Found");
         }
 
-        if (!gymCapacity) {
-            throw new Error("Gym Not Found");
+        return {
+            capacity: gymCapacity.capacity,
+            booked: overlapping,
+            available: (gymCapacity.capacity - overlapping)
         }
-
-        if (gymCapacity.capacity > overlapping) {
-            return true
-        }
-        return false;
 
     } catch (error) {
         console.log("Availability Check Service Error: ", error.message);

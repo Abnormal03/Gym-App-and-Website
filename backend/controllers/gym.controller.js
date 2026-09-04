@@ -139,11 +139,11 @@ const checkAvailability = async (req, res) => {
         }
 
         //check availability...
-        const available = await isAvailable(id, slot_start, slot_end);
+        const availability = await isAvailable(id, slot_start, slot_end);
 
         return res.status(200).json({
             success: true,
-            available
+            availability
         })
     } catch (error) {
         console.log("Availability Check Error: ", error.message);
