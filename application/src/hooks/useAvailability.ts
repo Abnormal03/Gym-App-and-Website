@@ -1,24 +1,28 @@
+// src/hooks/useAvailability.ts
 import { useState } from 'react';
 import { gymService } from '../services/gym.service';
+import { Availability } from '../types/gym.types';
 
 export const useAvailability = (gymId: number) => {
-  const [availability, setAvailability] = useState<{
-    capacity: number;
-    booked: number;
-    available: number;
-  } | null>(null);
+  const [availability, setAvailability] = useState<Availability | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Call this when user picks a time slot
   const checkSlot = async (slotStart: string, slotEnd: string) => {
     setLoading(true);
+    setError(null);
     try {
       const data = await gymService.getAvailability(gymId, slotStart, slotEnd);
       setAvailability(data);
+    } catch (err) {
+      setError(err as string);
     } finally {
       setLoading(false);
     }
   };
 
-  return { availability, loading, checkSlot };
+  // Reset when user changes selection
+  const reset = () => setAvailability(null);
+
+  return { availability, loading, error, checkSlot, reset };
 };

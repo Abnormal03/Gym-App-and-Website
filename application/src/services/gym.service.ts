@@ -1,6 +1,6 @@
 // src/services/gym.service.ts
 import api from './api';
-import { Gym, GymDetailsResponse, GymListResponse } from '../types/gym.types';
+import { Availability, Gym, GymDetailsResponse, GymListResponse } from '../types/gym.types';
 
 const normalizeGymList = (payload: Gym[] | GymListResponse): Gym[] => {
   if (Array.isArray(payload)) return payload;
@@ -19,6 +19,13 @@ const normalizeGymDetails = (payload: Gym | GymDetailsResponse): Gym => {
   throw new Error('Gym details not found in API response');
 };
 
+const normalizeAvailability = (payload: Availability | any): Availability=>{
+  if ('availability' in payload && payload.availability) {
+    return payload.availability
+  }
+  throw new Error('Gym Availability not found in API response')
+}
+
 export const gymService = {
   getAll: async (): Promise<Gym[]> => {
     const response = await api.get('/gyms');
@@ -30,8 +37,11 @@ export const gymService = {
     return normalizeGymDetails(response as unknown as Gym | GymDetailsResponse);
   },
 
-  getAvailability: (id: number, slotStart: string, slotEnd: string) =>
-    api.get(`/gyms/${id}/availability`, {
-      params: { slot_start: slotStart, slot_end: slotEnd }
-    }),
+  getAvailability: async (id: number, slotStart: string, slotEnd: string) =>{
+    const response = await api.get(`/gyms/${id}/availability`, {
+            params: { slot_start: slotStart, slot_end: slotEnd }
+          })
+    return normalizeAvailability(response as unknown as Availability | any)
+  }
+    
 };

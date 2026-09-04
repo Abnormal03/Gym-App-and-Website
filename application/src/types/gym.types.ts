@@ -36,4 +36,11 @@ export interface Package {
   price: number;
   durationDays: number;
   benefits?: string;
+  isActive: boolean;
+}
+
+export interface Availability {
+  capacity: number;
+  booked: number;
+  available: number;
 }

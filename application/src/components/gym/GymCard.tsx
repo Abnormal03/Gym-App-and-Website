@@ -1,66 +1,67 @@
-import { StyleSheet } from "react-native";
+import { Pressable, StyleSheet, type PressableProps } from "react-native";
 import { Card } from "../common/Card";
 import { View, Text, Image } from "react-native";
 import { Gym } from "../../types/gym.types";
 
-interface props {
+interface Props {
   gym: Gym;
   theme: any;
   mode: any;
-  onPress: (id: number) => void;
+  onPress: PressableProps["onPress"];
 }
 
-export function GymCard({ gym, theme, mode, onPress }: props) {
+export function GymCard({ gym, theme, mode, onPress }: Props) {
   const isClosed = isGymClosed(gym);
-  const openTime = Number(gym.openingTime.split(":")[0]);
   const amenitiesText = gym.amenities?.length
     ? gym.amenities.join(" • ")
     : "No amenities listed";
 
   return (
-    <Card
-      mode={mode}
-      style={[
-        styles.gymCard,
-        { backgroundColor: theme.card, borderColor: theme.border },
-      ]}
-    >
-      <View style={styles.photoWrap}>
-        <Image source={{ uri: gym.photos[1] }} style={styles.photo} />
-        <View style={[styles.openBadge, isClosed && styles.closedBadge]}>
-          <Text style={[styles.openText, isClosed && styles.closedText]}>
-            {isClosed ? "OPENS SOON" : "OPEN NOW"}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.cardInfo}>
-        <View style={styles.cardTitleRow}>
-          <Text style={[styles.gymName, { color: theme.text }]}>
-            {gym.name}
-          </Text>
-          <Text style={[styles.meta, { color: theme.muted }]}>
-            📍 {gym.address}
-          </Text>
-        </View>
-
-        <Text style={[styles.meta, { color: theme.muted }]}>
-          Amenities: {amenitiesText}
-        </Text>
-
-        <View style={styles.capacityContainer}>
-          <Text style={[styles.capacity, { color: theme.primary }]}>
-            Capacity: {gym.capacity}
-          </Text>
-
-          {isClosed && (
-            <Text style={styles.closed}>
-              ◷ Opens at {formatTo12Hour(gym.openingTime)}
+    <Pressable onPress={onPress} accessibilityRole="button">
+      <Card
+        mode={mode}
+        style={[
+          styles.gymCard,
+          { backgroundColor: theme.card, borderColor: theme.border },
+        ]}
+      >
+        <View style={styles.photoWrap}>
+          <Image source={{ uri: gym.photos[0] }} style={styles.photo} />
+          <View style={[styles.openBadge, isClosed && styles.closedBadge]}>
+            <Text style={[styles.openText, isClosed && styles.closedText]}>
+              {isClosed ? "OPENS SOON" : "OPEN NOW"}
             </Text>
-          )}
+          </View>
         </View>
-      </View>
-    </Card>
+
+        <View style={styles.cardInfo}>
+          <View style={styles.cardTitleRow}>
+            <Text style={[styles.gymName, { color: theme.text }]}>
+              {gym.name}
+            </Text>
+            <Text style={[styles.meta, { color: theme.muted }]}>
+              📍 {gym.address}
+            </Text>
+          </View>
+
+          <Text style={[styles.meta, { color: theme.muted }]}>
+            Amenities: {amenitiesText}
+          </Text>
+
+          <View style={styles.capacityContainer}>
+            <Text style={[styles.capacity, { color: theme.primary }]}>
+              Capacity: {gym.capacity}
+            </Text>
+
+            {isClosed && (
+              <Text style={styles.closed}>
+                ◷ Opens at {formatTo12Hour(gym.openingTime)}
+              </Text>
+            )}
+          </View>
+        </View>
+      </Card>
+    </Pressable>
   );
 }
 

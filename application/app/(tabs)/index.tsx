@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { GymCard } from "../../src/components/gym/GymCard";
 import { SkeletonList } from "../../src/components/gym/SkeletonLoading";
 import { useGyms } from "../../src/hooks/useGym";
+import { useRouter } from "expo-router";
 
 type Props = { dark?: boolean };
 
@@ -26,6 +28,7 @@ export function HomeScreen({ dark = false }: Props) {
     nav: themeDark ? colors.dark.card : colors.light.card,
     skeleton: themeDark ? colors.dark.border : colors.light.input,
   };
+  const router = useRouter();
 
   const { getGyms, gyms, loading: isLoading, error } = useGyms();
 
@@ -33,7 +36,9 @@ export function HomeScreen({ dark = false }: Props) {
     getGyms();
   }, []);
 
-  const handlePress = (id: number) => {};
+  const handlePress = (id: number) => {
+    router.push(`/gym/${id}`);
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -49,31 +54,35 @@ export function HomeScreen({ dark = false }: Props) {
             <Text style={[styles.headerIcon, { color: theme.text }]}>⚙</Text>
           </Pressable>
         </View>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.searchRow}>
-            <View
-              style={[
-                styles.searchBox,
-                { backgroundColor: theme.input, borderColor: theme.border },
-              ]}
-            >
-              <Text style={[styles.searchIcon, { color: theme.muted }]}>⌕</Text>
-              <TextInput
-                placeholder="Find your arena..."
-                placeholderTextColor={theme.muted}
-                style={[styles.searchInput, { color: theme.text }]}
-              />
-            </View>
-            <Button
-              mode={mode}
-              title="▣"
-              onPress={() => undefined}
-              style={styles.mapButton}
+
+        <View style={styles.searchRow}>
+          <View
+            style={[
+              styles.searchBox,
+              { backgroundColor: theme.input, borderColor: theme.border },
+            ]}
+          >
+            <Text style={[styles.searchIcon, { color: theme.muted }]}>⌕</Text>
+            <TextInput
+              placeholder="Find your arena..."
+              placeholderTextColor={theme.muted}
+              style={[styles.searchInput, { color: theme.text }]}
             />
           </View>
+          <Button
+            mode={mode}
+            title="🔍"
+            onPress={() => undefined}
+            style={styles.mapButton}
+          />
+        </View>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={isLoading} onRefresh={getGyms} />
+          }
+          showsVerticalScrollIndicator={false}
+        >
           {/* <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -114,14 +123,25 @@ export function HomeScreen({ dark = false }: Props) {
                   gym={gym}
                   theme={theme}
                   mode={mode}
-                  onPress={handlePress}
+                  onPress={() => {
+                    handlePress(gym.id);
+                  }}
                 />
               ))}
             </View>
           )}
           {error && (
-            <View>
-              <Text>Error happened while fetching available gyms...</Text>
+            <View style={styles.errorState}>
+              <Text style={[styles.errorText, { color: theme.text }]}>
+                {error}
+              </Text>
+              <Button
+                mode={mode}
+                title="Retry"
+                onPress={getGyms}
+                loading={isLoading}
+                style={styles.retryButton}
+              />
             </View>
           )}
         </ScrollView>
@@ -147,7 +167,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     alignItems: "center",
-    marginBottom: 30,
+    paddingHorizontal: 15,
   },
   searchBox: {
     flex: 1,
@@ -175,6 +195,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
   },
   gymList: { gap: 22 },
+  errorState: { alignItems: "center", gap: 12, paddingVertical: 24 },
+  errorText: { textAlign: "center", fontSize: 16 },
+  retryButton: { minHeight: 48, borderRadius: 9 },
 });
 
 export default HomeScreen;
