@@ -2,13 +2,6 @@ const paymentService = require("../services/payment.service");
 
 const initializePaymentController = async (req, res) => {
   try {
-    console.log("========================================");
-    console.log("========== INITIALIZE PAYMENT ==========");
-    console.log("========================================");
-
-    console.log("REQ BODY:", req.body);
-    console.log("REQ USER:", req.user);
-
     const bookingId = Number(req.body.bookingId);
 
     if (!bookingId || Number.isNaN(bookingId)) {
@@ -47,26 +40,16 @@ const initializePaymentController = async (req, res) => {
 
 const chapaCallbackController = async (req, res) => {
   try {
-    console.log("========================================");
-    console.log("========== CHAPA CALLBACK ===============");
-    console.log("========================================");
-
-    console.log("QUERY:", req.query);
     const txRef = req.query.trx_ref || req.query.tx_ref;
 
     if (!txRef) {
-      console.error("Callback transaction reference missing");
-
       return res.status(400).json({
         success: false,
         message: "Transaction reference is missing",
       });
     }
 
-    console.log("CALLBACK TX REF:", txRef);
     const result = await paymentService.processPaymentResult(txRef);
-
-    console.log("CALLBACK PAYMENT RESULT:", result);
 
     const frontendUrl = process.env.FRONTEND_URL;
 
@@ -106,16 +89,6 @@ const chapaCallbackController = async (req, res) => {
 
 const chapaWebhookController = async (req, res) => {
   try {
-    console.log("========================================");
-    console.log("========== CHAPA WEBHOOK ===============");
-    console.log("========================================");
-
-    console.log("HEADERS:", {
-      "x-chapa-signature": req.headers["x-chapa-signature"],
-
-      "chapa-signature": req.headers["chapa-signature"],
-    });
-
     const rawBody = req.rawBody;
 
     if (!rawBody) {
@@ -126,8 +99,6 @@ const chapaWebhookController = async (req, res) => {
         message: "Webhook raw body is missing",
       });
     }
-
-    console.log("RAW BODY:", rawBody.toString("utf8"));
 
     const signature =
       req.headers["x-chapa-signature"] || req.headers["chapa-signature"];
@@ -141,11 +112,7 @@ const chapaWebhookController = async (req, res) => {
       });
     }
 
-    console.log("WEBHOOK SIGNATURE:", signature);
-
     const result = await paymentService.handleChapaWebhook(rawBody, signature);
-
-    console.log("WEBHOOK RESULT:", result);
 
     return res.status(200).json({
       success: true,
@@ -165,8 +132,6 @@ const chapaWebhookController = async (req, res) => {
         "Webhook processing failed",
     });
   }
-
-  res.sendStatus(200);
 };
 const verifyPaymentController = async (req, res) => {
   try {
@@ -178,12 +143,6 @@ const verifyPaymentController = async (req, res) => {
         message: "Transaction reference is required",
       });
     }
-
-    console.log("========== MANUAL PAYMENT VERIFY ==========");
-
-    console.log("TX REF:", txRef);
-    console.log("USER ID:", req.user.id);
-
     const result = await paymentService.checkPaymentStatus(txRef, req.user.id);
 
     return res.status(200).json({
