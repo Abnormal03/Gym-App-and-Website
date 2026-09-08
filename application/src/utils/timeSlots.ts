@@ -1,102 +1,124 @@
+// src/utils/timeSlots.ts
+
 export const MAX_DURATION_HOURS = 4;
 
-const parseTime = (time: string): number => {
-  const [hour, minute] = time.split(':').map(Number);
-  return hour * 60 + minute;
-};
-
-const normalizeClosingMinutes = (
-  openingMinutes: number,
-  closingMinutes: number
-): number =>
-  closingMinutes < openingMinutes ? closingMinutes + 24 * 60 : closingMinutes;
-
-const formatTime = (minutes: number): string => {
-  const normalizedMinutes = minutes % (24 * 60);
-  const hour = Math.floor(normalizedMinutes / 60);
-  const minute = normalizedMinutes % 60;
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-};
-
+// Generate check-in times in 30-min increments within gym hours.
+// Last valid check-in must be at least 1 hour before closing.
 export const generateCheckInTimes = (
   openingTime: string,
   closingTime: string
 ): string[] => {
-  const openingMinutes = parseTime(openingTime);
-  const closingMinutes = normalizeClosingMinutes(
-    openingMinutes,
-    parseTime(closingTime)
-  );
-  const lastCheckIn = closingMinutes - 60; // at least 1hr before close
+  const [openHour, openMin] = openingTime.split(':').map(Number);
+  const [closeHour, closeMin] = closingTime.split(':').map(Number);
+
+  const openingMinutes = openHour * 60 + openMin;
+  const closingMinutes = closeHour * 60 + closeMin;
+  const lastCheckIn = closingMinutes - 60;
 
   const slots: string[] = [];
   let cursor = openingMinutes;
 
   while (cursor <= lastCheckIn) {
-    slots.push(formatTime(cursor));
+    const h = Math.floor(cursor / 60);
+    const m = cursor % 60;
+    slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     cursor += 30;
   }
 
   return slots;
 };
 
-// Given a check-in time and gym closing time, return the valid durations
-// in hours the user can choose from (30-min steps, max 4hrs, can't exceed closing).
+// Available workout durations given a check-in time and closing time.
+// Max 4 hours or whatever time is left before closing — whichever is less.
 export const getAvailableDurations = (
   checkInTime: string,
-  closingTime: string,
-  openingTime?: string
+  closingTime: string
 ): number[] => {
-  const checkInMinutes = parseTime(checkInTime);
-  const closingMinutes = parseTime(closingTime);
-  const normalizedClosingMinutes = openingTime
-    ? normalizeClosingMinutes(parseTime(openingTime), closingMinutes)
-    : closingMinutes < checkInMinutes
-      ? closingMinutes + 24 * 60
-      : closingMinutes;
-  const normalizedCheckInMinutes =
-    openingTime &&
-    normalizedClosingMinutes > 24 * 60 &&
-    checkInMinutes < parseTime(openingTime)
-      ? checkInMinutes + 24 * 60
-      : checkInMinutes;
+  const [checkInHour, checkInMin] = checkInTime.split(':').map(Number);
+  const [closeHour, closeMin] = closingTime.split(':').map(Number);
 
-  // Max they can stay: either the hard 4hr cap or time until closing
+  const checkInMinutes = checkInHour * 60 + checkInMin;
+  const closingMinutes = closeHour * 60 + closeMin;
+
   const maxMinutes = Math.min(
     MAX_DURATION_HOURS * 60,
-    normalizedClosingMinutes - normalizedCheckInMinutes
+    closingMinutes - checkInMinutes
   );
 
   const durations: number[] = [];
   for (let mins = 60; mins <= maxMinutes; mins += 30) {
-    durations.push(mins / 60); // store as hours: 1, 1.5, 2 ...
+    durations.push(mins / 60);
   }
 
   return durations;
 };
 
-// Given check-in time string + duration in hours → checkout time string
+// Computes checkout time string for DISPLAY only (e.g. "10:30").
+// Does NOT include the date — used only for showing the user their checkout time.
 export const computeCheckOutTime = (
   checkInTime: string,
   durationHours: number
 ): string => {
-  return formatTime(parseTime(checkInTime) + durationHours * 60);
+  const [h, m] = checkInTime.split(':').map(Number);
+  const totalMinutes = h * 60 + m + durationHours * 60;
+  const outH = Math.floor(totalMinutes / 60);
+  const outM = totalMinutes % 60;
+  return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
 };
 
-export const getCheckoutDayOffset = (
+// Builds the slotStart ISO string.
+// date = selected date, time = check-in time string "HH:MM"
+export const buildSlotStart = (date: Date, checkInTime: string): string => {
+  const [h, m] = checkInTime.split(':').map(Number);
+  const dt = new Date(date);
+  dt.setHours(h, m, 0, 0);
+  return dt.toISOString().replace('.000Z',"");
+};
+
+// Builds slotEnd for the AVAILABILITY CHECK (same day, just adds workout duration).
+// This tells the backend: "on this specific day, this person occupies a spot from X to Y"
+// Used for: GET /gyms/:id/availability
+export const buildAvailabilitySlotEnd = (
+  date: Date,
   checkInTime: string,
   durationHours: number
-): number => Math.floor((parseTime(checkInTime) + durationHours * 60) / (24 * 60));
+): string => {
+  const [h, m] = checkInTime.split(':').map(Number);
+  const totalMinutes = h * 60 + m + durationHours * 60;
+  const outH = Math.floor(totalMinutes / 60);
+  const outM = totalMinutes % 60;
 
-export const getCheckInDayOffset = (
-  openingTime: string,
-  closingTime: string,
-  checkInTime: string
-): number =>
-  parseTime(closingTime) < parseTime(openingTime) &&
-  parseTime(checkInTime) < parseTime(openingTime)
-    ? 1
-    : 0;
+  const dt = new Date(date);
+  dt.setHours(outH, outM, 0, 0);
+  return dt.toISOString().replace('.000Z',"");
+};
+
+// Builds slotEnd for BOOKING CREATION.
+// The date is slotStart date + package duration days (e.g. +30 for monthly).
+// The time is check-in time + workout duration.
+//
+// Example:
+//   slotStart: 2026-06-10T09:00:00 (monthly package, 1hr workout)
+//   slotEnd:   2026-07-10T10:00:00  ← 30 days later, 1hr later in the day
+//
+// Used for: POST /bookings
+export const buildBookingSlotEnd = (
+  date: Date,
+  checkInTime: string,
+  durationHours: number,
+  packageDurationDays: number
+): string => {
+  const [h, m] = checkInTime.split(':').map(Number);
+  const totalMinutes = h * 60 + m + durationHours * 60;
+  const outH = Math.floor(totalMinutes / 60);
+  const outM = totalMinutes % 60;
+
+  // End date = start date + package duration
+  const endDate = new Date(date);
+  endDate.setDate(endDate.getDate() + packageDurationDays);
+  endDate.setHours(outH, outM, 0, 0);
+  return endDate.toISOString().replace('.000Z',"");
+};
 
 // "1.5" → "1h 30m", "2" → "2h", "0.5" → "30m"
 export const formatDuration = (hours: number): string => {
@@ -107,20 +129,7 @@ export const formatDuration = (hours: number): string => {
   return `${h}h ${m}m`;
 };
 
-// Builds a full ISO datetime string from a Date and a "HH:MM" time string
-export const buildSlotDateTime = (
-  date: Date,
-  time: string,
-  dayOffset = 0
-): string => {
-  const [h, m] = time.split(':').map(Number);
-  const dt = new Date(date);
-  dt.setHours(h, m, 0, 0);
-  dt.setDate(dt.getDate() + dayOffset);
-  return dt.toISOString();
-};
-
-// Next 7 days starting from today
+// Next 7 days starting today
 export const getNextSevenDays = (): Date[] =>
   Array.from({ length: 7 }, (_, i) => {
     const d = new Date();

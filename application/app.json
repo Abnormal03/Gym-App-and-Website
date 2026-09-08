@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "application",
-    "slug": "application",
+    "name": "gym-mobile",
+    "slug": "gym-mobile",
     "scheme": "gym-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +17,20 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.gymmobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "gym-mobile"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

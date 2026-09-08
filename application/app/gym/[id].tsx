@@ -20,9 +20,9 @@ import {
   generateCheckInTimes,
   getAvailableDurations,
   computeCheckOutTime,
-  getCheckoutDayOffset,
-  getCheckInDayOffset,
-  buildSlotDateTime,
+  buildAvailabilitySlotEnd,
+  buildBookingSlotEnd,
+  buildSlotStart,
   formatDuration,
   getNextSevenDays,
   formatShortDay,
@@ -61,10 +61,8 @@ export default function GymDetailScreen() {
 
   const availableDurations =
     gym && checkInTime
-      ? getAvailableDurations(checkInTime, gym.closingTime, gym.openingTime)
+      ? getAvailableDurations(checkInTime, gym.closingTime)
       : [];
-
-  // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleDateChange = (date: Date) => {
     setSelectedDate(date);
@@ -84,33 +82,17 @@ export default function GymDetailScreen() {
     setDuration(hours);
 
     // Fire availability check immediately
-    const slotStart = buildSlotDateTime(
-      selectedDate,
-      checkInTime,
-      getCheckInDayOffset(gym!.openingTime, gym!.closingTime, checkInTime),
-    );
+    const slotStart = buildSlotStart(selectedDate, checkInTime);
     const checkOut = computeCheckOutTime(checkInTime, hours);
-    const slotEnd = buildSlotDateTime(
-      selectedDate,
-      checkOut,
-      getCheckoutDayOffset(checkInTime, hours),
-    );
+    const slotEnd = buildAvailabilitySlotEnd(selectedDate, checkOut, hours);
     checkSlot(slotStart, slotEnd);
   };
 
   const handleRetryAvailability = () => {
     if (!checkInTime || !duration) return;
-    const slotStart = buildSlotDateTime(
-      selectedDate,
-      checkInTime,
-      getCheckInDayOffset(gym!.openingTime, gym!.closingTime, checkInTime),
-    );
+    const slotStart = buildSlotStart(selectedDate, checkInTime);
     const checkOut = computeCheckOutTime(checkInTime, duration);
-    const slotEnd = buildSlotDateTime(
-      selectedDate,
-      checkOut,
-      getCheckoutDayOffset(checkInTime, duration),
-    );
+    const slotEnd = buildAvailabilitySlotEnd(selectedDate, checkOut, duration);
     checkSlot(slotStart, slotEnd);
   };
 
@@ -118,15 +100,12 @@ export default function GymDetailScreen() {
     if (!gym || !selectedPackage || !checkInTime || !duration || !checkOutTime)
       return;
 
-    const slotStart = buildSlotDateTime(
-      selectedDate,
-      checkInTime,
-      getCheckInDayOffset(gym.openingTime, gym.closingTime, checkInTime),
-    );
-    const slotEnd = buildSlotDateTime(
+    const slotStart = buildSlotStart(selectedDate, checkInTime);
+    const slotEnd = buildBookingSlotEnd(
       selectedDate,
       checkOutTime,
-      getCheckoutDayOffset(checkInTime, duration),
+      duration,
+      selectedPackage.durationDays,
     );
 
     setBookingDetails({
@@ -137,6 +116,7 @@ export default function GymDetailScreen() {
       packagePrice: selectedPackage.price,
       slotStart,
       slotEnd,
+      durationHours: duration,
     });
 
     router.push("/booking/new");
