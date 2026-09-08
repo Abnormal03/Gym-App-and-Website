@@ -63,6 +63,7 @@ const initializePayment = async (bookingId, userId) => {
 
   const txRef = `booking-${bookingId}-${Date.now()}`;
   let chapaResponse;
+  const returnUrl = `gym-mobile://booking/confirmation?tx_ref=${txRef}`
 
   try {
 
@@ -82,7 +83,7 @@ const initializePayment = async (bookingId, userId) => {
 
         callback_url: CHAPA_CALLBACK_URL,
 
-        return_url: CHAPA_RETURN_URL,
+        return_url: returnUrl,
 
         customization: {
           title: "Gym Booking",
@@ -433,31 +434,94 @@ const handleChapaWebhook = async (rawBody, signatureHeader) => {
   return result;
 };
 
-const checkPaymentStatus = async (txRef, userId) => {
+const EXPIRY_MINUTES = 30;
 
+const checkPaymentStatus = async (txRef, userId) => {
   const payment = await prisma.payment.findUnique({
     where: { chapaTxRef: txRef },
+    include: { booking: true },
   });
 
-  if (!payment) {
-    throw new Error(`Payment not found for tx_ref: ${txRef}`);
+  if (!payment) throw new Error('Payment not found');
+  if (payment.userId !== userId) throw new Error('Access denied');
+
+  if (payment.status === 'pending' && payment.booking.status === 'pending') {
+    const expiresAt = new Date(
+      payment.booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000
+    );
+
+    if (new Date() > expiresAt) {
+      await prisma.$transaction([
+        prisma.booking.update({
+          where: { id: payment.bookingId },
+          data: { status: 'cancelled' },
+        }),
+        prisma.payment.update({
+          where: { id: payment.id },
+          data: { status: 'failed' },
+        }),
+      ]);
+
+      return {
+        localStatus: 'failed',
+        chapaStatus: null,
+        bookingStatus: 'cancelled',
+        qrCode: null,
+        expired: true,
+      };
+    }
+  }
+  let chapaStatus = null;
+
+  try {
+    const verification = await axios.get(
+      `https://api.chapa.co/v1/transaction/verify/${txRef}`,
+      {
+        headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}` },
+      }
+    );
+    chapaStatus = verification.data?.data?.status ?? null;
+  } catch (err) {
+    console.error('Chapa verify failed:', err.message);
   }
 
-  if (payment.userId !== userId) {
-    throw new Error("Access denied");
+  if (
+    chapaStatus === 'success' &&
+    payment.status === 'pending'
+  ) {
+    const qrCode = `GYMAPP-${payment.bookingId}-${crypto.randomUUID()}`;
+
+    await prisma.$transaction([
+      prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: 'success' },
+      }),
+      prisma.booking.update({
+        where: { id: payment.bookingId },
+        data: { status: 'confirmed', qrCode },
+      }),
+    ]);
+
+    return {
+      localStatus: 'success',
+      chapaStatus: 'success',
+      bookingStatus: 'confirmed',
+      qrCode,
+      expired: false,
+    };
   }
 
-  const verification = await verifyChapaTransaction(txRef);
-
-  const booking = await prisma.booking.findUnique({
+  // ── Return current state ────────────────────────────────────────────────
+  const freshBooking = await prisma.booking.findUnique({
     where: { id: payment.bookingId },
   });
 
   return {
     localStatus: payment.status,
-    chapaStatus: verification?.data?.status ?? null,
-    bookingStatus: booking?.status ?? null,
-    qrCode: booking?.qrCode ?? null,
+    chapaStatus,
+    bookingStatus: freshBooking?.status ?? null,
+    qrCode: freshBooking?.qrCode ?? null,
+    expired: false,
   };
 };
 module.exports = {
