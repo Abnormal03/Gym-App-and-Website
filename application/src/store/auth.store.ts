@@ -1,7 +1,7 @@
 // src/store/auth.store.ts
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
 import { User } from '../types/user.types';
+import { deleteItem, readItem, writeItem } from '../services/auth.storage';
 
 interface AuthState {
   user: User | null;
@@ -9,7 +9,7 @@ interface AuthState {
   isLoading: boolean;
   login: (user: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
-  hydrate: () => Promise<void>;   // load saved session on app start
+  hydrate: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -18,24 +18,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   login: async (user, token) => {
-    await SecureStore.setItemAsync('token', token);
-    await SecureStore.setItemAsync('user', JSON.stringify(user));
+    await writeItem('token', token);
+    await writeItem('user', JSON.stringify(user));
     set({ user, token });
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync('token');
-    await SecureStore.deleteItemAsync('user');
+    await deleteItem('token');
+    await deleteItem('user');
     set({ user: null, token: null });
   },
 
   hydrate: async () => {
     try {
-      const token = await SecureStore.getItemAsync('token');
-      const userStr = await SecureStore.getItemAsync('user');
+      const token = await readItem('token');
+      const userStr = await readItem('user');
       if (token && userStr) {
         set({ user: JSON.parse(userStr), token });
       }
+    } catch (e) {
+      // If anything goes wrong reading storage, just start fresh
     } finally {
       set({ isLoading: false });
     }
