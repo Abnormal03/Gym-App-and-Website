@@ -12,6 +12,25 @@ const CHAPA_WEBHOOK_SECRET = process.env.CHAPA_WEBHOOK_SECRET;
 const CHAPA_CALLBACK_URL = process.env.CHAPA_CALLBACK_URL;
 const CHAPA_RETURN_URL = process.env.CHAPA_RETURN_URL;
 
+const getPaymentErrorMessage = (error) => {
+  const responseData = error.response?.data;
+  const message = responseData?.message ?? responseData?.error ?? responseData;
+
+  if (typeof message === "string" && message.trim()) {
+    return message;
+  }
+
+  if (message && typeof message === "object") {
+    try {
+      return JSON.stringify(message);
+    } catch (serializationError) {
+      return error.message;
+    }
+  }
+
+  return error.message || "Chapa payment initialization failed";
+};
+
 const initializePayment = async (bookingId, userId) => {
   if (!CHAPA_SECRET_KEY) {
     throw new Error("CHAPA_SECRET_KEY is missing");
@@ -63,7 +82,12 @@ const initializePayment = async (bookingId, userId) => {
 
   const txRef = `booking-${bookingId}-${Date.now()}`;
   let chapaResponse;
-  const returnUrl = `gym-mobile://booking/confirmation?tx_ref=${txRef}`
+  if (!CHAPA_CALLBACK_URL || !CHAPA_RETURN_URL) {
+    throw new Error("Chapa callback and return URLs must be configured");
+  }
+
+  const returnUrl = new URL(CHAPA_RETURN_URL);
+  returnUrl.searchParams.set("tx_ref", txRef);
 
   try {
 
@@ -83,7 +107,7 @@ const initializePayment = async (bookingId, userId) => {
 
         callback_url: CHAPA_CALLBACK_URL,
 
-        return_url: returnUrl,
+        return_url: returnUrl.toString(),
 
         customization: {
           title: "Gym Booking",
@@ -141,9 +165,7 @@ const initializePayment = async (bookingId, userId) => {
       console.error("FAILED TO SAVE FAILED PAYMENT:", databaseError);
     }
 
-    throw new Error(
-      error.response?.data?.message || "Chapa payment initialization failed",
-    );
+    throw new Error(getPaymentErrorMessage(error));
   }
 
   const checkoutUrl = chapaResponse.data?.data?.checkout_url;

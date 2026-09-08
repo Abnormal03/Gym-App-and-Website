@@ -1,5 +1,24 @@
 const paymentService = require("../services/payment.service");
 
+const getPaymentErrorMessage = (error, fallbackMessage) => {
+  const responseData = error.response?.data;
+  const message = responseData?.message ?? responseData?.error ?? responseData;
+
+  if (typeof message === "string" && message.trim()) {
+    return message;
+  }
+
+  if (message && typeof message === "object") {
+    try {
+      return JSON.stringify(message);
+    } catch (serializationError) {
+      return error.message || fallbackMessage;
+    }
+  }
+
+  return error.message || fallbackMessage;
+};
+
 const initializePaymentController = async (req, res) => {
   try {
     const bookingId = Number(req.body.bookingId);
@@ -30,10 +49,7 @@ const initializePaymentController = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message:
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to initialize payment",
+      message: getPaymentErrorMessage(error, "Failed to initialize payment"),
     });
   }
 };
@@ -52,9 +68,17 @@ const chapaCallbackController = async (req, res) => {
     const result = await paymentService.processPaymentResult(txRef);
 
     const frontendUrl = process.env.FRONTEND_URL;
+    const mobileReturnUrl = process.env.MOBILE_RETURN_URL;
+
+    if (mobileReturnUrl) {
+      const redirectUrl = new URL(mobileReturnUrl);
+      redirectUrl.searchParams.set("tx_ref", txRef);
+      redirectUrl.searchParams.set("status", result.outcome);
+      return res.redirect(redirectUrl.toString());
+    }
 
     if (!frontendUrl) {
-      throw new Error("FRONTEND_URL is not configured");
+      throw new Error("FRONTEND_URL or MOBILE_RETURN_URL is not configured");
     }
 
     if (result.outcome === "success") {
@@ -79,10 +103,7 @@ const chapaCallbackController = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message:
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to process Chapa callback",
+      message: getPaymentErrorMessage(error, "Failed to process Chapa callback"),
     });
   }
 };
@@ -126,10 +147,7 @@ const chapaWebhookController = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message:
-        error.response?.data?.message ||
-        error.message ||
-        "Webhook processing failed",
+      message: getPaymentErrorMessage(error, "Webhook processing failed"),
     });
   }
 };
@@ -157,10 +175,7 @@ const verifyPaymentController = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message:
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to verify payment",
+      message: getPaymentErrorMessage(error, "Failed to verify payment"),
     });
   }
 };
