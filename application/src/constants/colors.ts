@@ -1,4 +1,18 @@
-export const colors = {
+export type ThemePalette = {
+  background: string;
+  foreground: string;
+  card: string;
+  input: string;
+  border: string;
+  muted: string;
+  subtle: string;
+  primary: string;
+  primaryHover: string;
+  success: string;
+  error: string;
+};
+
+export const colors: Record<string, ThemePalette> = {
   light: {
     background: '#F8F7FC',
     foreground: '#171827',
@@ -10,7 +24,7 @@ export const colors = {
     primary: '#2E68F4',
     primaryHover: '#1E56DD',
     success: '#00855E',
-    error: "#eb3434"
+    error: '#eb3434',
   },
   dark: {
     background: '#070A0F',
@@ -23,8 +37,9 @@ export const colors = {
     primary: '#2E68F4',
     primaryHover: '#4B7DFF',
     success: '#00D99A',
-    error: "#eb3434"
+    error: '#eb3434',
   },
-} as const
+};
 
-export type ThemeMode = keyof typeof colors
+export type ThemeMode = keyof typeof colors;
+export type AppTheme = ThemePalette;

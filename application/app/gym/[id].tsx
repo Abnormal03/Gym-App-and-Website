@@ -15,6 +15,8 @@ import { useState } from "react";
 import { useGymDetail } from "../../src/hooks/useGymDetails";
 import { useAvailability } from "../../src/hooks/useAvailability";
 import { useBookingStore } from "../../src/store/booking.store";
+import { useTheme } from "../../src/hooks/useTheme";
+import type { ThemePalette } from "../../src/constants/colors";
 import { Package } from "../../src/types/gym.types";
 import {
   generateCheckInTimes,
@@ -35,6 +37,8 @@ const { width } = Dimensions.get("window");
 export default function GymDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const gymId = Number(id);
 
   const { gym, loading, error } = useGymDetail(gymId);
@@ -460,213 +464,244 @@ export default function GymDetailScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+const createStyles = (theme: ThemePalette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
 
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#e53935",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  retryBtn: {
-    backgroundColor: "#000",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryText: { color: "#fff", fontWeight: "600" },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    errorText: {
+      fontSize: 16,
+      color: theme.error,
+      textAlign: "center",
+      marginBottom: 16,
+    },
+    retryBtn: {
+      backgroundColor: theme.primary,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    retryText: { color: theme.card, fontWeight: "600" },
 
-  // Photos
-  photo: { width, height: 260 },
-  photoPlaceholder: {
-    width,
-    height: 200,
-    backgroundColor: "#f0f0f0",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  photoPlaceholderText: { color: "#aaa" },
+    // Photos
+    photo: { width, height: 260 },
+    photoPlaceholder: {
+      width,
+      height: 200,
+      backgroundColor: theme.input,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    photoPlaceholderText: { color: theme.subtle },
 
-  // Content
-  content: { padding: 20 },
-  gymName: { fontSize: 24, fontWeight: "700", color: "#111", marginBottom: 6 },
-  address: { fontSize: 14, color: "#666", marginBottom: 12 },
-  infoRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  infoChip: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  infoChipText: { fontSize: 13, color: "#444" },
+    // Content
+    content: { padding: 20 },
+    gymName: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: theme.foreground,
+      marginBottom: 6,
+    },
+    address: { fontSize: 14, color: theme.muted, marginBottom: 12 },
+    infoRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+    infoChip: {
+      backgroundColor: theme.input,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    infoChipText: { fontSize: 13, color: theme.foreground },
 
-  // Section
-  section: { marginTop: 28 },
-  sectionTitleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111",
-    marginBottom: 12,
-  },
-  sectionHint: { fontSize: 12, color: "#999" },
-  emptyText: { color: "#999", fontSize: 14 },
+    // Section
+    section: { marginTop: 28 },
+    sectionTitleRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.foreground,
+      marginBottom: 12,
+    },
+    sectionHint: { fontSize: 12, color: theme.subtle },
+    emptyText: { color: theme.subtle, fontSize: 14 },
 
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 
-  // Amenities
-  amenityTag: {
-    backgroundColor: "#e8f5e9",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  amenityText: { fontSize: 13, color: "#2e7d32", fontWeight: "500" },
+    // Amenities
+    amenityTag: {
+      backgroundColor: "#e8f5e9",
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    amenityText: { fontSize: 13, color: "#2e7d32", fontWeight: "500" },
 
-  // Package cards
-  packageCard: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  packageCardSelected: { borderColor: "#111", backgroundColor: "#fafafa" },
-  packageHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  packageName: { fontSize: 16, fontWeight: "600", color: "#111" },
-  packagePrice: { fontSize: 16, fontWeight: "700", color: "#111" },
-  packageMeta: { fontSize: 13, color: "#888", marginBottom: 4 },
-  packageBenefits: { fontSize: 13, color: "#555", marginTop: 4 },
-  selectedLabel: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#2e7d32",
-  },
+    // Package cards
+    packageCard: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+    },
+    packageCardSelected: {
+      borderColor: theme.primary,
+      backgroundColor: theme.input,
+    },
+    packageHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    packageName: { fontSize: 16, fontWeight: "600", color: theme.foreground },
+    packagePrice: { fontSize: 16, fontWeight: "700", color: theme.foreground },
+    packageMeta: { fontSize: 13, color: theme.muted, marginBottom: 4 },
+    packageBenefits: { fontSize: 13, color: theme.muted, marginTop: 4 },
+    selectedLabel: {
+      marginTop: 8,
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme.success,
+    },
 
-  // Date chips
-  dayChip: {
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginRight: 8,
-    minWidth: 52,
-  },
-  dayChipSelected: { backgroundColor: "#111", borderColor: "#111" },
-  dayLabel: { fontSize: 11, color: "#888", marginBottom: 2 },
-  dayNumber: { fontSize: 16, fontWeight: "600", color: "#111" },
-  selectedChipText: { color: "#fff" },
+    // Date chips
+    dayChip: {
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.border,
+      marginRight: 8,
+      minWidth: 52,
+    },
+    dayChipSelected: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
+    },
+    dayLabel: { fontSize: 11, color: theme.muted, marginBottom: 2 },
+    dayNumber: { fontSize: 16, fontWeight: "600", color: theme.foreground },
+    selectedChipText: { color: theme.card },
 
-  // Check-in time chips
-  timeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginRight: 8,
-    alignItems: "center",
-  },
-  timeChipSelected: { backgroundColor: "#111", borderColor: "#111" },
-  timeText: { fontSize: 14, color: "#333", fontWeight: "500" },
+    // Check-in time chips
+    timeChip: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.border,
+      marginRight: 8,
+      alignItems: "center",
+    },
+    timeChipSelected: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
+    },
+    timeText: { fontSize: 14, color: theme.foreground, fontWeight: "500" },
 
-  // Duration chips
-  durationChip: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    alignItems: "center",
-  },
-  durationChipSelected: { backgroundColor: "#111", borderColor: "#111" },
-  durationText: { fontSize: 14, color: "#333", fontWeight: "500" },
+    // Duration chips
+    durationChip: {
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.border,
+      alignItems: "center",
+    },
+    durationChipSelected: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
+    },
+    durationText: { fontSize: 14, color: theme.foreground, fontWeight: "500" },
 
-  // Time summary card
-  timeSummary: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#f8f8f8",
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-  },
-  timeSummaryItem: { alignItems: "center" },
-  timeSummaryLabel: { fontSize: 11, color: "#999", marginBottom: 4 },
-  timeSummaryValue: { fontSize: 16, fontWeight: "700", color: "#111" },
-  timeSummaryArrow: { fontSize: 18, color: "#bbb" },
+    // Time summary card
+    timeSummary: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.input,
+      borderRadius: 12,
+      padding: 16,
+      marginTop: 16,
+    },
+    timeSummaryItem: { alignItems: "center" },
+    timeSummaryLabel: { fontSize: 11, color: theme.subtle, marginBottom: 4 },
+    timeSummaryValue: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: theme.foreground,
+    },
+    timeSummaryArrow: { fontSize: 18, color: theme.subtle },
 
-  // Availability
-  availabilityBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#e8f5e9",
-    borderRadius: 10,
-    padding: 14,
-  },
-  availabilityFull: { backgroundColor: "#ffebee" },
-  availabilityText: { fontSize: 14, fontWeight: "500", color: "#333", flex: 1 },
-  availabilityError: {
-    backgroundColor: "#ffebee",
-    borderRadius: 10,
-    padding: 14,
-    gap: 10,
-  },
-  availabilityErrorText: { fontSize: 14, fontWeight: "500", color: "#b71c1c" },
-  availabilityRetryBtn: {
-    alignSelf: "flex-start",
-    backgroundColor: "#111",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  availabilityRetryText: { color: "#fff", fontWeight: "600" },
+    // Availability
+    availabilityBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: theme.input,
+      borderRadius: 10,
+      padding: 14,
+    },
+    availabilityFull: { backgroundColor: "#ffebee" },
+    availabilityText: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: theme.foreground,
+      flex: 1,
+    },
+    availabilityError: {
+      backgroundColor: theme.input,
+      borderRadius: 10,
+      padding: 14,
+      gap: 10,
+    },
+    availabilityErrorText: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: theme.error,
+    },
+    availabilityRetryBtn: {
+      alignSelf: "flex-start",
+      backgroundColor: theme.primary,
+      borderRadius: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    availabilityRetryText: { color: theme.card, fontWeight: "600" },
 
-  // Footer
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#fff",
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-  },
-  footerSummary: {
-    fontSize: 12,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  bookBtn: {
-    backgroundColor: "#111",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
-  bookBtnDisabled: { backgroundColor: "#ccc" },
-  bookBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-});
+    // Footer
+    footer: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: theme.card,
+      padding: 16,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    footerSummary: {
+      fontSize: 12,
+      color: theme.muted,
+      textAlign: "center",
+      marginBottom: 8,
+    },
+    bookBtn: {
+      backgroundColor: theme.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: "center",
+    },
+    bookBtnDisabled: { backgroundColor: theme.subtle },
+    bookBtnText: { color: theme.card, fontSize: 16, fontWeight: "600" },
+  });

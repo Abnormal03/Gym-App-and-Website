@@ -57,3 +57,26 @@ export interface VerifyPaymentResponse {
 }
 
 export type PaymentStatus = 'pending' | 'success' | 'failed' | 'expired';
+
+export interface MyBooking {
+  id: number;
+  gymId: number;
+  packageId: number;
+  slotStart: string;
+  slotEnd: string;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'checked_in';
+  qrCode: string | null;
+  createdAt: string;
+  gym: {
+    id: number;
+    name: string;
+    address: string;
+    photos: string[];
+  };
+  package: {
+    id: number;
+    name: string;
+    type: string;
+    price: number;
+  };
+}

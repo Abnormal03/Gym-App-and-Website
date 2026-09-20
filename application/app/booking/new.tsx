@@ -10,10 +10,14 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useBookingStore } from "../../src/store/booking.store";
 import { bookingService } from "../../src/services/booking.service";
+import { useTheme } from "../../src/hooks/useTheme";
+import type { ThemePalette } from "../../src/constants/colors";
 
 export default function BookingNewScreen() {
   const router = useRouter();
   const store = useBookingStore();
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const [loading, setLoading] = useState(false);
 
   // Two-step progress so the user knows what's happening during the wait
@@ -155,31 +159,35 @@ export default function BookingNewScreen() {
 
       {/* Summary Card */}
       <View style={styles.summaryCard}>
-        <Row label="Gym" value={store.gymName ?? "-"} />
-        <Divider />
-        <Row label="Package" value={store.packageName ?? "-"} />
-        <Divider />
+        <Row label="Gym" value={store.gymName ?? "-"} theme={theme} />
+        <Divider theme={theme} />
+        <Row label="Package" value={store.packageName ?? "-"} theme={theme} />
+        <Divider theme={theme} />
         <Row
           label="Check-in"
           value={store.slotStart ? formatCheckIn(store.slotStart) : "-"}
+          theme={theme}
         />
-        <Divider />
+        <Divider theme={theme} />
         <Row
           label="Check-out"
           value={store.slotEnd ? formatCheckOutTime(store.slotEnd) : "-"}
+          theme={theme}
         />
-        <Divider />
-        <Row label="Duration" value={formatDurationLabel()} />
-        <Divider />
+        <Divider theme={theme} />
+        <Row label="Duration" value={formatDurationLabel()} theme={theme} />
+        <Divider theme={theme} />
         <Row
           label="Valid until"
           value={store.slotEnd ? formatExpiryDate(store.slotEnd) : "-"}
+          theme={theme}
         />
-        <Divider />
+        <Divider theme={theme} />
         <Row
           label="Total"
           value={`ETB ${store.packagePrice?.toFixed(2) ?? "0.00"}`}
           highlight
+          theme={theme}
         />
       </View>
 
@@ -227,21 +235,29 @@ const Row = ({
   label,
   value,
   highlight = false,
+  theme,
 }: {
   label: string;
   value: string;
   highlight?: boolean;
+  theme: ThemePalette;
 }) => (
   <View style={rowStyles.row}>
-    <Text style={rowStyles.label}>{label}</Text>
-    <Text style={[rowStyles.value, highlight && rowStyles.highlighted]}>
+    <Text style={[rowStyles.label, { color: theme.muted }]}>{label}</Text>
+    <Text
+      style={[
+        rowStyles.value,
+        { color: theme.foreground },
+        highlight && rowStyles.highlighted,
+      ]}
+    >
       {value}
     </Text>
   </View>
 );
 
-const Divider = () => (
-  <View style={{ height: 1, backgroundColor: "#f0f0f0" }} />
+const Divider = ({ theme }: { theme: ThemePalette }) => (
+  <View style={{ height: 1, backgroundColor: theme.border }} />
 );
 
 const rowStyles = StyleSheet.create({
@@ -252,60 +268,65 @@ const rowStyles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
   },
-  label: { fontSize: 14, color: "#888" },
+  label: { fontSize: 14 },
   value: {
     fontSize: 14,
-    color: "#111",
     fontWeight: "500",
     maxWidth: "60%",
     textAlign: "right",
   },
-  highlighted: { fontSize: 16, fontWeight: "700", color: "#111" },
+  highlighted: { fontSize: 16, fontWeight: "700" },
 });
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  content: { padding: 24 },
-  heading: { fontSize: 24, fontWeight: "700", color: "#111", marginBottom: 6 },
-  subheading: { fontSize: 14, color: "#888", marginBottom: 28 },
+const createStyles = (theme: ThemePalette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    content: { padding: 24 },
+    heading: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: theme.foreground,
+      marginBottom: 6,
+    },
+    subheading: { fontSize: 14, color: theme.muted, marginBottom: 28 },
 
-  summaryCard: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 20,
-  },
+    summaryCard: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 16,
+      overflow: "hidden",
+      marginBottom: 20,
+    },
 
-  noticeBox: {
-    backgroundColor: "#fff8e1",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 28,
-  },
-  noticeText: { fontSize: 13, color: "#795548", lineHeight: 20 },
-  noticeBold: { fontWeight: "700" },
+    noticeBox: {
+      backgroundColor: theme.input,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 28,
+    },
+    noticeText: { fontSize: 13, color: theme.muted, lineHeight: 20 },
+    noticeBold: { fontWeight: "700" },
 
-  errorText: {
-    color: "#e53935",
-    fontSize: 14,
-    marginBottom: 16,
-    textAlign: "center",
-  },
+    errorText: {
+      color: theme.error,
+      fontSize: 14,
+      marginBottom: 16,
+      textAlign: "center",
+    },
 
-  confirmBtn: {
-    backgroundColor: "#111",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 12,
-    minHeight: 52,
-    justifyContent: "center",
-  },
-  btnDisabled: { backgroundColor: "#555" },
-  confirmBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  loadingRow: { flexDirection: "row", alignItems: "center" },
+    confirmBtn: {
+      backgroundColor: theme.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: "center",
+      marginBottom: 12,
+      minHeight: 52,
+      justifyContent: "center",
+    },
+    btnDisabled: { backgroundColor: theme.subtle },
+    confirmBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+    loadingRow: { flexDirection: "row", alignItems: "center" },
 
-  backBtn: { alignItems: "center", padding: 12 },
-  backBtnText: { color: "#888", fontSize: 15 },
-});
+    backBtn: { alignItems: "center", padding: 12 },
+    backBtnText: { color: theme.muted, fontSize: 15 },
+  });

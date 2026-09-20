@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -8,25 +7,21 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { colors } from "../../src/constants/colors";
-import { Button } from "../../src/components/common/Button";
+import { Button } from "../../../src/components/common/Button";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { GymCard } from "../../src/components/gym/GymCard";
-import { SkeletonList } from "../../src/components/gym/SkeletonLoading";
-import { useGyms } from "../../src/hooks/useGym";
+import { GymCard } from "../../../src/components/gym/GymCard";
+import { SkeletonList } from "../../../src/components/gym/SkeletonLoading";
+import { useGyms } from "../../../src/hooks/useGym";
 import { useRouter } from "expo-router";
+import { useTheme } from "../../../src/hooks/useTheme";
 
-type Props = { dark?: boolean };
-
-export function HomeScreen({ dark = false }: Props) {
-  const [themeDark] = useState(dark);
-  const [activeFilter, setActiveFilter] = useState("Distance");
-  const mode = themeDark ? "dark" : "light";
+export function HomeScreen() {
+  const { theme: palette, mode } = useTheme();
   const theme = {
-    ...(themeDark ? colors.dark : colors.light),
-    text: (themeDark ? colors.dark : colors.light).foreground,
-    nav: themeDark ? colors.dark.card : colors.light.card,
-    skeleton: themeDark ? colors.dark.border : colors.light.input,
+    ...palette,
+    text: palette.foreground,
+    nav: palette.card,
+    skeleton: palette.border,
   };
   const router = useRouter();
 
@@ -43,18 +38,6 @@ export function HomeScreen({ dark = false }: Props) {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={styles.viewport}>
-        <View style={styles.header}>
-          <Pressable accessibilityLabel="Open menu">
-            <Text style={[styles.headerIcon, { color: theme.text }]}>☰</Text>
-          </Pressable>
-          <Text style={[styles.logo, { color: theme.primary }]}>
-            BOLE ELITE
-          </Text>
-          <Pressable accessibilityLabel="Open settings">
-            <Text style={[styles.headerIcon, { color: theme.text }]}>⚙</Text>
-          </Pressable>
-        </View>
-
         <View style={styles.searchRow}>
           <View
             style={[
@@ -83,36 +66,6 @@ export function HomeScreen({ dark = false }: Props) {
           }
           showsVerticalScrollIndicator={false}
         >
-          {/* <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}
-          >
-            {["Distance", "Rating", "Price: low-high"].map((filter) => (
-              <Pressable
-                key={filter}
-                onPress={() => setActiveFilter(filter)}
-                style={[
-                  styles.filter,
-                  {
-                    backgroundColor:
-                      activeFilter === filter ? theme.primary : theme.input,
-                    borderColor:
-                      activeFilter === filter ? theme.primary : theme.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: activeFilter === filter ? "#fff" : theme.text,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {filter}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView> */}
           {isLoading ? (
             <SkeletonList theme={theme} />
           ) : (

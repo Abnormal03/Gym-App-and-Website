@@ -4,7 +4,9 @@ import {
   CreateBookingResponse,
   InitializePaymentResponse,
   VerifyPaymentResponse,
+  MyBooking
 } from '../types/booking.types';
+
 
 export const bookingService = {
   // Step 1 — creates the booking record
@@ -18,8 +20,8 @@ export const bookingService = {
   verifyPayment: (txRef: string): Promise<VerifyPaymentResponse> =>
     api.get(`/payments/verify/${txRef}`),
 
-  getMyBookings: () =>
-    api.get('/bookings/my'),
+  getMyBookings: (): Promise<{ success: boolean; bookings: MyBooking[] }> =>
+    api.get('/bookings/my-bookings'),
 
   cancel: (id: number) =>
     api.put(`/bookings/${id}/cancel`),

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "../src/store/auth.store";
 import { useBookingStore } from "../src/store/booking.store";
+import "react-native-gesture-handler";
 
 export default function RootLayout() {
   const { user, isLoading, hydrate } = useAuthStore();
@@ -25,7 +26,7 @@ export default function RootLayout() {
     }
 
     if (user && inAuthGroup) {
-      router.replace("/(tabs)");
+      router.replace("/(drawer)/(tabs)");
       return;
     }
 

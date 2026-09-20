@@ -19,6 +19,8 @@ import {
   PaymentStatus,
   VerifyPaymentResult,
 } from "../../src/types/booking.types";
+import { useTheme } from "../../src/hooks/useTheme";
+import type { ThemePalette } from "../../src/constants/colors";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -26,6 +28,8 @@ export default function ConfirmationScreen() {
   const { tx_ref } = useLocalSearchParams<{ tx_ref: string }>();
   const router = useRouter();
   const store = useBookingStore();
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const countdown = useCountdown(store.expiresAt);
 
   const [status, setStatus] = useState<PaymentStatus>("pending");
@@ -77,7 +81,7 @@ export default function ConfirmationScreen() {
       <View style={styles.centered}>
         <Text style={styles.failedTitle}>No booking found</Text>
         <TouchableOpacity
-          onPress={() => router.replace("/(tabs)")}
+          onPress={() => router.replace("/(drawer)/(tabs)")}
           style={styles.primaryBtn}
         >
           <Text style={styles.primaryBtnText}>Back to Home</Text>
@@ -87,7 +91,7 @@ export default function ConfirmationScreen() {
   }
 
   if (status === "pending") {
-    return <PendingState countdown={countdown} />;
+    return <PendingState countdown={countdown} styles={styles} />;
   }
 
   if (status === "success") {
@@ -96,12 +100,14 @@ export default function ConfirmationScreen() {
         qrCode={result?.qrCode ?? null}
         store={store}
         router={router}
+        styles={styles}
+        theme={theme}
       />
     );
   }
 
   if (status === "expired") {
-    return <ExpiredState router={router} store={store} />;
+    return <ExpiredState router={router} store={store} styles={styles} />;
   }
 
   return (
@@ -116,17 +122,22 @@ export default function ConfirmationScreen() {
       }}
       onHome={async () => {
         await store.clearPendingBooking();
-        router.replace("/(tabs)");
+        router.replace("/(drawer)/(tabs)");
       }}
+      styles={styles}
     />
   );
 }
 
+type ConfirmationStyles = ReturnType<typeof createStyles>;
+
 // ─── Pending ──────────────────────────────────────────────────────────────────
 const PendingState = ({
   countdown,
+  styles,
 }: {
   countdown: ReturnType<typeof useCountdown>;
+  styles: ConfirmationStyles;
 }) => (
   <View style={styles.centered}>
     <ActivityIndicator size="large" color="#111" style={{ marginBottom: 24 }} />
@@ -161,10 +172,14 @@ const SuccessState = ({
   qrCode,
   store,
   router,
+  styles,
+  theme,
 }: {
   qrCode: string | null;
   store: BookingState;
   router: ReturnType<typeof useRouter>;
+  styles: ConfirmationStyles;
+  theme: ThemePalette;
 }) => {
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-US", {
@@ -209,32 +224,49 @@ const SuccessState = ({
 
       {/* Booking details from store */}
       <View style={styles.detailsCard}>
-        <DetailRow label="Gym" value={store.gymName ?? "-"} />
-        <DetailRow label="Package" value={store.packageName ?? "-"} />
+        <DetailRow label="Gym" value={store.gymName ?? "-"} theme={theme} />
+        <DetailRow
+          label="Package"
+          value={store.packageName ?? "-"}
+          theme={theme}
+        />
         {store.slotStart && (
-          <DetailRow label="Date" value={formatDate(store.slotStart)} />
+          <DetailRow
+            label="Date"
+            value={formatDate(store.slotStart)}
+            theme={theme}
+          />
         )}
         {store.slotStart && (
-          <DetailRow label="Check-in" value={formatTime(store.slotStart)} />
+          <DetailRow
+            label="Check-in"
+            value={formatTime(store.slotStart)}
+            theme={theme}
+          />
         )}
         {store.slotEnd && (
-          <DetailRow label="Check-out" value={formatTime(store.slotEnd)} />
+          <DetailRow
+            label="Check-out"
+            value={formatTime(store.slotEnd)}
+            theme={theme}
+          />
         )}
         <DetailRow
           label="Amount Paid"
           value={`ETB ${store.packagePrice?.toFixed(2) ?? "0.00"}`}
+          theme={theme}
         />
       </View>
 
       <TouchableOpacity
-        onPress={() => router.replace("/(tabs)/bookings")}
+        onPress={() => router.replace("/(drawer)/(tabs)/bookings")}
         style={styles.primaryBtn}
       >
         <Text style={styles.primaryBtnText}>View My Bookings</Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={async () => {
-          router.replace("/(tabs)");
+          router.replace("/(drawer)/(tabs)");
           await store.clearPendingBooking();
         }}
         style={styles.secondaryBtn}
@@ -250,10 +282,12 @@ const FailedState = ({
   error,
   onRetry,
   onHome,
+  styles,
 }: {
   error: string | null;
   onRetry: () => void;
   onHome: () => void;
+  styles: ConfirmationStyles;
 }) => (
   <View style={styles.centered}>
     <Text style={styles.failedIcon}>✕</Text>
@@ -275,9 +309,11 @@ const FailedState = ({
 const ExpiredState = ({
   router,
   store,
+  styles,
 }: {
   router: ReturnType<typeof useRouter>;
   store: BookingState;
+  styles: ConfirmationStyles;
 }) => (
   <View style={styles.centered}>
     <Text style={styles.expiredIcon}>⏰</Text>
@@ -289,7 +325,7 @@ const ExpiredState = ({
     <TouchableOpacity
       onPress={async () => {
         await store.clearPendingBooking();
-        router.replace("/(tabs)");
+        router.replace("/(drawer)/(tabs)");
       }}
       style={styles.primaryBtn}
     >
@@ -299,10 +335,20 @@ const ExpiredState = ({
 );
 
 // ─── Detail Row ───────────────────────────────────────────────────────────────
-const DetailRow = ({ label, value }: { label: string; value: string }) => (
-  <View style={detailStyles.row}>
-    <Text style={detailStyles.label}>{label}</Text>
-    <Text style={detailStyles.value}>{value}</Text>
+const DetailRow = ({
+  label,
+  value,
+  theme,
+}: {
+  label: string;
+  value: string;
+  theme: ThemePalette;
+}) => (
+  <View style={[detailStyles.row, { borderBottomColor: theme.border }]}>
+    <Text style={[detailStyles.label, { color: theme.muted }]}>{label}</Text>
+    <Text style={[detailStyles.value, { color: theme.foreground }]}>
+      {value}
+    </Text>
   </View>
 );
 
@@ -319,118 +365,119 @@ const detailStyles = StyleSheet.create({
 });
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  content: { padding: 24, alignItems: "center" },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-    backgroundColor: "#fff",
-  },
-  pendingTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111",
-    marginBottom: 10,
-  },
-  pendingMessage: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  countdownBadge: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  countdownBadgeUrgent: { backgroundColor: "#fff3e0" },
-  countdownText: { fontSize: 16, fontWeight: "600", color: "#555" },
-  countdownTextUrgent: { color: "#e65100" },
-  checkingNote: { fontSize: 12, color: "#bbb" },
+const createStyles = (theme: ThemePalette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    content: { padding: 24, alignItems: "center" },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 32,
+      backgroundColor: theme.background,
+    },
+    pendingTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: theme.foreground,
+      marginBottom: 10,
+    },
+    pendingMessage: {
+      fontSize: 14,
+      color: theme.muted,
+      textAlign: "center",
+      lineHeight: 22,
+      marginBottom: 24,
+    },
+    countdownBadge: {
+      backgroundColor: theme.input,
+      borderRadius: 20,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      marginBottom: 12,
+    },
+    countdownBadgeUrgent: { backgroundColor: "#fff3e0" },
+    countdownText: { fontSize: 16, fontWeight: "600", color: theme.muted },
+    countdownTextUrgent: { color: theme.error },
+    checkingNote: { fontSize: 12, color: theme.subtle },
 
-  successHeader: { alignItems: "center", marginBottom: 28, width: "100%" },
-  successIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 36,
-    backgroundColor: "#e8f5e9",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  successIcon: { fontSize: 34, color: "#2e7d32" },
-  successTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#111",
-  },
-  successMessage: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 21,
-  },
+    successHeader: { alignItems: "center", marginBottom: 28, width: "100%" },
+    successIconCircle: {
+      width: 42,
+      height: 42,
+      borderRadius: 36,
+      backgroundColor: theme.input,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    successIcon: { fontSize: 34, color: theme.success },
+    successTitle: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: theme.foreground,
+    },
+    successMessage: {
+      fontSize: 14,
+      color: theme.muted,
+      textAlign: "center",
+      lineHeight: 21,
+    },
 
-  qrContainer: {
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    marginBottom: 24,
-    width: "100%",
-  },
-  qrHint: { fontSize: 12, color: "#aaa", marginTop: 14 },
-  qrFallback: { color: "#aaa", fontSize: 14, textAlign: "center" },
+    qrContainer: {
+      alignItems: "center",
+      backgroundColor: theme.card,
+      padding: 24,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+      marginBottom: 24,
+      width: "100%",
+    },
+    qrHint: { fontSize: 12, color: theme.subtle, marginTop: 14 },
+    qrFallback: { color: theme.subtle, fontSize: 14, textAlign: "center" },
 
-  detailsCard: {
-    width: "100%",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 28,
-  },
+    detailsCard: {
+      width: "100%",
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 28,
+    },
 
-  failedIcon: { fontSize: 52, color: "#e53935", marginBottom: 16 },
-  failedTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#111",
-    marginBottom: 10,
-  },
-  failedMessage: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 32,
-  },
-  expiredIcon: { fontSize: 52, marginBottom: 16 },
+    failedIcon: { fontSize: 52, color: theme.error, marginBottom: 16 },
+    failedTitle: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: theme.foreground,
+      marginBottom: 10,
+    },
+    failedMessage: {
+      fontSize: 14,
+      color: theme.muted,
+      textAlign: "center",
+      lineHeight: 22,
+      marginBottom: 32,
+    },
+    expiredIcon: { fontSize: 52, marginBottom: 16 },
 
-  primaryBtn: {
-    backgroundColor: "#111",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    width: "100%",
-    marginBottom: 12,
-  },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  secondaryBtn: { alignItems: "center", padding: 12, width: "100%" },
-  secondaryBtnText: { color: "#888", fontSize: 15 },
-  successHead: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    marginBottom: 16,
-  },
-});
+    primaryBtn: {
+      backgroundColor: theme.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: "center",
+      width: "100%",
+      marginBottom: 12,
+    },
+    primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+    secondaryBtn: { alignItems: "center", padding: 12, width: "100%" },
+    secondaryBtnText: { color: theme.muted, fontSize: 15 },
+    successHead: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      marginBottom: 16,
+    },
+  });

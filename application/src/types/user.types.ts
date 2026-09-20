@@ -1,11 +1,12 @@
 export interface User {
     id: number;
     name: string;
-    phone?: number;
+    phone?: string;
     email: string;
     photoUrl?: string;
     fcmToken?: string;
-    createdSt: string
+    totalBookings?:number;
+    createdAt: string;   
 }
 
 export interface AuthResponse {
@@ -24,4 +25,15 @@ export interface RegisterDTO {
   email: string;
   phone?: string;
   password: string;
+}
+
+export interface UpdateProfileDTO {
+  name?: string;
+  phone?: string;
+  photoUrl?: string;
+}
+
+export interface ChangePasswordDTO {
+  currentPassword: string;
+  newPassword: string;
 }

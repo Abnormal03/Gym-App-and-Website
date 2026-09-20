@@ -10,10 +10,14 @@ import {
 import { useRouter } from "expo-router";
 import { useBookingStore } from "../../src/store/booking.store";
 import { useCountdown } from "../../src/hooks/useCountdown";
+import { useTheme } from "../../src/hooks/useTheme";
+import type { ThemePalette } from "../../src/constants/colors";
 
 export default function BookingPaymentScreen() {
   const router = useRouter();
   const store = useBookingStore();
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const countdown = useCountdown(store.expiresAt);
 
   const formatSlotTime = (iso: string) => {
@@ -56,7 +60,7 @@ export default function BookingPaymentScreen() {
           style: "destructive",
           onPress: async () => {
             await store.clearPendingBooking();
-            router.replace("/(tabs)");
+            router.replace("/(drawer)/(tabs)");
           },
         },
       ],
@@ -74,7 +78,7 @@ export default function BookingPaymentScreen() {
         <TouchableOpacity
           onPress={async () => {
             await store.clearPendingBooking();
-            router.replace("/(tabs)");
+            router.replace("/(drawer)/(tabs)");
           }}
           style={styles.primaryBtn}
         >
@@ -151,98 +155,109 @@ export default function BookingPaymentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  content: { flex: 1, padding: 24 },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
+const createStyles = (theme: ThemePalette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    content: { flex: 1, padding: 24 },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 32,
+    },
 
-  heading: { fontSize: 24, fontWeight: "700", color: "#111", marginBottom: 8 },
-  subheading: { fontSize: 14, color: "#888", marginBottom: 28, lineHeight: 21 },
+    heading: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: theme.foreground,
+      marginBottom: 8,
+    },
+    subheading: {
+      fontSize: 14,
+      color: theme.muted,
+      marginBottom: 28,
+      lineHeight: 21,
+    },
 
-  // Timer
-  timerCard: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  timerCardUrgent: { backgroundColor: "#fff3e0" },
-  timerLabel: { fontSize: 13, color: "#888", marginBottom: 8 },
-  timerValue: {
-    fontSize: 42,
-    fontWeight: "700",
-    color: "#111",
-    letterSpacing: 2,
-  },
-  timerValueUrgent: { color: "#e65100" },
+    // Timer
+    timerCard: {
+      backgroundColor: theme.input,
+      borderRadius: 16,
+      padding: 20,
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    timerCardUrgent: { backgroundColor: "#fff3e0" },
+    timerLabel: { fontSize: 13, color: theme.muted, marginBottom: 8 },
+    timerValue: {
+      fontSize: 42,
+      fontWeight: "700",
+      color: theme.foreground,
+      letterSpacing: 2,
+    },
+    timerValueUrgent: { color: theme.error },
 
-  // Summary
-  summaryCard: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  summaryGym: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111",
-    marginBottom: 4,
-  },
-  summaryPackage: { fontSize: 14, color: "#555", marginBottom: 4 },
-  summarySlot: { fontSize: 13, color: "#888", marginBottom: 8 },
-  summaryPrice: { fontSize: 20, fontWeight: "700", color: "#111" },
+    // Summary
+    summaryCard: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+    },
+    summaryGym: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.foreground,
+      marginBottom: 4,
+    },
+    summaryPackage: { fontSize: 14, color: theme.muted, marginBottom: 4 },
+    summarySlot: { fontSize: 13, color: theme.muted, marginBottom: 8 },
+    summaryPrice: { fontSize: 20, fontWeight: "700", color: theme.foreground },
 
-  // Chapa button
-  chapaBtn: {
-    backgroundColor: "#1a237e",
-    borderRadius: 12,
-    padding: 18,
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  chapaBtnText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  chapaBtnSub: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
+    // Chapa button
+    chapaBtn: {
+      backgroundColor: "#1a237e",
+      borderRadius: 12,
+      padding: 18,
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    chapaBtnText: {
+      color: "#fff",
+      fontSize: 17,
+      fontWeight: "700",
+      marginBottom: 4,
+    },
+    chapaBtnSub: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
 
-  alreadyPaidBtn: { alignItems: "center", padding: 12 },
-  alreadyPaidText: { color: "#1a237e", fontSize: 14, fontWeight: "500" },
+    alreadyPaidBtn: { alignItems: "center", padding: 12 },
+    alreadyPaidText: { color: theme.primary, fontSize: 14, fontWeight: "500" },
 
-  // Cancel
-  cancelBtn: { padding: 20, alignItems: "center" },
-  cancelText: { color: "#e53935", fontSize: 14 },
+    // Cancel
+    cancelBtn: { padding: 20, alignItems: "center" },
+    cancelText: { color: theme.error, fontSize: 14 },
 
-  // Expired
-  expiredIcon: { fontSize: 56, marginBottom: 16 },
-  expiredTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#111",
-    marginBottom: 10,
-  },
-  expiredMessage: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 32,
-  },
-  primaryBtn: {
-    backgroundColor: "#111",
-    borderRadius: 12,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-  },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-});
+    // Expired
+    expiredIcon: { fontSize: 56, marginBottom: 16 },
+    expiredTitle: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: theme.foreground,
+      marginBottom: 10,
+    },
+    expiredMessage: {
+      fontSize: 14,
+      color: theme.muted,
+      textAlign: "center",
+      lineHeight: 22,
+      marginBottom: 32,
+    },
+    primaryBtn: {
+      backgroundColor: theme.primary,
+      borderRadius: 12,
+      paddingHorizontal: 32,
+      paddingVertical: 14,
+    },
+    primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  });
