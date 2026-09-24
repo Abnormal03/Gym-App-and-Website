@@ -7,8 +7,23 @@ export const useProfile = () => {
   const { user, login, token } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPass, setSavingPass] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const [passError, setPassError] = useState<string | null>(null);
+
+  const clearError = ()=>{
+    setError(null);
+    setPassError(null);
+  }
+  useEffect(()=>{
+    if(!error&&!passError) return;
+    const errorTimeout = setTimeout(()=>{
+      clearError();
+    }, 5000);
+    return ()=> clearTimeout(errorTimeout);
+  },[error, passError, clearError])
 
   const updateProfile = async (data: UpdateProfileDTO) => {
     setSaving(true);
@@ -27,18 +42,37 @@ export const useProfile = () => {
   };
 
   const changePassword = async (data: ChangePasswordDTO) => {
-    setSaving(true);
-    setError(null);
+    setSavingPass(true);
+    setPassError(null);
     setSuccess(null);
     try {
       await userService.changePassword(data);
       setSuccess('Password changed successfully');
-    } catch (err) {
-      setError(err as string);
+    } catch (err:any) {
+      setPassError(err?.message|| "unable to change password!");
     } finally {
-      setSaving(false);
+      setSavingPass(false);
     }
   };
 
-  return { user, loading, saving, error, success, updateProfile, changePassword };
+  const loadProfile = async ()=>{
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const loadedUser = await userService.getProfile();
+      if (loadedUser.success) {
+        return loadedUser.user;
+      }
+      setError("Unable to load profile.")
+      return user;
+    } catch (error: any) {
+      setError(error.message||"unable to load profile.")
+      return user;
+    }finally{
+      setLoading(false);
+    }
+  }
+
+  return { user, loading, saving,savingPass, passError, error, success, updateProfile, changePassword, loadProfile };
 };

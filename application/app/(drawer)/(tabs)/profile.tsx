@@ -10,7 +10,7 @@ import {
   Image,
   Alert,
 } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProfile } from "../../../src/hooks/useProfile";
 import { useAuthStore } from "../../../src/store/auth.store";
 import { useRouter } from "expo-router";
@@ -21,12 +21,19 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const { logout } = useAuthStore();
-  const { user, saving, error, success, updateProfile, changePassword } =
-    useProfile();
+  const {
+    user: savedUser,
+    saving,
+    error,
+    success,
+    savingPass,
+    passError,
+    updateProfile,
+    changePassword,
+    loadProfile,
+  } = useProfile();
 
-  // Editable fields mirror the user object
-  const [name, setName] = useState(user?.name ?? "");
-  const [phone, setPhone] = useState(user?.phone ?? "");
+  const [user, setUser] = useState(savedUser);
 
   // Password change state — kept local to this screen
   const [showPasswordSection, setShowPasswordSection] = useState(false);
@@ -43,6 +50,29 @@ export default function ProfileScreen() {
     input: theme.input,
     inputBorder: theme.border,
   };
+
+  const loadUser = async () => {
+    const nameBeforeLoad = name;
+    const phoneBeforeLoad = phone;
+    const loadedUser = await loadProfile();
+    setUser(loadedUser);
+    setName((currentName) =>
+      currentName === nameBeforeLoad ? (loadedUser?.name ?? "") : currentName,
+    );
+    setPhone((currentPhone) =>
+      currentPhone === phoneBeforeLoad
+        ? (loadedUser?.phone ?? "")
+        : currentPhone,
+    );
+  };
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  // Editable fields mirror the user object
+  const [name, setName] = useState(user?.name ?? "");
+  const [phone, setPhone] = useState(user?.phone ?? "");
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -202,6 +232,13 @@ export default function ProfileScreen() {
       </Section>
 
       {/* Account */}
+      {passError && (
+        <View style={[styles.errorBanner, { backgroundColor: theme.input }]}>
+          <Text style={[styles.errorText, { color: theme.error }]}>
+            {passError}
+          </Text>
+        </View>
+      )}
       <Section title="Account" colors={colors}>
         <TouchableOpacity
           onPress={() => setShowPasswordSection(!showPasswordSection)}
@@ -264,14 +301,14 @@ export default function ProfileScreen() {
             />
             <TouchableOpacity
               onPress={handleChangePassword}
-              disabled={saving}
+              disabled={savingPass}
               style={[
                 styles.saveBtn,
                 { backgroundColor: theme.primary },
-                saving && styles.saveBtnDisabled,
+                savingPass && styles.saveBtnDisabled,
               ]}
             >
-              {saving ? (
+              {savingPass ? (
                 <ActivityIndicator color={theme.card} size="small" />
               ) : (
                 <Text style={styles.saveBtnText}>Update Password</Text>

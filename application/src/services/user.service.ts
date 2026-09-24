@@ -2,8 +2,9 @@ import api from './api';
 import { User, UpdateProfileDTO, ChangePasswordDTO } from '../types/user.types';
 
 export const userService = {
-  getProfile: (): Promise<{ success: boolean; user: User }> =>
-    api.get('/users/me'),
+  getProfile: async (): Promise<{ success: boolean; user: User }> =>
+    api.get('/users/me')
+  ,
 
   updateProfile: (
     data: UpdateProfileDTO

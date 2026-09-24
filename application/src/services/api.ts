@@ -1,9 +1,11 @@
 // src/services/api.ts
 import axios from 'axios';
 import { readItem } from './auth.storage';
+import { BASE_URL } from './localBaseUrl';
+
 
 const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL,
+  baseURL: BASE_URL,
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 });
