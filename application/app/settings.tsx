@@ -9,45 +9,32 @@ import {
   Linking,
   Alert,
 } from "react-native";
-import { useState, useEffect } from "react";
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useState, useEffect, useRef } from "react";
 import { useAuthStore } from "../src/store/auth.store";
 import Constants from "expo-constants";
 import { useTheme } from "../src/hooks/useTheme";
-
-// Notification preference keys
-const NOTIF_KEYS = {
-  bookingConfirmations: "notif_booking_confirmations",
-  sessionReminders: "notif_session_reminders",
-  promotions: "notif_promotions",
-};
+import { usePreference } from "../src/hooks/usePreference";
+import { Preference } from "../src/types/user.types";
 
 export default function SettingsScreen() {
   const { theme } = useTheme();
-  const router = useRouter();
-  const { logout } = useAuthStore();
+  const { user } = useAuthStore();
 
   // Notification preferences — default ON for important, OFF for promo
-  const [bookingConfirm, setBookingConfirm] = useState(true);
-  const [sessionReminders, setSessionReminders] = useState(true);
-  const [promotions, setPromotions] = useState(false);
+  const { error, saving, success, savePreference: savePref } = usePreference();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const entries = await AsyncStorage.multiGet(Object.values(NOTIF_KEYS));
-        const stored = Object.fromEntries(entries);
-        const read = (key: string, fallback: boolean) =>
-          stored[key] != null ? JSON.parse(stored[key]!) : fallback;
-        setBookingConfirm(read(NOTIF_KEYS.bookingConfirmations, true));
-        setSessionReminders(read(NOTIF_KEYS.sessionReminders, true));
-        setPromotions(read(NOTIF_KEYS.promotions, false));
-      } catch {
-        // keep defaults
-      }
-    })();
-  }, []);
+  const [bookingConfirm, setBookingConfirm] = useState<boolean>(
+    user?.preference.bookingConfirm ?? true,
+  );
+  const [sessionReminders, setSessionReminders] = useState<boolean>(
+    user?.preference.sessionReminders ?? true,
+  );
+  const [promotions, setPromotions] = useState<boolean>(
+    user?.preference.offersAndPromotions ?? false,
+  );
+  const [hasChanges, setHasChanges] = useState(false);
+  const pendingPreference = useRef<Preference | null>(null);
+  const savingPreference = useRef(false);
 
   const colors = {
     bg: theme.background,
@@ -57,13 +44,45 @@ export default function SettingsScreen() {
     muted: theme.muted,
   };
 
-  const savePreference = async (key: string, value: boolean) => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify(value));
-    } catch (e) {
-      // Fail silently — preference just won't persist
-    }
+  const queuePreferenceSave = (preference: Preference) => {
+    pendingPreference.current = preference;
+    if (savingPreference.current) return;
+
+    savingPreference.current = true;
+    void (async () => {
+      try {
+        while (pendingPreference.current) {
+          const nextPreference = pendingPreference.current;
+          pendingPreference.current = null;
+          await savePref(nextPreference);
+        }
+      } finally {
+        savingPreference.current = false;
+        if (pendingPreference.current) {
+          queuePreferenceSave(pendingPreference.current);
+        }
+      }
+    })();
   };
+
+  const savePreference = () => {
+    queuePreferenceSave({
+      bookingConfirm,
+      sessionReminders,
+      offersAndPromotions: promotions,
+    });
+  };
+
+  useEffect(() => {
+    if (!hasChanges) return;
+    savePreference();
+  }, [hasChanges, bookingConfirm, sessionReminders, promotions]);
+
+  useEffect(() => {
+    return () => {
+      pendingPreference.current = null;
+    };
+  }, []);
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -101,7 +120,7 @@ export default function SettingsScreen() {
           value={bookingConfirm}
           onChange={(v) => {
             setBookingConfirm(v);
-            savePreference(NOTIF_KEYS.bookingConfirmations, v);
+            setHasChanges(true);
           }}
           colors={colors}
         />
@@ -111,7 +130,7 @@ export default function SettingsScreen() {
           value={sessionReminders}
           onChange={(v) => {
             setSessionReminders(v);
-            savePreference(NOTIF_KEYS.sessionReminders, v);
+            setHasChanges(true);
           }}
           colors={colors}
           noBorder
@@ -122,12 +141,28 @@ export default function SettingsScreen() {
           value={promotions}
           onChange={(v) => {
             setPromotions(v);
-            savePreference(NOTIF_KEYS.promotions, v);
+            setHasChanges(true);
           }}
           colors={colors}
           noBorder
         />
       </SettingsSection>
+
+      {error && (
+        <View style={[styles.errorBanner, { backgroundColor: theme.input }]}>
+          <Text style={[styles.errorText, { color: theme.error }]}>
+            {error}
+          </Text>
+        </View>
+      )}
+
+      {success && (
+        <View style={[styles.successBanner, { backgroundColor: theme.input }]}>
+          <Text style={[styles.successText, { color: theme.success }]}>
+            ✓ {success}
+          </Text>
+        </View>
+      )}
 
       {/* About */}
       <SettingsSection title="About" colors={colors}>
@@ -324,4 +359,19 @@ const styles = StyleSheet.create({
   },
   dangerText: { fontSize: 15, color: "#e53935", fontWeight: "500" },
   dangerArrow: { fontSize: 14 },
+
+  errorBanner: {
+    backgroundColor: "#ffebee",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: { color: "#c62828", fontSize: 14 },
+  successBanner: {
+    backgroundColor: "#e8f5e9",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  successText: { color: "#2e7d32", fontSize: 14, fontWeight: "500" },
 });

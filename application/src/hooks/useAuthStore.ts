@@ -3,12 +3,12 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../store/auth.store';
-import { LoginDTO, RegisterDTO } from '../types/user.types';
+import { LoginDTO, Preference, RegisterDTO, User } from '../types/user.types';
 
 export const useAuth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { login, logout, user, token } = useAuthStore();
+  const { login, logout, user, token, updatePref } = useAuthStore();
   const router = useRouter();
 
   const getErrorMessage = (err: unknown) =>

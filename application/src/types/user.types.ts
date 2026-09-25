@@ -7,6 +7,13 @@ export interface User {
     fcmToken?: string;
     totalBookings?:number;
     createdAt: string;   
+    preference: Preference 
+}
+
+export interface Preference{
+  bookingConfirm: boolean,
+  sessionReminders: boolean,
+  offersAndPromotions: boolean
 }
 
 export interface AuthResponse {
