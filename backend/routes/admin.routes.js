@@ -6,6 +6,7 @@ const {
   getUserById,
   deleteUser,
   getAdminProfile,
+  searchGyms,
 } = require("../controllers/admin.controller.js");
 
 const { protect, adminOnly } = require("../middleware/auth.middleware.js");
@@ -26,5 +27,8 @@ router.delete("/users/:id", protect, adminOnly, deleteUser);
 
 // Get admin profile
 router.get("/profile", protect, adminOnly, getAdminProfile);
+
+// Search gyms
+router.get("/gyms/search", protect, adminOnly, searchGyms);
 
 module.exports = router;

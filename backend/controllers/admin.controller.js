@@ -164,10 +164,74 @@ const getAdminProfile = async (req, res) => {
   }
 };
 
+// Search gyms by name and location
+const searchGyms = async (req, res) => {
+  try {
+    const { name, location } = req.query;
+
+    if (!name && !location) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a gym name or location",
+      });
+    }
+
+    const gyms = await prisma.gym.findMany({
+      where: {
+        isActive: true,
+        AND: [
+          name
+            ? {
+                name: {
+                  contains: name.trim(),
+                  mode: "insensitive",
+                },
+              }
+            : {},
+          location
+            ? {
+                address: {
+                  contains: location.trim(),
+                  mode: "insensitive",
+                },
+              }
+            : {},
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        latitude: true,
+        longitude: true,
+        openingTime: true,
+        closingTime: true,
+        capacity: true,
+        photos: true,
+        amenities: true,
+        isActive: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      gyms,
+    });
+  } catch (error) {
+    console.log("Search Gyms Error:", error.message);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to search gyms",
+    });
+  }
+};
+
 module.exports = {
   getDashboard,
   getAllUsers,
   getUserById,
   deleteUser,
   getAdminProfile,
+  searchGyms,
 };
