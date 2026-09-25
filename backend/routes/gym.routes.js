@@ -1,17 +1,28 @@
-const express = require('express');
-const { GetGyms, getGymDetails, addGym, updateGym, checkAvailability } = require('../controllers/gym.controller');
-const { protect, adminOnly } = require('../middleware/auth.middleware');
+const express = require("express");
+
+const {
+  GetGyms,
+  getGymDetails,
+  addGym,
+  updateGym,
+  checkAvailability,
+  searchGyms,
+} = require("../controllers/gym.controller");
+
+const { protect, adminOnly } = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
-router.get('/', protect, GetGyms);
+router.get("/", protect, GetGyms);
 
-router.get('/:id', protect, getGymDetails);
+router.get("/search", protect, searchGyms);
 
-router.get('/:id/availability', protect, checkAvailability);
+router.get("/:id", protect, getGymDetails);
 
-router.post('/', protect, adminOnly, addGym)
+router.get("/:id/availability", protect, checkAvailability);
 
-router.put('/:id', protect, adminOnly, updateGym);
+router.post("/", protect, adminOnly, addGym);
+
+router.put("/:id", protect, adminOnly, updateGym);
 
 module.exports = router;
