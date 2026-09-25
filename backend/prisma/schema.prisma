@@ -7,16 +7,19 @@ datasource db {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
-  email     String    @unique
+  email     String   @unique
   phone     String?
   password  String
   photoUrl  String?
   fcmToken  String?
-  createdAt DateTime  @default(now())
-  bookings  Booking[]
-  payments  Payment[]
+  createdAt DateTime @default(now())
+
+  bookings        Booking[]
+  payments        Payment[]
+  trainerSessions TrainerSession[] @relation("MemberTrainerSessions")
+  reviews         TrainerReview[]
 }
 
 model GymAdmin {
@@ -25,11 +28,12 @@ model GymAdmin {
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
-  gyms      Gym[]
+
+  gyms Gym[]
 }
 
 model Gym {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   adminId     Int
   name        String
   address     String
@@ -40,11 +44,13 @@ model Gym {
   capacity    Int
   photos      String[]
   amenities   String[]
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  bookings    Booking[]
-  admin       GymAdmin  @relation(fields: [adminId], references: [id])
-  packages    Package[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  bookings Booking[]
+  admin    GymAdmin  @relation(fields: [adminId], references: [id])
+  packages Package[]
+  trainers Trainer[]
 }
 
 model Package {
@@ -57,8 +63,9 @@ model Package {
   benefits     String?
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
-  bookings     Booking[]
-  gym          Gym         @relation(fields: [gymId], references: [id])
+
+  bookings Booking[]
+  gym      Gym       @relation(fields: [gymId], references: [id])
 }
 
 model Booking {
@@ -71,10 +78,11 @@ model Booking {
   status    BookingStatus @default(pending)
   qrCode    String?       @unique
   createdAt DateTime      @default(now())
-  gym       Gym           @relation(fields: [gymId], references: [id])
-  package   Package?      @relation(fields: [packageId], references: [id])
-  user      User          @relation(fields: [userId], references: [id])
-  payment   Payment?
+
+  gym     Gym      @relation(fields: [gymId], references: [id])
+  package Package? @relation(fields: [packageId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+  payment Payment?
 }
 
 model Payment {
@@ -87,16 +95,90 @@ model Payment {
   chapaTxRef       String?       @unique
   chapaCheckoutUrl String?
   createdAt        DateTime      @default(now())
-  booking          Booking       @relation(fields: [bookingId], references: [id])
-  user             User          @relation(fields: [userId], references: [id])
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 }
 
 model Trainer {
+  id                 Int                @id @default(autoincrement())
+  gymId              Int?
+  name               String
+  email              String             @unique
+  passwordHash       String
+  bio                String?
+  specialization     String?
+  experienceYears    Int?
+  profilePhotoUrl    String?
+  sessionPrice       Decimal?           @db.Decimal(10, 2)
+  verificationStatus VerificationStatus @default(PENDING)
+  rating             Float              @default(0)
+  createdAt          DateTime           @default(now())
+
+  gym          Gym?                  @relation(fields: [gymId], references: [id])
+  credentials  TrainerCredential[]
+  availability TrainerAvailability[]
+  sessions     TrainerSession[]      @relation("TrainerSessions")
+  reviews      TrainerReview[]
+}
+
+model TrainerCredential {
+  id         Int      @id @default(autoincrement())
+  trainerId  Int
+  fileUrl    String
+  label      String?
+  uploadedAt DateTime @default(now())
+
+  trainer Trainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+}
+
+model TrainerAvailability {
+  id        Int    @id @default(autoincrement())
+  trainerId Int
+  dayOfWeek Int
+  startTime String
+  endTime   String
+
+  trainer Trainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId, dayOfWeek])
+}
+
+model TrainerSession {
+  id         Int           @id @default(autoincrement())
+  trainerId  Int
+  memberId   Int
+  startTime  DateTime
+  endTime    DateTime
+  status     SessionStatus @default(PENDING_PAYMENT)
+  price      Decimal       @db.Decimal(10, 2)
+  chapaTxRef String?       @unique
+  createdAt  DateTime      @default(now())
+
+  trainer Trainer @relation("TrainerSessions", fields: [trainerId], references: [id])
+  member  User    @relation("MemberTrainerSessions", fields: [memberId], references: [id])
+
+  review TrainerReview?
+
+  @@index([trainerId, startTime])
+  @@index([memberId, startTime])
+}
+
+model TrainerReview {
   id        Int      @id @default(autoincrement())
-  gymId     Int
-  name      String?
-  bio       String?
+  trainerId Int
+  memberId  Int
+  sessionId Int      @unique
+  rating    Int
+  review    String?
   createdAt DateTime @default(now())
+
+  trainer Trainer        @relation(fields: [trainerId], references: [id])
+  member  User           @relation(fields: [memberId], references: [id])
+  session TrainerSession @relation(fields: [sessionId], references: [id])
+
+  @@index([trainerId])
+  @@index([memberId])
 }
 
 enum PackageType {
@@ -119,4 +201,17 @@ enum PaymentStatus {
   success
   failed
   refunded
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum SessionStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  COMPLETED
+  CANCELLED
 }
