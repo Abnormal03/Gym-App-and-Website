@@ -1,11 +1,20 @@
 const prisma = require("../config/prisma");
 
-// Get admin dashboard information
 const getDashboard = async (req, res) => {
   try {
     const totalUsers = await prisma.user.count();
 
     const totalAdmins = await prisma.gymAdmin.count();
+
+    const totalGyms = await prisma.gym.count({
+      where: {
+        isActive: true,
+      },
+    });
+
+    const totalBookings = await prisma.booking.count();
+
+    const totalPayments = await prisma.payment.count();
 
     res.status(200).json({
       success: true,
@@ -13,6 +22,9 @@ const getDashboard = async (req, res) => {
       data: {
         totalUsers,
         totalAdmins,
+        totalGyms,
+        totalBookings,
+        totalPayments,
       },
     });
   } catch (error) {
@@ -25,7 +37,6 @@ const getDashboard = async (req, res) => {
   }
 };
 
-// Get all users
 const getAllUsers = async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -35,6 +46,10 @@ const getAllUsers = async (req, res) => {
         email: true,
         phone: true,
         createdAt: true,
+      },
+
+      orderBy: {
+        createdAt: "desc",
       },
     });
 
@@ -52,15 +67,24 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-// Get single user by ID
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const userId = Number(id);
+
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: {
-        id: Number(id),
+        id: userId,
       },
+
       select: {
         id: true,
         name: true,
@@ -69,6 +93,7 @@ const getUserById = async (req, res) => {
         createdAt: true,
       },
     });
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -90,14 +115,24 @@ const getUserById = async (req, res) => {
   }
 };
 
-// Delete user
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const userId = Number(id);
+
+    // Validate ID
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    // Check if user exists
     const user = await prisma.user.findUnique({
       where: {
-        id: Number(id),
+        id: userId,
       },
     });
 
@@ -108,9 +143,10 @@ const deleteUser = async (req, res) => {
       });
     }
 
+    // Delete user
     await prisma.user.delete({
       where: {
-        id: Number(id),
+        id: userId,
       },
     });
 
@@ -128,13 +164,15 @@ const deleteUser = async (req, res) => {
   }
 };
 
-// Get logged-in admin profile
 const getAdminProfile = async (req, res) => {
   try {
+    const adminId = Number(req.user.id);
+
     const admin = await prisma.gymAdmin.findUnique({
       where: {
-        id: req.user.id,
+        id: adminId,
       },
+
       select: {
         id: true,
         name: true,
@@ -164,74 +202,10 @@ const getAdminProfile = async (req, res) => {
   }
 };
 
-// Search gyms by name and location
-const searchGyms = async (req, res) => {
-  try {
-    const { name, location } = req.query;
-
-    if (!name && !location) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a gym name or location",
-      });
-    }
-
-    const gyms = await prisma.gym.findMany({
-      where: {
-        isActive: true,
-        AND: [
-          name
-            ? {
-                name: {
-                  contains: name.trim(),
-                  mode: "insensitive",
-                },
-              }
-            : {},
-          location
-            ? {
-                address: {
-                  contains: location.trim(),
-                  mode: "insensitive",
-                },
-              }
-            : {},
-        ],
-      },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        latitude: true,
-        longitude: true,
-        openingTime: true,
-        closingTime: true,
-        capacity: true,
-        photos: true,
-        amenities: true,
-        isActive: true,
-      },
-    });
-
-    res.status(200).json({
-      success: true,
-      gyms,
-    });
-  } catch (error) {
-    console.log("Search Gyms Error:", error.message);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to search gyms",
-    });
-  }
-};
-
 module.exports = {
   getDashboard,
   getAllUsers,
   getUserById,
   deleteUser,
   getAdminProfile,
-  searchGyms,
 };
