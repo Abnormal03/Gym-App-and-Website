@@ -87,8 +87,70 @@ const changePassword = async (req, res) => {
     }
 }
 
+const updateUserPreference = async (req, res) => {
+    try {
+        const { bookingConfirm, sessionReminders, offersAndPromotions } = req.body;
+
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: {
+                id: true,
+                preference: true
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' })
+        }
+
+        const preference = await prisma.userPreference.upsert({
+            where: { userId: req.user.id },
+            update: {
+                bookingConfirm,
+                sessionReminders,
+                offersAndPromotions
+            },
+            create: {
+                userId: req.user.id,
+                bookingConfirm,
+                sessionReminders,
+                offersAndPromotions
+            }
+        });
+
+        res.json({ success: true, preference });
+    } catch (error) {
+        console.log('Update user preference error: ', error.message);
+        res.status(500).json({ success: false, message: 'Server error' })
+    }
+}
+
+const getPreference = async (req, res) => {
+    try {
+        const preference = await prisma.userPreference.findUnique({
+            where: { userId: req.user.id },
+            select: {
+                bookingConfirm: true,
+                sessionReminders: true,
+                offersAndPromotions: true
+            }
+        });
+
+        if (!preference) {
+            return res.status(404).json({ success: false, message: 'User preference not found' })
+        }
+
+        res.json({ success: true, preference })
+    } catch (error) {
+        console.log('Get user preference error: ', error.message);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
 module.exports = {
     updateMe,
     getMe,
-    changePassword
+    changePassword,
+    updateUserPreference,
+    getPreference
 }

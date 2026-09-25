@@ -17,6 +17,16 @@ model User {
   createdAt DateTime  @default(now())
   bookings  Booking[]
   payments  Payment[]
+  preference UserPreference? 
+}
+
+model UserPreference {
+  id Int @id @default(autoincrement())
+  userId Int @unique
+  user User @relation(fields: [userId], references: [id])
+  bookingConfirm Boolean @default(true)
+  sessionReminders Boolean @default(true)
+  offersAndPromotions Boolean @default(false)
 }
 
 model GymAdmin {

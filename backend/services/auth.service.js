@@ -5,6 +5,15 @@ const checkExist = async (email) => {
         const user = await prisma.user.findUnique({
             where: {
                 email
+            },
+            include: {
+                preference: {
+                    select: {
+                        bookingConfirm: true,
+                        sessionReminders: true,
+                        offersAndPromotions: true
+                    }
+                }
             }
         });
         if (!user) {
@@ -43,14 +52,22 @@ const createUser = async ({ name, email, phone, password }) => {
                 name,
                 email,
                 phone,
-                password
+                password,
+                preference: {
+                    create: {
+                        bookingConfirm: true,
+                        sessionReminders: true,
+                        offersAndPromotions: false
+                    }
+                }
             },
             select: {
                 id: true,
                 name: true,
                 email: true,
                 phone: true,
-                createdAt: true
+                createdAt: true,
+                preference: true
             }
         })
 
