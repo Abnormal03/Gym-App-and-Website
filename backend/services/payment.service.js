@@ -1,9 +1,14 @@
 const axios = require("axios");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+
 const {
   bookingTransitionsFromPayment,
 } = require("../config/bookingTransitions");
+
+const {
+  trainerSessionTransitionsFromPayment,
+} = require("../config/trainerSessionTransitions");
 
 const CHAPA_BASE_URL = "https://api.chapa.co/v1";
 
@@ -51,13 +56,6 @@ const initializePayment = async (bookingId, userId) => {
     throw new Error("Booking not found");
   }
 
-  console.log("BOOKING:", {
-    id: booking.id,
-    userId: booking.userId,
-    status: booking.status,
-    packageId: booking.packageId,
-  });
-
   if (booking.userId !== userId) {
     throw new Error("Access denied");
   }
@@ -81,7 +79,7 @@ const initializePayment = async (bookingId, userId) => {
   }
 
   const txRef = `booking-${bookingId}-${Date.now()}`;
-  let chapaResponse;
+
   if (!CHAPA_CALLBACK_URL || !CHAPA_RETURN_URL) {
     throw new Error("Chapa callback and return URLs must be configured");
   }
@@ -89,8 +87,9 @@ const initializePayment = async (bookingId, userId) => {
   const returnUrl = new URL(CHAPA_RETURN_URL);
   returnUrl.searchParams.set("tx_ref", txRef);
 
-  try {
+  let chapaResponse;
 
+  try {
     chapaResponse = await axios.post(
       `${CHAPA_BASE_URL}/transaction/initialize`,
       {
@@ -123,10 +122,8 @@ const initializePayment = async (bookingId, userId) => {
         timeout: 30000,
       },
     );
-
   } catch (error) {
     try {
-
       await prisma.$transaction(async (tx) => {
         await tx.payment.upsert({
           where: {
@@ -208,7 +205,8 @@ const initializePayment = async (bookingId, userId) => {
 
     throw new Error("Chapa did not return checkout URL");
   }
-  const payment = await prisma.payment.upsert({
+
+  return prisma.payment.upsert({
     where: {
       bookingId,
     },
@@ -228,6 +226,219 @@ const initializePayment = async (bookingId, userId) => {
       chapaTxRef: txRef,
       chapaCheckoutUrl: checkoutUrl,
       status: "pending",
+    },
+  });
+};
+
+const initializeTrainerSessionPayment = async (trainerSessionId, userId) => {
+  if (!CHAPA_SECRET_KEY) {
+    throw new Error("CHAPA_SECRET_KEY is missing");
+  }
+
+  const session = await prisma.trainerSession.findUnique({
+    where: {
+      id: trainerSessionId,
+    },
+    include: {
+      member: true,
+      trainer: true,
+      payment: true,
+    },
+  });
+
+  if (!session) {
+    throw new Error("Trainer session not found");
+  }
+
+  if (session.memberId !== userId) {
+    throw new Error("Access denied");
+  }
+
+  if (
+    session.status !== "PENDING_PAYMENT" &&
+    session.status !== "PAYMENT_FAILED"
+  ) {
+    throw new Error(
+      `Cannot pay for a trainer session with status ${session.status}`,
+    );
+  }
+
+  if (!session.member) {
+    throw new Error("Trainer session member not found");
+  }
+
+  if (!session.trainer) {
+    throw new Error("Trainer not found");
+  }
+
+  const amount = Number(session.price);
+
+  if (!amount || amount <= 0) {
+    throw new Error("Invalid trainer session payment amount");
+  }
+
+  if (!CHAPA_CALLBACK_URL || !CHAPA_RETURN_URL) {
+    throw new Error("Chapa callback and return URLs must be configured");
+  }
+
+  const txRef = `trainer-session-${trainerSessionId}-${Date.now()}`;
+
+  const returnUrl = new URL(CHAPA_RETURN_URL);
+  returnUrl.searchParams.set("tx_ref", txRef);
+
+  let chapaResponse;
+
+  try {
+    chapaResponse = await axios.post(
+      `${CHAPA_BASE_URL}/transaction/initialize`,
+      {
+        amount: amount.toString(),
+        currency: "ETB",
+
+        email: session.member.email,
+
+        first_name: session.member.name?.split(" ")[0] || "Member",
+
+        last_name: session.member.name?.split(" ").slice(1).join(" ") || "User",
+
+        tx_ref: txRef,
+
+        callback_url: CHAPA_CALLBACK_URL,
+
+        return_url: returnUrl.toString(),
+
+        customization: {
+          title: "Trainer Session",
+          description: `Payment for trainer session ${trainerSessionId}`,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${CHAPA_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+
+        timeout: 30000,
+      },
+    );
+  } catch (error) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.payment.upsert({
+          where: {
+            trainerSessionId,
+          },
+
+          update: {
+            amount,
+            chapaTxRef: txRef,
+            chapaCheckoutUrl: null,
+            status: "failed",
+          },
+
+          create: {
+            userId,
+            trainerSessionId,
+            amount,
+            currency: "ETB",
+            chapaTxRef: txRef,
+            chapaCheckoutUrl: null,
+            status: "failed",
+          },
+        });
+
+        if (session.status === "PENDING_PAYMENT") {
+          await tx.trainerSession.update({
+            where: {
+              id: trainerSessionId,
+            },
+
+            data: {
+              status: "PAYMENT_FAILED",
+            },
+          });
+        }
+      });
+    } catch (databaseError) {
+      console.error("FAILED TO SAVE FAILED TRAINER PAYMENT:", databaseError);
+    }
+
+    throw new Error(getPaymentErrorMessage(error));
+  }
+
+  const checkoutUrl = chapaResponse.data?.data?.checkout_url;
+
+  if (!checkoutUrl) {
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.upsert({
+        where: {
+          trainerSessionId,
+        },
+
+        update: {
+          amount,
+          chapaTxRef: txRef,
+          chapaCheckoutUrl: null,
+          status: "failed",
+        },
+
+        create: {
+          userId,
+          trainerSessionId,
+          amount,
+          currency: "ETB",
+          chapaTxRef: txRef,
+          chapaCheckoutUrl: null,
+          status: "failed",
+        },
+      });
+
+      if (session.status === "PENDING_PAYMENT") {
+        await tx.trainerSession.update({
+          where: {
+            id: trainerSessionId,
+          },
+
+          data: {
+            status: "PAYMENT_FAILED",
+          },
+        });
+      }
+    });
+
+    throw new Error("Chapa did not return checkout URL");
+  }
+
+  const payment = await prisma.payment.upsert({
+    where: {
+      trainerSessionId,
+    },
+
+    update: {
+      amount,
+      chapaTxRef: txRef,
+      chapaCheckoutUrl: checkoutUrl,
+      status: "pending",
+    },
+
+    create: {
+      userId,
+      trainerSessionId,
+      amount,
+      currency: "ETB",
+      chapaTxRef: txRef,
+      chapaCheckoutUrl: checkoutUrl,
+      status: "pending",
+    },
+  });
+
+  await prisma.trainerSession.update({
+    where: {
+      id: trainerSessionId,
+    },
+
+    data: {
+      chapaTxRef: txRef,
     },
   });
 
@@ -252,6 +463,23 @@ const verifyChapaTransaction = async (txRef) => {
   );
 
   return response.data;
+};
+
+const processTrainerSessionPayment = async (txRef) => {
+  const payment = await prisma.payment.findUnique({
+    where: {
+      chapaTxRef: txRef,
+    },
+    include: {
+      trainerSession: true,
+    },
+  });
+
+  if (!payment?.trainerSessionId) {
+    return null;
+  }
+
+  return processPaymentResult(txRef);
 };
 
 const isValidWebhookSignature = (rawBody, signatureHeader) => {
@@ -302,23 +530,43 @@ const processPaymentResult = async (txRef) => {
   }
 
   if (payment.status === "success") {
-    const booking = await prisma.booking.findUnique({
-      where: {
-        id: payment.bookingId,
-      },
-    });
+    if (payment.bookingId) {
+      const booking = await prisma.booking.findUnique({
+        where: {
+          id: payment.bookingId,
+        },
+      });
 
-    return {
-      payment,
-      booking,
-      chapaStatus: "success",
-      outcome: "success",
-    };
+      return {
+        payment,
+        booking,
+        trainerSession: null,
+        chapaStatus: "success",
+        outcome: "success",
+      };
+    }
+
+    if (payment.trainerSessionId) {
+      const trainerSession = await prisma.trainerSession.findUnique({
+        where: {
+          id: payment.trainerSessionId,
+        },
+      });
+
+      return {
+        payment,
+        booking: null,
+        trainerSession,
+        chapaStatus: "success",
+        outcome: "success",
+      };
+    }
   }
 
   const verification = await verifyChapaTransaction(txRef);
 
   const chapaStatus = verification?.data?.status || null;
+
   let outcome = "pending";
 
   if (chapaStatus === "success") {
@@ -331,24 +579,50 @@ const processPaymentResult = async (txRef) => {
     outcome = "failed";
   }
 
-  console.log("PAYMENT OUTCOME:", outcome);
+  console.log(
+    "PAYMENT OUTCOME:",
+    outcome,
+    "TYPE:",
+    payment.bookingId ? "GYM_BOOKING" : "TRAINER_SESSION",
+  );
 
   if (outcome === "pending") {
-    const booking = await prisma.booking.findUnique({
-      where: {
-        id: payment.bookingId,
-      },
-    });
+    if (payment.bookingId) {
+      const booking = await prisma.booking.findUnique({
+        where: {
+          id: payment.bookingId,
+        },
+      });
 
-    return {
-      payment,
-      booking,
-      chapaStatus,
-      outcome,
-    };
+      return {
+        payment,
+        booking,
+        trainerSession: null,
+        chapaStatus,
+        outcome,
+      };
+    }
+
+    if (payment.trainerSessionId) {
+      const trainerSession = await prisma.trainerSession.findUnique({
+        where: {
+          id: payment.trainerSessionId,
+        },
+      });
+
+      return {
+        payment,
+        booking: null,
+        trainerSession,
+        chapaStatus,
+        outcome,
+      };
+    }
+
+    throw new Error("Payment is not linked to a booking or trainer session");
   }
 
-  return await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const currentPayment = await tx.payment.findUnique({
       where: {
         id: payment.id,
@@ -360,75 +634,146 @@ const processPaymentResult = async (txRef) => {
     }
 
     if (currentPayment.status === "success") {
-      const existingBooking = await tx.booking.findUnique({
+      if (currentPayment.bookingId) {
+        const existingBooking = await tx.booking.findUnique({
+          where: {
+            id: currentPayment.bookingId,
+          },
+        });
+
+        return {
+          payment: currentPayment,
+          booking: existingBooking,
+          trainerSession: null,
+          chapaStatus,
+          outcome: "success",
+        };
+      }
+
+      if (currentPayment.trainerSessionId) {
+        const existingSession = await tx.trainerSession.findUnique({
+          where: {
+            id: currentPayment.trainerSessionId,
+          },
+        });
+
+        return {
+          payment: currentPayment,
+          booking: null,
+          trainerSession: existingSession,
+          chapaStatus,
+          outcome: "success",
+        };
+      }
+    }
+
+    if (currentPayment.bookingId) {
+      const booking = await tx.booking.findUnique({
         where: {
           id: currentPayment.bookingId,
         },
       });
 
+      if (!booking) {
+        throw new Error("Booking not found");
+      }
+
+      const nextStatus =
+        bookingTransitionsFromPayment[booking.status]?.[outcome];
+
+      if (!nextStatus) {
+        throw new Error(
+          `No valid transition from booking status "${booking.status}" ` +
+            `for payment outcome "${outcome}"`,
+        );
+      }
+
+      const updatedPayment = await tx.payment.update({
+        where: {
+          id: currentPayment.id,
+        },
+
+        data: {
+          status: outcome,
+        },
+      });
+
+      const bookingData = {
+        status: nextStatus,
+      };
+
+      if (outcome === "success" && !booking.qrCode) {
+        bookingData.qrCode = crypto.randomUUID();
+      }
+
+      const updatedBooking = await tx.booking.update({
+        where: {
+          id: currentPayment.bookingId,
+        },
+
+        data: bookingData,
+      });
+
       return {
-        payment: currentPayment,
-        booking: existingBooking,
+        payment: updatedPayment,
+        booking: updatedBooking,
+        trainerSession: null,
         chapaStatus,
-        outcome: "success",
+        outcome,
       };
     }
 
-    const booking = await tx.booking.findUnique({
-      where: {
-        id: currentPayment.bookingId,
-      },
-    });
+    if (currentPayment.trainerSessionId) {
+      const trainerSession = await tx.trainerSession.findUnique({
+        where: {
+          id: currentPayment.trainerSessionId,
+        },
+      });
 
-    if (!booking) {
-      throw new Error("Booking not found");
+      if (!trainerSession) {
+        throw new Error("Trainer session not found");
+      }
+
+      const nextStatus =
+        trainerSessionTransitionsFromPayment[trainerSession.status]?.[outcome];
+
+      if (!nextStatus) {
+        throw new Error(
+          `No valid transition from trainer session status ` +
+            `"${trainerSession.status}" for payment outcome "${outcome}"`,
+        );
+      }
+
+      const updatedPayment = await tx.payment.update({
+        where: {
+          id: currentPayment.id,
+        },
+
+        data: {
+          status: outcome,
+        },
+      });
+
+      const updatedTrainerSession = await tx.trainerSession.update({
+        where: {
+          id: trainerSession.id,
+        },
+
+        data: {
+          status: nextStatus,
+        },
+      });
+
+      return {
+        payment: updatedPayment,
+        booking: null,
+        trainerSession: updatedTrainerSession,
+        chapaStatus,
+        outcome,
+      };
     }
-    const nextStatus = bookingTransitionsFromPayment[booking.status]?.[outcome];
 
-    if (!nextStatus) {
-      console.error(
-        `UNHANDLED BOOKING TRANSITION: booking ${booking.id} is in status "${booking.status}", ` +
-        `no transition defined for payment outcome "${outcome}". Aborting so payment status ` +
-        `is not updated without a matching booking update.`,
-      );
-
-      throw new Error(
-        `No valid transition from booking status "${booking.status}" for payment outcome "${outcome}"`,
-      );
-    }
-
-    const updatedPayment = await tx.payment.update({
-      where: {
-        id: currentPayment.id,
-      },
-
-      data: {
-        status: outcome,
-      },
-    });
-
-    const bookingData = {
-      status: nextStatus,
-    };
-
-    if (outcome === "success" && !booking.qrCode) {
-      bookingData.qrCode = crypto.randomUUID();
-    }
-
-    const updatedBooking = await tx.booking.update({
-      where: {
-        id: currentPayment.bookingId,
-      },
-
-      data: bookingData,
-    });
-
-    return {
-      payment: updatedPayment,
-      booking: updatedBooking,
-      chapaStatus,
-      outcome,
-    };
+    throw new Error("Payment is not linked to a booking or trainer session");
   });
 };
 
@@ -446,110 +791,195 @@ const handleChapaWebhook = async (rawBody, signatureHeader) => {
   } catch (error) {
     throw new Error("Invalid webhook JSON");
   }
+
   const txRef = event?.tx_ref || event?.trx_ref;
 
   if (!txRef) {
     throw new Error("Webhook payload missing tx_ref");
   }
-  const result = await processPaymentResult(txRef);
 
-  return result;
+  return processPaymentResult(txRef);
 };
 
 const EXPIRY_MINUTES = 30;
 
+const handleChapaCallback = async (txRef) => {
+  if (!txRef) {
+    throw new Error("Transaction reference is required");
+  }
+
+  return processPaymentResult(txRef);
+};
+
 const checkPaymentStatus = async (txRef, userId) => {
   const payment = await prisma.payment.findUnique({
-    where: { chapaTxRef: txRef },
-    include: { booking: true },
+    where: {
+      chapaTxRef: txRef,
+    },
+
+    include: {
+      booking: true,
+      trainerSession: true,
+    },
   });
 
-  if (!payment) throw new Error('Payment not found');
-  if (payment.userId !== userId) throw new Error('Access denied');
+  if (!payment) {
+    throw new Error("Payment not found");
+  }
 
-  if (payment.status === 'pending' && payment.booking.status === 'pending') {
-    const expiresAt = new Date(
-      payment.booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000
-    );
+  if (payment.userId !== userId) {
+    throw new Error("Access denied");
+  }
 
-    if (new Date() > expiresAt) {
-      await prisma.$transaction([
-        prisma.booking.update({
-          where: { id: payment.bookingId },
-          data: { status: 'cancelled' },
-        }),
-        prisma.payment.update({
-          where: { id: payment.id },
-          data: { status: 'failed' },
-        }),
-      ]);
+  if (payment.bookingId && payment.booking) {
+    const booking = payment.booking;
 
+    if (payment.status === "pending" && booking.status === "pending") {
+      const expiresAt = new Date(
+        booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000,
+      );
+
+      if (new Date() > expiresAt) {
+        await prisma.$transaction([
+          prisma.booking.update({
+            where: {
+              id: payment.bookingId,
+            },
+
+            data: {
+              status: "cancelled",
+            },
+          }),
+
+          prisma.payment.update({
+            where: {
+              id: payment.id,
+            },
+
+            data: {
+              status: "failed",
+            },
+          }),
+        ]);
+
+        return {
+          localStatus: "failed",
+          chapaStatus: null,
+          bookingStatus: "cancelled",
+          trainerSessionStatus: null,
+          bookingId: payment.bookingId,
+          trainerSessionId: null,
+          qrCode: null,
+          expired: true,
+        };
+      }
+    }
+  }
+
+  if (payment.trainerSessionId && payment.trainerSession) {
+    const session = payment.trainerSession;
+
+    if (payment.status === "success" && session.status !== "CONFIRMED") {
       return {
-        localStatus: 'failed',
-        chapaStatus: null,
-        bookingStatus: 'cancelled',
+        localStatus: payment.status,
+        chapaStatus: "success",
+        bookingStatus: null,
+        trainerSessionStatus: session.status,
+        bookingId: null,
+        trainerSessionId: session.id,
         qrCode: null,
-        expired: true,
+        expired: false,
       };
     }
   }
+
   let chapaStatus = null;
 
   try {
-    const verification = await axios.get(
-      `https://api.chapa.co/v1/transaction/verify/${txRef}`,
-      {
-        headers: { Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}` },
-      }
-    );
-    chapaStatus = verification.data?.data?.status ?? null;
-  } catch (err) {
-    console.error('Chapa verify failed:', err.message);
+    const verification = await verifyChapaTransaction(txRef);
+
+    chapaStatus = verification?.data?.status ?? null;
+  } catch (error) {
+    console.error("Chapa verify failed:", error.message);
   }
 
-  if (
-    chapaStatus === 'success' &&
-    payment.status === 'pending'
-  ) {
-    const qrCode = `GYMAPP-${payment.bookingId}-${crypto.randomUUID()}`;
+  if (chapaStatus === "success" && payment.status === "pending") {
+    const result = await processPaymentResult(txRef);
 
-    await prisma.$transaction([
-      prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'success' },
-      }),
-      prisma.booking.update({
-        where: { id: payment.bookingId },
-        data: { status: 'confirmed', qrCode },
-      }),
-    ]);
+    if (payment.bookingId) {
+      return {
+        localStatus: result.payment.status,
+        chapaStatus,
+        bookingStatus: result.booking?.status ?? null,
+        trainerSessionStatus: null,
+        bookingId: payment.bookingId,
+        trainerSessionId: null,
+        qrCode: result.booking?.qrCode ?? null,
+        expired: false,
+      };
+    }
+
+    if (payment.trainerSessionId) {
+      return {
+        localStatus: result.payment.status,
+        chapaStatus,
+        bookingStatus: null,
+        trainerSessionStatus: result.trainerSession?.status ?? null,
+        bookingId: null,
+        trainerSessionId: payment.trainerSessionId,
+        qrCode: null,
+        expired: false,
+      };
+    }
+  }
+
+  if (payment.bookingId) {
+    const freshBooking = await prisma.booking.findUnique({
+      where: {
+        id: payment.bookingId,
+      },
+    });
 
     return {
-      localStatus: 'success',
-      chapaStatus: 'success',
-      bookingStatus: 'confirmed',
-      qrCode,
+      localStatus: payment.status,
+      chapaStatus,
+      bookingStatus: freshBooking?.status ?? null,
+      trainerSessionStatus: null,
+      bookingId: payment.bookingId,
+      trainerSessionId: null,
+      qrCode: freshBooking?.qrCode ?? null,
       expired: false,
     };
   }
 
-  // ── Return current state ────────────────────────────────────────────────
-  const freshBooking = await prisma.booking.findUnique({
-    where: { id: payment.bookingId },
-  });
+  if (payment.trainerSessionId) {
+    const freshSession = await prisma.trainerSession.findUnique({
+      where: {
+        id: payment.trainerSessionId,
+      },
+    });
 
-  return {
-    localStatus: payment.status,
-    chapaStatus,
-    bookingStatus: freshBooking?.status ?? null,
-    qrCode: freshBooking?.qrCode ?? null,
-    expired: false,
-  };
+    return {
+      localStatus: payment.status,
+      chapaStatus,
+      bookingStatus: null,
+      trainerSessionStatus: freshSession?.status ?? null,
+      bookingId: null,
+      trainerSessionId: payment.trainerSessionId,
+      qrCode: null,
+      expired: false,
+    };
+  }
+
+  throw new Error("Payment is not linked to a booking or trainer session");
 };
+
 module.exports = {
   initializePayment,
+  initializeTrainerSessionPayment,
   verifyChapaTransaction,
   checkPaymentStatus,
   processPaymentResult,
   handleChapaWebhook,
+  handleChapaCallback,
 };

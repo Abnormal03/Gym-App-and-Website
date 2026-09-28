@@ -7,28 +7,32 @@ datasource db {
 }
 
 model User {
-  id              Int              @id @default(autoincrement())
-  name            String
-  email           String           @unique
-  phone           String?
-  password        String
-  photoUrl        String?
-  fcmToken        String?
-  createdAt       DateTime         @default(now())
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  phone     String?
+  password  String
+  photoUrl  String?
+  fcmToken  String?
+  createdAt DateTime @default(now())
+
   bookings        Booking[]
   payments        Payment[]
-  trainerSessions TrainerSession[] @relation("MemberTrainerSessions")
   reviews         TrainerReview[]
+  trainerSessions TrainerSession[] @relation("MemberTrainerSessions")
   preference      UserPreference?
+
+  conversationsAsMember Conversation[]
 }
 
 model UserPreference {
   id                  Int     @id @default(autoincrement())
   userId              Int     @unique
-  user                User    @relation(fields: [userId], references: [id])
   bookingConfirm      Boolean @default(true)
   sessionReminders    Boolean @default(true)
   offersAndPromotions Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 model GymAdmin {
@@ -97,38 +101,42 @@ model Booking {
 model Payment {
   id               Int           @id @default(autoincrement())
   userId           Int
-  bookingId        Int           @unique
+  bookingId        Int?          @unique
   amount           Float
   currency         String        @default("ETB")
   status           PaymentStatus @default(pending)
   chapaTxRef       String?       @unique
   chapaCheckoutUrl String?
   createdAt        DateTime      @default(now())
+  trainerSessionId Int?          @unique
 
-  booking Booking @relation(fields: [bookingId], references: [id])
-  user    User    @relation(fields: [userId], references: [id])
+  booking        Booking?        @relation(fields: [bookingId], references: [id])
+  trainerSession TrainerSession? @relation(fields: [trainerSessionId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
 }
 
 model Trainer {
   id                 Int                @id @default(autoincrement())
   gymId              Int?
   name               String
-  email              String             @unique
-  passwordHash       String
   bio                String?
-  specialization     String?
-  experienceYears    Int?
-  profilePhotoUrl    String?
-  sessionPrice       Decimal?           @db.Decimal(10, 2)
-  verificationStatus VerificationStatus @default(PENDING)
-  rating             Float              @default(0)
   createdAt          DateTime           @default(now())
+  email              String             @unique
+  experienceYears    Int?
+  passwordHash       String
+  profilePhotoUrl    String?
+  rating             Float              @default(0)
+  sessionPrice       Decimal?           @db.Decimal(10, 2)
+  specialization     String?
+  verificationStatus VerificationStatus @default(PENDING)
 
   gym          Gym?                  @relation(fields: [gymId], references: [id])
-  credentials  TrainerCredential[]
   availability TrainerAvailability[]
-  sessions     TrainerSession[]      @relation("TrainerSessions")
+  credentials  TrainerCredential[]
   reviews      TrainerReview[]
+  sessions     TrainerSession[]      @relation("TrainerSessions")
+
+  conversationsAsTrainer Conversation[]
 }
 
 model TrainerCredential {
@@ -162,15 +170,18 @@ model TrainerSession {
   status     SessionStatus @default(PENDING_PAYMENT)
   price      Decimal       @db.Decimal(10, 2)
   chapaTxRef String?       @unique
+  expiresAt  DateTime?
   createdAt  DateTime      @default(now())
 
   trainer Trainer @relation("TrainerSessions", fields: [trainerId], references: [id])
   member  User    @relation("MemberTrainerSessions", fields: [memberId], references: [id])
 
-  review TrainerReview?
+  payment Payment?
+  review  TrainerReview?
 
   @@index([trainerId, startTime])
   @@index([memberId, startTime])
+  @@index([status, expiresAt])
 }
 
 model TrainerReview {
@@ -182,12 +193,47 @@ model TrainerReview {
   review    String?
   createdAt DateTime @default(now())
 
-  trainer Trainer        @relation(fields: [trainerId], references: [id])
   member  User           @relation(fields: [memberId], references: [id])
   session TrainerSession @relation(fields: [sessionId], references: [id])
+  trainer Trainer        @relation(fields: [trainerId], references: [id])
 
   @@index([trainerId])
   @@index([memberId])
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  memberId  Int
+  trainerId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  member   User      @relation(fields: [memberId], references: [id])
+  trainer  Trainer   @relation(fields: [trainerId], references: [id])
+  messages Message[]
+
+  @@unique([memberId, trainerId])
+  @@index([memberId])
+  @@index([trainerId])
+}
+
+model Message {
+  id             Int               @id @default(autoincrement())
+  conversationId Int
+  senderType     MessageSenderType
+  senderId       Int
+  content        String
+  isRead         Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+enum MessageSenderType {
+  MEMBER
+  TRAINER
 }
 
 enum PackageType {
@@ -200,9 +246,9 @@ enum PackageType {
 enum BookingStatus {
   pending
   confirmed
-  payment_failed
   cancelled
   checked_in
+  payment_failed
 }
 
 enum PaymentStatus {
@@ -223,4 +269,5 @@ enum SessionStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
+  PAYMENT_FAILED
 }
