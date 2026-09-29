@@ -4,7 +4,7 @@ const prisma = require("../config/prisma");
 const verifyGymOwner = async (req, res, next) => {
   try {
     const { id } = req.user;
-    const gymId = req.body.gymId || req.params.gymId;
+    const gymId = req.body?.gymId || req.params?.gymId;
 
     if (!gymId) {
       return res.status(400).json({
