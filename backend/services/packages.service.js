@@ -21,6 +21,26 @@ const getPackages = async (id) => {
         throw new Error(error.message || "Failed to fetch packages.");
     }
 }
+const getPackagesForAdmin = async (id) => {
+    try {
+        const gymId = Number(id);
+
+        if (!Number.isInteger(gymId) || gymId <= 0) {
+            throw new Error("Invalid gym id");
+        }
+
+        const packages = await prisma.package.findMany({
+            where: {
+                gymId,
+            }
+        })
+
+        return packages;
+    } catch (error) {
+        console.log("Packages Error: ", error.message);
+        throw new Error(error.message || "Failed to fetch packages.");
+    }
+}
 
 
 const createPackage = async ({ gymId, name, description, price, durationDays, sessions }) => {
@@ -113,5 +133,6 @@ module.exports = {
     createPackage,
     updatePackage,
     isActive,
-    deletePackage
+    deletePackage,
+    getPackagesForAdmin
 }

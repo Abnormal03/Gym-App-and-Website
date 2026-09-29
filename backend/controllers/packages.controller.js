@@ -1,9 +1,27 @@
-const { getPackages, createPackage: createPackageService, updatePackage: updatePackageService, isActive: checkActive, deletePackage: deactivate } = require("../services/packages.service");
+const { getPackages, createPackage: createPackageService, updatePackage: updatePackageService, isActive: checkActive, deletePackage: deactivate, getPackagesForAdmin: getPackagesAdmin } = require("../services/packages.service");
 
 const gymPackages = async (req, res) => {
     try {
         const { gym_id } = req.query;
         const packages = await getPackages(gym_id);
+
+        return res.status(200).json({
+            success: true,
+            packages
+        })
+    } catch (error) {
+        console.log("gymPackages error: ", error.message);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch gym packages"
+        });
+    }
+}
+const gymPackagesForAdmin = async (req, res) => {
+    try {
+        const { gym_id } = req.query;
+        const packages = await getPackagesAdmin(gym_id);
 
         return res.status(200).json({
             success: true,
@@ -92,5 +110,6 @@ module.exports = {
     gymPackages,
     createPackage,
     updatePackage,
-    deletePackage
+    deletePackage,
+    gymPackagesForAdmin
 }
