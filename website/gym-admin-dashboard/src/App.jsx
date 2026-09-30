@@ -55,19 +55,29 @@ function Shell({ children }) {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="sidebar-brand">gym<span>admin</span></div>
+        <div className="sidebar-header">
+          <div className="sidebar-brand">gym<span>admin</span></div>
+          <span className="sidebar-badge">ADMIN CONSOLE</span>
+        </div>
         <nav>
+          <div className="nav-heading">Workspace</div>
           <NavLink to="/gyms" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-            Gyms
+            <span className="nav-item-label">Gyms</span>
+            <span className="nav-item-arrow" aria-hidden="true">-&gt;</span>
           </NavLink>
           <NavLink to="/packages" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-            Packages
+            <span className="nav-item-label">Packages</span>
+            <span className="nav-item-arrow" aria-hidden="true">-&gt;</span>
           </NavLink>
           <NavLink to="/bookings" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-            Bookings &amp; revenue
+            <span className="nav-item-label">Bookings &amp; revenue</span>
+            <span className="nav-item-arrow" aria-hidden="true">-&gt;</span>
           </NavLink>
         </nav>
-        <div className="sidebar-foot">BY SKYKIN TECHNOLOGIES</div>
+        <div className="sidebar-foot">
+          <span className="sidebar-foot-rule" />
+          <span>By Skykin Technologies</span>
+        </div>
       </aside>
 
       <div className="main">

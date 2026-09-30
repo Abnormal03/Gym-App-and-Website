@@ -57,34 +57,54 @@ export default function Bookings() {
   const totalBookings = stats?.totalBookings ?? stats?.total ?? bookings.length
   const totalRevenue = stats?.totalRevenue ?? stats?.revenue ?? '—'
   const checkIns = stats?.totalCheckIns ?? stats?.checkIns ?? bookings.filter((b) => b.status === 'checked_in').length
+  const pendingBookings = bookings.filter((booking) => booking.status === 'pending').length
+  const revenueLabel = typeof totalRevenue === 'number' ? `${totalRevenue.toLocaleString()} ETB` : totalRevenue
 
   return (
     <>
-      <div className="page-head">
+      <div className="page-head booking-page-head">
         <div>
-          <h1>Bookings &amp; revenue</h1>
-          <p>{selectedGym ? selectedGym.name : 'All gyms'} — live from the booking system.</p>
+          <p className="eyebrow">Daily operations</p>
+          <h1>Booking pulse</h1>
+          <p>{selectedGym ? selectedGym.name : 'All gyms'} — reservations, attendance, and revenue in one view.</p>
         </div>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="scoreboard">
-        <div className="score">
-          <div className="score-value">{totalBookings}</div>
-          <div className="score-label">Total bookings</div>
+      <div className="booking-summary" aria-label="Booking summary">
+        <div className="booking-summary-item">
+          <span className="summary-mark summary-mark-primary" aria-hidden="true">01</span>
+          <div>
+            <strong>{totalBookings}</strong>
+            <span>Total bookings</span>
+          </div>
         </div>
-        <div className="score">
-          <div className="score-value">{typeof totalRevenue === 'number' ? `${totalRevenue.toLocaleString()} ETB` : totalRevenue}</div>
-          <div className="score-label">Revenue</div>
+        <div className="booking-summary-item">
+          <span className="summary-mark" aria-hidden="true">02</span>
+          <div>
+            <strong>{revenueLabel}</strong>
+            <span>Revenue collected</span>
+          </div>
         </div>
-        <div className="score">
-          <div className="score-value">{checkIns}</div>
-          <div className="score-label">Checked in</div>
+        <div className="booking-summary-item">
+          <span className="summary-mark" aria-hidden="true">03</span>
+          <div>
+            <strong>{checkIns}</strong>
+            <span>Checked in</span>
+          </div>
         </div>
       </div>
 
-      <div className="table-wrap">
+      <div className="booking-list-heading">
+        <div>
+          <h2>Reservation queue</h2>
+          <p>{pendingBookings} {pendingBookings === 1 ? 'booking' : 'bookings'} waiting for confirmation.</p>
+        </div>
+        <span className="booking-live-indicator"><span /> Live data</span>
+      </div>
+
+      <div className="table-wrap booking-table-wrap">
         {loadingGyms || loading ? (
           <div className="loading-row">Loading bookings…</div>
         ) : !gymId ? (
@@ -102,18 +122,33 @@ export default function Bookings() {
             <thead>
               <tr>
                 <th>Member</th>
-                <th>Slot</th>
+                <th>Reservation slot</th>
                 <th>Package</th>
                 <th>Status</th>
-                <th></th>
+                <th aria-label="Actions"></th>
               </tr>
             </thead>
             <tbody>
               {bookings.map((b) => (
                 <tr key={b.id}>
-                  <td>{b.user?.name || b.memberName || `#${b.userId ?? '—'}`}</td>
-                  <td>{formatDate(b.slotStart)} – {formatDate(b.slotEnd)}</td>
-                  <td>{b.package?.name || (b.packageId ? `#${b.packageId}` : '—')}</td>
+                  <td>
+                    <div className="booking-member-cell">
+                      <span className="booking-member-mark" aria-hidden="true">{(b.user?.name || b.memberName || 'M').slice(0, 1).toUpperCase()}</span>
+                      <div>
+                        <strong>{b.user?.name || b.memberName || `#${b.userId ?? '—'}`}</strong>
+                        <span>Member booking</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="booking-slot-cell">
+                      <strong>{formatDate(b.slotStart)}</strong>
+                      <span>Ends {formatDate(b.slotEnd)}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="booking-package-cell">{b.package?.name || (b.packageId ? `Package #${b.packageId}` : 'Package not listed')}</span>
+                  </td>
                   <td>
                     <span className={`pill pill-${b.status}`}>{(b.status || 'pending').replace('_', ' ')}</span>
                   </td>

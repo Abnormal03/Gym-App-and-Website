@@ -23,7 +23,17 @@ export default function GymForm({ mode }) {
     let cancelled = false
     async function load() {
       try {
-        const g = await api.getGym(token, id)
+        let g
+        try {
+          const response = await api.getGym(token, id)
+          g = response?.gymDetails || response
+        } catch (detailError) {
+          const listResponse = await api.listGyms(token)
+          const gyms = Array.isArray(listResponse) ? listResponse : listResponse?.gyms || []
+          g = gyms.find((gym) => String(gym.id ?? gym.gymId ?? gym.gym_id) === String(id))
+          if (!g) throw detailError
+        }
+        if (!g || typeof g !== 'object') throw new Error('Gym details could not be loaded')
         if (cancelled) return
         setForm({
           name: g.name || '',

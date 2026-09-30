@@ -30,18 +30,18 @@ async function request(path, { method = 'GET', body, token } = {}) {
 }
 
 export const api = {
-  
+
   adminLogin: (email, password) =>
     request('/api/auth/admin/login', { method: 'POST', body: { email, password } }),
   me: (token) => request('/api/admin/profile', { token }),
 
-  
+
   listGyms: (token) => request('/api/gyms', { token }),
   getGym: (token, id) => request(`/api/gyms/${id}`, { token }),
   createGym: (token, body) => request('/api/gyms', { method: 'POST', body, token }),
   updateGym: (token, id, body) => request(`/api/gyms/${id}`, { method: 'PUT', body, token }),
 
-  listPackages: (token, gymId) => request(`/api/packages?gym_id=${gymId}`, { token }),
+  listPackages: (token, gymId) => request(`/api/packages/admin?gym_id=${gymId}`, { token }),
   createPackage: (token, body) => request('/api/packages', { method: 'POST', body, token }),
   updatePackage: (token, id, body) => request(`/api/packages/${id}`, { method: 'PUT', body, token }),
   deactivatePackage: (token, id) => request(`/api/packages/${id}`, { method: 'DELETE', token }),

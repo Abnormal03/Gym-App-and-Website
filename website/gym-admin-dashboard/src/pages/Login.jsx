@@ -28,11 +28,27 @@ export default function Login() {
 
   return (
     <div className="login-screen">
-      <div className="login-panel">
-        <h1>Gym admin</h1>
-        <p className="sub">Manage gyms, packages, and bookings.</p>
+      <div className="login-brand-panel">
+        <div className="login-brand">gym<span>admin</span></div>
+        <div className="login-brand-copy">
+          <p className="eyebrow">Operations, in focus</p>
+          <h1>A clearer view of your gym business.</h1>
+          <p>Keep your locations, packages, and bookings moving from one focused workspace.</p>
+        </div>
+        <div className="login-brand-footer">
+          <span className="status-dot" aria-hidden="true" />
+          <span>Admin workspace</span>
+        </div>
+      </div>
 
-        {error && <div className="error-banner">{error}</div>}
+      <div className="login-panel">
+        <div className="login-panel-heading">
+          <p className="eyebrow">Welcome back</p>
+          <h2>Sign in to continue</h2>
+          <p className="sub">Use your admin account to access the dashboard.</p>
+        </div>
+
+        {error && <div className="error-banner" role="alert">{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="field">
@@ -57,10 +73,13 @@ export default function Login() {
               placeholder="••••••••"
             />
           </div>
-          <button className="btn btn-primary" type="submit" disabled={submitting} style={{ width: '100%', justifyContent: 'center' }}>
-            {submitting ? 'Logging in…' : 'Log in'}
+          <button className="login-submit" type="submit" disabled={submitting}>
+            <span>{submitting ? 'Signing in...' : 'Sign in'}</span>
+            <span aria-hidden="true">-&gt;</span>
           </button>
         </form>
+
+        <p className="login-note">Authorized gym administrators only.</p>
       </div>
     </div>
   )

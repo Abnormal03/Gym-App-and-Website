@@ -17,6 +17,10 @@ export default function Packages() {
   const [saving, setSaving] = useState(false)
 
   const gymId = selectedGym?.id || selectedGymId
+  const activePackages = packages.filter((pkg) => pkg.isActive !== false)
+  const averagePrice = packages.length
+    ? Math.round(packages.reduce((total, pkg) => total + (Number(pkg.price) || 0), 0) / packages.length)
+    : 0
 
   useEffect(() => {
     if (!gymId) { setLoading(false); return }
@@ -100,19 +104,57 @@ export default function Packages() {
     }
   }
 
+  async function handleActivate(pkg) {
+    if (!confirm(`Activate "${pkg.name}"?`)) return
+    try {
+      await api.updatePackage(token, pkg.id, { isActive: true })
+      await refresh();
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
   return (
     <>
-      <div className="page-head">
+      <div className="page-head package-page-head">
         <div>
-          <h1>Packages</h1>
-          <p>Pricing for {selectedGym ? selectedGym.name : 'the selected gym'}.</p>
+          <p className="eyebrow">Membership catalogue</p>
+          <h1>Packages that move people</h1>
+          <p>Shape the offers members see at {selectedGym ? selectedGym.name : 'your selected gym'}.</p>
         </div>
         {gyms.length > 0 && (
-          <button className="btn btn-primary" onClick={startCreate}>Add package</button>
+          <button className="btn btn-primary package-add-button" onClick={startCreate}>
+            <span className="button-plus" aria-hidden="true">+</span>
+            Add package
+          </button>
         )}
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+
+      <div className="package-summary" aria-label="Package summary">
+        <div className="package-summary-item">
+          <span className="summary-mark summary-mark-primary" aria-hidden="true">01</span>
+          <div>
+            <strong>{packages.length}</strong>
+            <span>Total packages</span>
+          </div>
+        </div>
+        <div className="package-summary-item">
+          <span className="summary-mark" aria-hidden="true">02</span>
+          <div>
+            <strong>{activePackages.length}</strong>
+            <span>Available to members</span>
+          </div>
+        </div>
+        <div className="package-summary-item">
+          <span className="summary-mark" aria-hidden="true">03</span>
+          <div>
+            <strong>{averagePrice.toLocaleString()} <small>ETB</small></strong>
+            <span>Average price</span>
+          </div>
+        </div>
+      </div>
 
       {editingId && (
         <form className="form-panel" onSubmit={handleSubmit} style={{ marginBottom: 24 }}>
@@ -149,7 +191,7 @@ export default function Packages() {
         </form>
       )}
 
-      <div className="table-wrap">
+      <div className="table-wrap package-table-wrap">
         {loadingGyms || loading ? (
           <div className="loading-row">Loading packages…</div>
         ) : !gymId ? (
@@ -166,8 +208,7 @@ export default function Packages() {
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Type</th>
+                <th>Membership</th>
                 <th>Price</th>
                 <th>Duration</th>
                 <th>Status</th>
@@ -177,21 +218,29 @@ export default function Packages() {
             <tbody>
               {packages.map((p) => (
                 <tr key={p.id}>
-                  <td><strong>{p.name}</strong></td>
-                  <td>{p.type}</td>
-                  <td>{p.price} ETB</td>
-                  <td>{p.durationDays} days</td>
                   <td>
-                    <span className={`pill ${p.isActive === false ? 'pill-cancelled' : 'pill-confirmed'}`}>
+                    <div className="package-name-cell">
+                      <span className="package-mark" aria-hidden="true">{(p.type || 'P').slice(0, 1).toUpperCase()}</span>
+                      <div>
+                        <strong>{p.name}</strong>
+                        <span>{p.benefits || `${p.type || 'Membership'} access`}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td><strong className="package-price">{Number(p.price || 0).toLocaleString()} <small>ETB</small></strong></td>
+                  <td><span className="package-duration">{p.durationDays || 0} <small>days</small></span></td>
+                  <td>
+                    <span className={`package-status ${p.isActive === false ? 'package-status-inactive' : ''}`}>
+                      <span />
                       {p.isActive === false ? 'Inactive' : 'Active'}
                     </span>
                   </td>
                   <td>
                     <div className="row-actions">
                       <button className="btn btn-ghost btn-small" onClick={() => startEdit(p)}>Edit</button>
-                      {p.isActive !== false && (
-                        <button className="btn btn-danger btn-small" onClick={() => handleDeactivate(p)}>Deactivate</button>
-                      )}
+                      {p.isActive !== false ?
+                        <button className="btn btn-danger btn-small" onClick={() => handleDeactivate(p)}>Deactivate</button> : <button className="btn btn-success btn-small" onClick={() => handleActivate(p)}>Activate</button>
+                      }
                     </div>
                   </td>
                 </tr>
