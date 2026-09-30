@@ -66,8 +66,8 @@ const createPackage = async ({ gymId, name, description, price, durationDays, se
 
 const updatePackage = async (id, packageData) => {
     try {
-        const { gymId, isActive } = packageData;
-        if (gymId !== undefined || isActive !== undefined) {
+        const { gymId } = packageData;
+        if (gymId !== undefined) {
             throw new Error("Couldn't Update these fields.")
         }
         const updatedPackage = await prisma.package.update({
