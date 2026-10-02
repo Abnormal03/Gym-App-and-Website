@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const trainerService = require("../services/trainer.service.js");
 
 const {
   createTrainer,
@@ -38,13 +37,27 @@ const generateTrainerToken = (trainer) => {
 
 const registerTrainer = async (req, res) => {
   try {
-    const { name, email, password, bio, specialization, experienceYears } =
-      req.body;
+    const {
+      name,
+      email,
+      phone,
+      password,
+      bio,
+      specialization,
+      experienceYears,
+    } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !phone || !password) {
       return res.status(400).json({
         success: false,
-        message: "Name, email and password are required",
+        message: "Name, email, phone and password are required",
+      });
+    }
+
+    if (!/^\+2519\d{8}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number must be in the format +2519XXXXXXXX",
       });
     }
 
@@ -58,6 +71,7 @@ const registerTrainer = async (req, res) => {
     const trainer = await createTrainer({
       name,
       email,
+      phone,
       password,
       bio,
       specialization,

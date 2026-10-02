@@ -4,6 +4,7 @@ const {
   initializePaymentController,
   initializeTrainerSessionPaymentController,
   chapaCallbackController,
+  chapaWebhookController,
   verifyPaymentController,
 } = require("../controllers/payment.controller");
 
@@ -20,6 +21,8 @@ router.post(
 );
 
 router.get("/callback", chapaCallbackController);
+
+router.post("/webhook", chapaWebhookController);
 
 router.get("/verify/:txRef", protect, verifyPaymentController);
 

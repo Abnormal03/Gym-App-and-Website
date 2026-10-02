@@ -11,7 +11,7 @@ const getPaymentErrorMessage = (error, fallbackMessage) => {
   if (message && typeof message === "object") {
     try {
       return JSON.stringify(message);
-    } catch (serializationError) {
+    } catch {
       return error.message || fallbackMessage;
     }
   }
@@ -43,9 +43,10 @@ const initializePaymentController = async (req, res) => {
       payment,
     });
   } catch (error) {
-    console.error("Initialize Payment Error:");
-
-    console.error(error.response?.data || error.message || error);
+    console.error(
+      "Initialize Payment Error:",
+      error.response?.data || error.message || error,
+    );
 
     return res.status(400).json({
       success: false,
@@ -68,12 +69,20 @@ const chapaCallbackController = async (req, res) => {
     const result = await paymentService.processPaymentResult(txRef);
 
     const frontendUrl = process.env.FRONTEND_URL;
+
     const mobileReturnUrl = process.env.MOBILE_RETURN_URL;
 
     if (mobileReturnUrl) {
       const redirectUrl = new URL(mobileReturnUrl);
+
       redirectUrl.searchParams.set("tx_ref", txRef);
+
       redirectUrl.searchParams.set("status", result.outcome);
+
+      if (result.refundStatus) {
+        redirectUrl.searchParams.set("refund_status", result.refundStatus);
+      }
+
       return res.redirect(redirectUrl.toString());
     }
 
@@ -93,13 +102,32 @@ const chapaCallbackController = async (req, res) => {
       );
     }
 
+    if (result.outcome === "refund_pending" || result.outcome === "refunded") {
+      const redirectUrl = new URL(`${frontendUrl}/payment-refund`);
+
+      redirectUrl.searchParams.set("tx_ref", txRef);
+
+      redirectUrl.searchParams.set("status", result.outcome);
+
+      if (result.refundStatus) {
+        redirectUrl.searchParams.set("refund_status", result.refundStatus);
+      }
+
+      if (result.refundRef) {
+        redirectUrl.searchParams.set("refund_ref", result.refundRef);
+      }
+
+      return res.redirect(redirectUrl.toString());
+    }
+
     return res.redirect(
       `${frontendUrl}/payment-pending?tx_ref=${encodeURIComponent(txRef)}`,
     );
   } catch (error) {
-    console.error("Chapa callback error:");
-
-    console.error(error.response?.data || error.message || error);
+    console.error(
+      "Chapa callback error:",
+      error.response?.data || error.message || error,
+    );
 
     return res.status(400).json({
       success: false,
@@ -117,6 +145,7 @@ const chapaWebhookController = async (req, res) => {
     console.log(">>> CHAPA WEBHOOK RECEIVED");
     console.log("Time:", new Date().toISOString());
     console.log("========================================");
+
     const rawBody = req.rawBody;
 
     if (!rawBody) {
@@ -140,7 +169,13 @@ const chapaWebhookController = async (req, res) => {
       });
     }
 
-    const result = await paymentService.handleChapaWebhook(rawBody, signature);
+    const payload = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+
+    const result = await paymentService.handleChapaWebhook(
+      payload,
+      rawBody,
+      signature,
+    );
 
     return res.status(200).json({
       success: true,
@@ -148,9 +183,10 @@ const chapaWebhookController = async (req, res) => {
       result,
     });
   } catch (error) {
-    console.error("Chapa webhook error:");
-
-    console.error(error.response?.data || error.message || error);
+    console.error(
+      "Chapa webhook error:",
+      error.response?.data || error.message || error,
+    );
 
     return res.status(400).json({
       success: false,
@@ -158,6 +194,7 @@ const chapaWebhookController = async (req, res) => {
     });
   }
 };
+
 const verifyPaymentController = async (req, res) => {
   try {
     const txRef = req.params.txRef;
@@ -168,6 +205,7 @@ const verifyPaymentController = async (req, res) => {
         message: "Transaction reference is required",
       });
     }
+
     const result = await paymentService.checkPaymentStatus(txRef, req.user.id);
 
     return res.status(200).json({
