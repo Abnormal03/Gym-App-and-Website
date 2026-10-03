@@ -1,36 +1,29 @@
-const prisma = require("../config/prisma");
+const {
+  getDashboardData,
+  getAllUsers: getAllUsersService,
+  getUserById: getUserByIdService,
+  deleteUser: deleteUserService,
+  getAdminProfile: getAdminProfileService,
+
+  getPendingTrainers: getPendingTrainersService,
+  getTrainerForVerification: getTrainerForVerificationService,
+  verifyTrainer: verifyTrainerService,
+  rejectTrainer: rejectTrainerService,
+} = require("../services/admin.service");
 
 const getDashboard = async (req, res) => {
   try {
-    const totalUsers = await prisma.user.count();
+    const data = await getDashboardData();
 
-    const totalAdmins = await prisma.gymAdmin.count();
-
-    const totalGyms = await prisma.gym.count({
-      where: {
-        isActive: true,
-      },
-    });
-
-    const totalBookings = await prisma.booking.count();
-
-    const totalPayments = await prisma.payment.count();
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Admin dashboard data",
-      data: {
-        totalUsers,
-        totalAdmins,
-        totalGyms,
-        totalBookings,
-        totalPayments,
-      },
+      data,
     });
   } catch (error) {
     console.log("Dashboard Error:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to load dashboard",
     });
@@ -39,28 +32,16 @@ const getDashboard = async (req, res) => {
 
 const getAllUsers = async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        createdAt: true,
-      },
+    const users = await getAllUsersService();
 
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       users,
     });
   } catch (error) {
     console.log("Get Users Error:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to get users",
     });
@@ -69,9 +50,7 @@ const getAllUsers = async (req, res) => {
 
 const getUserById = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const userId = Number(id);
+    const userId = Number(req.params.id);
 
     if (!Number.isInteger(userId)) {
       return res.status(400).json({
@@ -80,19 +59,7 @@ const getUserById = async (req, res) => {
       });
     }
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        createdAt: true,
-      },
-    });
+    const user = await getUserByIdService(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -101,14 +68,14 @@ const getUserById = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       user,
     });
   } catch (error) {
     console.log("User Error:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to get user",
     });
@@ -117,11 +84,8 @@ const getUserById = async (req, res) => {
 
 const deleteUser = async (req, res) => {
   try {
-    const { id } = req.params;
+    const userId = Number(req.params.id);
 
-    const userId = Number(id);
-
-    // Validate ID
     if (!Number.isInteger(userId)) {
       return res.status(400).json({
         success: false,
@@ -129,12 +93,7 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
+    const user = await getUserByIdService(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -143,21 +102,16 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    // Delete user
-    await prisma.user.delete({
-      where: {
-        id: userId,
-      },
-    });
+    await deleteUserService(userId);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "User deleted successfully",
     });
   } catch (error) {
     console.log("Delete User Error:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to delete user",
     });
@@ -168,18 +122,7 @@ const getAdminProfile = async (req, res) => {
   try {
     const adminId = Number(req.user.id);
 
-    const admin = await prisma.gymAdmin.findUnique({
-      where: {
-        id: adminId,
-      },
-
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        createdAt: true,
-      },
-    });
+    const admin = await getAdminProfileService(adminId);
 
     if (!admin) {
       return res.status(404).json({
@@ -188,24 +131,157 @@ const getAdminProfile = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       admin,
     });
   } catch (error) {
     console.log("Admin Profile Error:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to get admin profile",
     });
   }
 };
 
+const getPendingTrainers = async (req, res) => {
+  try {
+    const trainers = await getPendingTrainersService();
+
+    return res.status(200).json({
+      success: true,
+      trainers,
+    });
+  } catch (error) {
+    console.log("Get Pending Trainers Error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get pending trainers",
+    });
+  }
+};
+
+const getTrainerForVerification = async (req, res) => {
+  try {
+    const trainerId = Number(req.params.id);
+
+    if (!Number.isInteger(trainerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid trainer ID",
+      });
+    }
+
+    const trainer = await getTrainerForVerificationService(trainerId);
+
+    if (!trainer) {
+      return res.status(404).json({
+        success: false,
+        message: "Trainer not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      trainer,
+    });
+  } catch (error) {
+    console.log("Get Trainer Error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get trainer",
+    });
+  }
+};
+
+const verifyTrainer = async (req, res) => {
+  try {
+    const trainerId = Number(req.params.id);
+
+    if (!Number.isInteger(trainerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid trainer ID",
+      });
+    }
+
+    const trainer = await getTrainerForVerificationService(trainerId);
+
+    if (!trainer) {
+      return res.status(404).json({
+        success: false,
+        message: "Trainer not found",
+      });
+    }
+
+    const updatedTrainer = await verifyTrainerService(trainerId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Trainer verified successfully",
+      trainer: updatedTrainer,
+    });
+  } catch (error) {
+    console.log("Verify Trainer Error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify trainer",
+    });
+  }
+};
+
+const rejectTrainer = async (req, res) => {
+  try {
+    const trainerId = Number(req.params.id);
+
+    if (!Number.isInteger(trainerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid trainer ID",
+      });
+    }
+
+    const trainer = await getTrainerForVerificationService(trainerId);
+
+    if (!trainer) {
+      return res.status(404).json({
+        success: false,
+        message: "Trainer not found",
+      });
+    }
+
+    const updatedTrainer = await rejectTrainerService(trainerId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Trainer rejected successfully",
+      trainer: updatedTrainer,
+    });
+  } catch (error) {
+    console.log("Reject Trainer Error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to reject trainer",
+    });
+  }
+};
+
 module.exports = {
   getDashboard,
+
   getAllUsers,
   getUserById,
   deleteUser,
+
   getAdminProfile,
+
+  getPendingTrainers,
+  getTrainerForVerification,
+  verifyTrainer,
+  rejectTrainer,
 };
