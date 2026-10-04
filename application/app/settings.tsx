@@ -1,4 +1,3 @@
-// app/settings.tsx
 import {
   View,
   Text,
@@ -24,13 +23,13 @@ export default function SettingsScreen() {
   const { error, saving, success, savePreference: savePref } = usePreference();
 
   const [bookingConfirm, setBookingConfirm] = useState<boolean>(
-    user?.preference.bookingConfirm ?? true,
+    user?.preference?.bookingConfirm ?? true,
   );
   const [sessionReminders, setSessionReminders] = useState<boolean>(
-    user?.preference.sessionReminders ?? true,
+    user?.preference?.sessionReminders ?? true,
   );
   const [promotions, setPromotions] = useState<boolean>(
-    user?.preference.offersAndPromotions ?? false,
+    user?.preference?.offersAndPromotions ?? false,
   );
   const [hasChanges, setHasChanges] = useState(false);
   const pendingPreference = useRef<Preference | null>(null);

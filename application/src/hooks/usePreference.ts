@@ -36,8 +36,6 @@ export const usePreference = ()=>{
                     await updatePref({preference:pref, ...restOfUser},token)
                 }
             }
-
-
         } catch (error: any) {
             console.log(error?.message);
             setError("Unable To Save Update")

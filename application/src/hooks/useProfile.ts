@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { userService } from '../services/user.service';
 import { useAuthStore } from '../store/auth.store';
 import { UpdateProfileDTO, ChangePasswordDTO } from '../types/user.types';
@@ -11,19 +11,22 @@ export const useProfile = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [passError, setPassError] = useState<string | null>(null);
+  const [updateChange, setUpdateChange] = useState(0);
 
-  const clearError = ()=>{
-    setError(null);
-    setPassError(null);
-  }
-  useEffect(()=>{
-    if(!error&&!passError) return;
-    const errorTimeout = setTimeout(()=>{
-      clearError();
+  const [passError, setPassError] = useState<string | null>(null);
+  const activeProfileRequest = useRef(0);
+
+  useEffect(() => {
+    if (!error && !passError && !success) return;
+
+    const errorTimeout = setTimeout(() => {
+      setError(null);
+      setPassError(null);
+      setSuccess(null);
     }, 5000);
-    return ()=> clearTimeout(errorTimeout);
-  },[error, passError, clearError])
+
+    return () => clearTimeout(errorTimeout);
+  }, [error, passError, success]);
 
   const updateProfile = async (data: UpdateProfileDTO) => {
     setSaving(true);
@@ -31,11 +34,13 @@ export const useProfile = () => {
     setSuccess(null);
     try {
       const res = await userService.updateProfile(data);
-      // Update store so header/drawer reflects new name immediately
       if (token) await login(res.user, token);
-      setSuccess('Profile updated successfully');
-    } catch (err:any) {
+      setUpdateChange((version) => version + 1);
+      setSuccess("Profile updated successfully");
+      return true;
+    } catch (err: any) {
       setError(err.message || "profile update failed");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -56,23 +61,29 @@ export const useProfile = () => {
   };
 
   const loadProfile = async ()=>{
+    const requestId = ++activeProfileRequest.current;
     setLoading(true);
     setError(null);
-    setSuccess(null);
     try {
       const loadedUser = await userService.getProfile();
       if (loadedUser.success) {
         return loadedUser.user;
       }
-      setError("Unable to load profile.")
+      if (requestId === activeProfileRequest.current) {
+        setError("Unable to load profile.")
+      }
       return user;
     } catch (error: any) {
-      setError(error.message||"unable to load profile.")
+      if (requestId === activeProfileRequest.current) {
+        setError(error.message||"unable to load profile.")
+      }
       return user;
     }finally{
-      setLoading(false);
+      if (requestId === activeProfileRequest.current) {
+        setLoading(false);
+      }
     }
   }
 
-  return { user, loading, saving,savingPass, passError, error, success, updateProfile, changePassword, loadProfile };
+  return { updateChange, setUpdateChange, user, loading, saving,savingPass, passError, error, success, updateProfile, changePassword, loadProfile };
 };

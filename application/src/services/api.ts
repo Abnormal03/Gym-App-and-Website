@@ -5,7 +5,7 @@ import { BASE_URL } from './localBaseUrl';
 
 
 const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: process.env.EXPO_PUBLIC_API_URL,
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 });

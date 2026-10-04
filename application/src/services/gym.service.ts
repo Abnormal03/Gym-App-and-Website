@@ -20,8 +20,8 @@ const normalizeGymDetails = (payload: Gym | GymDetailsResponse): Gym => {
 };
 
 const normalizeAvailability = (payload: Availability | any): Availability=>{
-  if ('availability' in payload && payload.availability) {
-    return payload.availability
+  if ('available' in payload && payload.available) {
+    return payload.available
   }
   throw new Error('Gym Availability not found in API response')
 }
@@ -41,6 +41,7 @@ export const gymService = {
     const response = await api.get(`/gyms/${id}/availability`, {
             params: { slot_start: slotStart, slot_end: slotEnd }
           })
+          console.log("response", response)
     return normalizeAvailability(response as unknown as Availability | any)
   }
     

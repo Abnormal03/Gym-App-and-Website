@@ -57,7 +57,7 @@ export default function ConfirmationScreen() {
       // Stop polling once we have a final answer
       if (resolved !== "pending") {
         stopPolling();
-        // await store.clearPendingBooking();
+        await store.clearPendingBooking();
       }
     } catch (err) {
       setError(err as string);

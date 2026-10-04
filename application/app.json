@@ -3,7 +3,7 @@
     "name": "gym-mobile",
     "slug": "gym-mobile",
     "scheme": "gym-mobile",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

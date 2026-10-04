@@ -9,12 +9,14 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Touchable,
 } from "react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useProfile } from "../../../src/hooks/useProfile";
 import { useAuthStore } from "../../../src/store/auth.store";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../../src/hooks/useTheme";
+import ProfilePicture from "../../../src/components/profile/ProfilePicture";
 // import * as ImagePicker from "expo-image-picker";
 
 export default function ProfileScreen() {
@@ -28,18 +30,24 @@ export default function ProfileScreen() {
     success,
     savingPass,
     passError,
+    updateChange,
+    loading,
     updateProfile,
     changePassword,
     loadProfile,
   } = useProfile();
 
   const [user, setUser] = useState(savedUser);
+  const loadRequestId = useRef(0);
 
   // Password change state — kept local to this screen
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  //profile view and change modal...
+  const [openProfile, setOpenProfile] = useState(false);
 
   const colors = {
     bg: theme.background,
@@ -52,9 +60,12 @@ export default function ProfileScreen() {
   };
 
   const loadUser = async () => {
+    const requestId = ++loadRequestId.current;
     const nameBeforeLoad = name;
     const phoneBeforeLoad = phone;
     const loadedUser = await loadProfile();
+    if (requestId !== loadRequestId.current) return;
+
     setUser(loadedUser);
     setName((currentName) =>
       currentName === nameBeforeLoad ? (loadedUser?.name ?? "") : currentName,
@@ -67,8 +78,8 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
-    loadUser();
-  }, []);
+    void loadUser();
+  }, [updateChange]);
 
   // Editable fields mirror the user object
   const [name, setName] = useState(user?.name ?? "");
@@ -122,25 +133,41 @@ export default function ProfileScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      {openProfile && (
+        <ProfilePicture
+          user={user}
+          onClose={() => {
+            setOpenProfile(false);
+          }}
+          onUploaded={loadUser}
+          profileLoading={loading}
+        />
+      )}
       {/* Avatar */}
       <View style={styles.avatarSection}>
-        <View style={styles.avatarWrapper}>
-          {user?.photoUrl ? (
-            <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
-          ) : (
-            <View
-              style={[
-                styles.avatar,
-                styles.avatarPlaceholder,
-                { backgroundColor: theme.input },
-              ]}
-            >
-              <Text style={styles.avatarInitial}>
-                {user?.name?.charAt(0).toUpperCase() ?? "U"}
-              </Text>
-            </View>
-          )}
-        </View>
+        <TouchableOpacity
+          onPress={() => {
+            setOpenProfile(!openProfile);
+          }}
+        >
+          <View style={styles.avatarWrapper}>
+            {user?.photoUrl ? (
+              <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
+            ) : (
+              <View
+                style={[
+                  styles.avatar,
+                  styles.avatarPlaceholder,
+                  { backgroundColor: theme.input },
+                ]}
+              >
+                <Text style={styles.avatarInitial}>
+                  {user?.name?.charAt(0).toUpperCase() ?? "U"}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
         <Text style={[styles.avatarName, { color: colors.text }]}>
           {user?.name}
         </Text>
