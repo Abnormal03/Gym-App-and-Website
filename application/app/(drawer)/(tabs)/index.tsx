@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -17,6 +17,7 @@ import { useTheme } from "../../../src/hooks/useTheme";
 
 export function HomeScreen() {
   const { theme: palette, mode } = useTheme();
+  const [search, setSearch] = useState<string>("");
   const theme = {
     ...palette,
     text: palette.foreground,
@@ -25,7 +26,15 @@ export function HomeScreen() {
   };
   const router = useRouter();
 
-  const { getGyms, gyms, loading: isLoading, error } = useGyms();
+  const {
+    getGyms,
+    gyms,
+    loading: isLoading,
+    error,
+    searching,
+    searchError,
+    searchGymByNameAndLocation,
+  } = useGyms();
 
   useEffect(() => {
     getGyms();
@@ -33,6 +42,14 @@ export function HomeScreen() {
 
   const handlePress = (id: number) => {
     router.push(`/gym/${id}`);
+  };
+
+  const handleSearch = async () => {
+    if (search.trim().length === 0) {
+      await getGyms();
+    } else {
+      await searchGymByNameAndLocation(search);
+    }
   };
 
   return (
@@ -48,6 +65,8 @@ export function HomeScreen() {
             <Text style={[styles.searchIcon, { color: theme.muted }]}>⌕</Text>
             <TextInput
               placeholder="Find your arena..."
+              value={search}
+              onChangeText={(text) => setSearch(text)}
               placeholderTextColor={theme.muted}
               style={[styles.searchInput, { color: theme.text }]}
             />
@@ -55,10 +74,28 @@ export function HomeScreen() {
           <Button
             mode={mode}
             title="🔍"
-            onPress={() => undefined}
+            loading={searching}
+            onPress={handleSearch}
             style={styles.mapButton}
           />
         </View>
+        {searchError && (
+          <View
+            style={{
+              height: 30,
+              borderWidth: 1,
+              borderRadius: 10,
+              borderColor: theme.border,
+              alignItems: "center",
+              justifyContent: "center",
+              marginTop: 5,
+            }}
+          >
+            <Text style={{ color: theme.error, textAlign: "center" }}>
+              {searchError}
+            </Text>
+          </View>
+        )}
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={

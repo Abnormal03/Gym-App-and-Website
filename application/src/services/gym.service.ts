@@ -1,6 +1,6 @@
 // src/services/gym.service.ts
 import api from './api';
-import { Availability, Gym, GymDetailsResponse, GymListResponse } from '../types/gym.types';
+import { Availability, Gym, GymDetailsResponse, GymListResponse, GymSearchResponse } from '../types/gym.types';
 
 const normalizeGymList = (payload: Gym[] | GymListResponse): Gym[] => {
   if (Array.isArray(payload)) return payload;
@@ -41,8 +41,9 @@ export const gymService = {
     const response = await api.get(`/gyms/${id}/availability`, {
             params: { slot_start: slotStart, slot_end: slotEnd }
           })
-          console.log("response", response)
     return normalizeAvailability(response as unknown as Availability | any)
-  }
+  },
+  searchGyms: async (name: string, location: String): Promise<GymSearchResponse>=>
+    api.get(`/gyms/search`, {params:{name, location}})
     
 };

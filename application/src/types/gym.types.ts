@@ -44,3 +44,9 @@ export interface Availability {
   booked: number;
   available: number;
 }
+
+export interface GymSearchResponse {
+  success: boolean;
+  message?: string;
+  gyms: Gym[],
+}

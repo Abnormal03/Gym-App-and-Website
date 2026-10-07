@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { gymService } from '../services/gym.service';
 import { Gym } from '../types/gym.types';
 
@@ -7,6 +7,10 @@ export const useGyms = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [gymDetails, setGymDetails] = useState<Gym | null>(null);
+
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string| null>(null)
+  const requestOrder = useRef(0);
 
   const getErrorMessage = (err: unknown): string => {
     if (typeof err === 'string') return err;
@@ -18,17 +22,33 @@ export const useGyms = () => {
     return 'Something went wrong';
   };
 
+  useEffect(()=>{
+    if(!searchError) return;
+    const errorTimeout = setTimeout(()=>{setSearchError(null)},5000);
+
+    return ()=> clearTimeout(errorTimeout)
+  },[searchError])
+
   const getGyms = async () => {
+    const requestId = ++requestOrder.current;
     setLoading(true);
     setError(null);
+    setSearching(false);
+    setSearchError(null);
 
     try {
       const response = await gymService.getAll();
-      setGyms(response);
+      if (requestId === requestOrder.current) {
+        setGyms(response);
+      }
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (requestId === requestOrder.current) {
+        setError(getErrorMessage(err));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestOrder.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -46,6 +66,44 @@ export const useGyms = () => {
     }
   };
 
+  const searchGymByNameAndLocation = async (nameloc:string)=>{
+    const requestId = ++requestOrder.current;
+    setLoading(false);
+    setError(null);
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const byName = await gymService.searchGyms(nameloc,"");
+      if (requestId !== requestOrder.current) return;
+
+      if (byName.success && byName.message) {
+        const byLocation = await gymService.searchGyms("", nameloc);
+        if (requestId !== requestOrder.current) return;
+
+        if (byLocation.message) {
+          setSearchError(byLocation.message);
+        }
+        if (byLocation.success) {
+          setGyms(byLocation.gyms);
+        }
+      }else if(!byName.success && byName.message){
+        setSearchError(byName.message)
+      }
+      if (byName.success && !byName.message) {
+        setGyms(byName.gyms)
+      }
+
+    } catch (error) {
+      if (requestId === requestOrder.current) {
+        setSearchError(getErrorMessage(error));
+      }
+    }finally{
+      if (requestId === requestOrder.current) {
+        setSearching(false);
+      }
+    }
+  }
+
   return {
     getGyms,
     getGymDetails,
@@ -53,5 +111,8 @@ export const useGyms = () => {
     gyms,
     loading,
     error,
+    searching,
+    searchError,
+    searchGymByNameAndLocation
   };
 };
