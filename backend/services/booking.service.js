@@ -1,7 +1,18 @@
 const prisma = require("../config/prisma");
 const { allowedTransitions } = require("../config/bookingTransitions");
+const { expireStale, getUsedCapacity } = require("./bookingHelpers.service");
 
 const isAdmin = (role) => role === "gym_admin" || role === "platform_admin";
+
+const validatePositiveId = (value, fieldName = "ID") => {
+  const id = Number(value);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+
+  return id;
+};
 
 const createBooking = async ({
   userId,
@@ -9,90 +20,120 @@ const createBooking = async ({
   packageId,
   slotStart,
   slotEnd,
+  headcount = 1,
 }) => {
-  userId = Number(userId);
-  gymId = Number(gymId);
+  userId = validatePositiveId(userId, "user ID");
+  gymId = validatePositiveId(gymId, "gym ID");
 
-  if (packageId) {
-    packageId = Number(packageId);
+  if (packageId === undefined || packageId === null || packageId === "") {
+    packageId = null;
+  } else {
+    packageId = validatePositiveId(packageId, "package ID");
+  }
+
+  headcount = Number(headcount);
+
+  if (!Number.isInteger(headcount) || headcount <= 0) {
+    throw new Error("Headcount must be a positive integer");
+  }
+
+  if (!slotStart || !slotEnd) {
+    throw new Error("Invalid booking date");
   }
 
   const start = new Date(slotStart);
   const end = new Date(slotEnd);
 
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new Error("Invalid booking date");
+  }
+
+  if (start <= new Date()) {
+    throw new Error("Booking start must be in the future");
   }
 
   if (start >= end) {
     throw new Error("slotStart must be before slotEnd");
   }
 
-  return await prisma.$transaction(
+  return prisma.$transaction(
     async (tx) => {
+      // Lock the gym row so concurrent bookings serialize capacity checks.
+      const lockedGyms = await tx.$queryRaw`
+        SELECT "id"
+        FROM "Gym"
+        WHERE "id" = ${gymId}
+        FOR UPDATE
+      `;
+
+      if (lockedGyms.length === 0) {
+        throw new Error("Gym not found");
+      }
+
       const gym = await tx.gym.findUnique({
-        where: {
-          id: gymId,
-        },
+        where: { id: gymId },
       });
 
       if (!gym) {
         throw new Error("Gym not found");
       }
 
-      if (packageId) {
-        const pkg = await tx.package.findFirst({
+      if (gym.isActive === false) {
+        throw new Error("Gym is not active");
+      }
+
+      // Expire old unpaid bookings before checking capacity.
+      await expireStale(tx, { gymId });
+
+      let selectedPackage = null;
+
+      if (packageId !== null) {
+        selectedPackage = await tx.package.findFirst({
           where: {
             id: packageId,
-            gymId: gymId,
+            gymId,
           },
         });
 
-        if (!pkg) {
+        if (!selectedPackage) {
           throw new Error("Package not found for this gym");
+        }
+
+        if (
+          selectedPackage.isActive === false ||
+          selectedPackage.active === false
+        ) {
+          throw new Error("Package is not active");
         }
       }
 
-      const bookedCount = await tx.booking.count({
-        where: {
-          gymId,
+      const usedCapacity = await getUsedCapacity(tx, gymId, start, end);
 
-          slotStart: {
-            lt: end,
-          },
+      const capacity = Number(gym.capacity);
 
-          slotEnd: {
-            gt: start,
-          },
-
-          status: {
-            not: "cancelled",
-          },
-        },
-      });
-
-      const capacity = gym.capacity || 1;
-
-      if (bookedCount >= capacity) {
+      if (
+        !Number.isFinite(capacity) ||
+        capacity <= 0 ||
+        usedCapacity + headcount > capacity
+      ) {
         throw new Error("Selected slot is fully booked");
       }
 
-      const booking = await tx.booking.create({
+      return tx.booking.create({
         data: {
           userId,
           gymId,
-          packageId: packageId || null,
+          packageId,
           slotStart: start,
           slotEnd: end,
+          headcount,
         },
-
         include: {
           gym: true,
           package: true,
+          payment: true,
         },
       });
-
-      return booking;
     },
     {
       maxWait: 10000,
@@ -102,29 +143,25 @@ const createBooking = async ({
 };
 
 const getMyBookings = async (userId) => {
-  return await prisma.booking.findMany({
-    where: {
-      userId,
-    },
+  userId = validatePositiveId(userId, "user ID");
 
+  return prisma.booking.findMany({
+    where: { userId },
     include: {
       gym: true,
       package: true,
       payment: true,
     },
-
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: { createdAt: "desc" },
   });
 };
 
 const getBookingById = async (id, userId, role) => {
-  const booking = await prisma.booking.findUnique({
-    where: {
-      id,
-    },
+  id = validatePositiveId(id, "booking ID");
+  userId = validatePositiveId(userId, "user ID");
 
+  const booking = await prisma.booking.findUnique({
+    where: { id },
     include: {
       gym: true,
       package: true,
@@ -144,44 +181,47 @@ const getBookingById = async (id, userId, role) => {
 };
 
 const changeBookingStatus = async (id, newStatus) => {
-  const booking = await prisma.booking.findUnique({
-    where: {
-      id,
-    },
-  });
+  id = validatePositiveId(id, "booking ID");
 
-  if (!booking) {
-    throw new Error("Booking not found");
-  }
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findUnique({
+      where: { id },
+    });
 
-  const allowed = allowedTransitions[booking.status];
+    if (!booking) {
+      throw new Error("Booking not found");
+    }
 
-  if (!allowed) {
-    throw new Error(`Unknown current status: ${booking.status}`);
-  }
+    const allowed = allowedTransitions[booking.status];
 
-  if (!allowed.includes(newStatus)) {
-    throw new Error(
-      `Cannot change booking from ${booking.status} to ${newStatus}`,
-    );
-  }
+    if (!allowed) {
+      throw new Error(`Unknown current status: ${booking.status}`);
+    }
 
-  return await prisma.booking.update({
-    where: {
-      id,
-    },
+    if (!allowed.includes(newStatus)) {
+      throw new Error(
+        `Cannot change booking from ${booking.status} to ${newStatus}`,
+      );
+    }
 
-    data: {
-      status: newStatus,
-    },
+    return tx.booking.update({
+      where: { id },
+      data: { status: newStatus },
+      include: {
+        gym: true,
+        package: true,
+        payment: true,
+      },
+    });
   });
 };
 
 const cancelBooking = async (id, userId, role) => {
+  id = validatePositiveId(id, "booking ID");
+  userId = validatePositiveId(userId, "user ID");
+
   const booking = await prisma.booking.findUnique({
-    where: {
-      id,
-    },
+    where: { id },
   });
 
   if (!booking) {
@@ -212,66 +252,54 @@ const checkInBooking = async (id, role) => {
 };
 
 const getGymBookings = async (gymId) => {
+  gymId = validatePositiveId(gymId, "gym ID");
+
   const gym = await prisma.gym.findUnique({
-    where: {
-      id: gymId,
-    },
+    where: { id: gymId },
   });
 
   if (!gym) {
     throw new Error("Gym not found");
   }
 
-  return await prisma.booking.findMany({
-    where: {
-      gymId,
-    },
-
+  return prisma.booking.findMany({
+    where: { gymId },
     include: {
       user: true,
       package: true,
       payment: true,
     },
-
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: { createdAt: "desc" },
   });
 };
 
 const getBookingStats = async () => {
-  const totalBookings = await prisma.booking.count();
-
-  const pendingBookings = await prisma.booking.count({
-    where: {
-      status: "pending",
-    },
-  });
-
-  const confirmedBookings = await prisma.booking.count({
-    where: {
-      status: "confirmed",
-    },
-  });
-
-  const cancelledBookings = await prisma.booking.count({
-    where: {
-      status: "cancelled",
-    },
-  });
-
-  const checkedInBookings = await prisma.booking.count({
-    where: {
-      status: "checked_in",
-    },
-  });
+  const [
+    total,
+    pending,
+    confirmed,
+    checkedIn,
+    cancelled,
+    expired,
+    paymentFailed,
+  ] = await Promise.all([
+    prisma.booking.count(),
+    prisma.booking.count({ where: { status: "pending" } }),
+    prisma.booking.count({ where: { status: "confirmed" } }),
+    prisma.booking.count({ where: { status: "checked_in" } }),
+    prisma.booking.count({ where: { status: "cancelled" } }),
+    prisma.booking.count({ where: { status: "expired" } }),
+    prisma.booking.count({ where: { status: "payment_failed" } }),
+  ]);
 
   return {
-    totalBookings,
-    pendingBookings,
-    confirmedBookings,
-    cancelledBookings,
-    checkedInBookings,
+    total,
+    pending,
+    confirmed,
+    checkedIn,
+    cancelled,
+    expired,
+    paymentFailed,
   };
 };
 
