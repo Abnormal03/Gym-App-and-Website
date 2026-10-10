@@ -1,7 +1,5 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const prisma = require("../config/prisma.js");
-const { adminOnly } = require("../middleware/auth.middleware.js");
 const {
   checkExist,
   createUser,
@@ -114,12 +112,12 @@ const adminLogin = async (req, res) => {
         .json({ success: false, message: "Invalid email or password" });
     }
 
-    // const isMatch = await bcrypt.compare(password, admin.password);
-    // if (!isMatch) {
-    //   return res
-    //     .status(401)
-    //     .json({ success: false, message: "Invalid email or password" });
-    // }
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid email or password" });
+    }
 
     const token = generateToken(admin.id, "gym_admin");
 
@@ -131,8 +129,49 @@ const adminLogin = async (req, res) => {
   }
 };
 
+const { z } = require('zod');
+const { ok, asyncHandler } = require('../utils/responses');
+const service = require('../services/auth.service.js');
+
+const loginSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(1),
+});
+
+// 8-72 characters (bcrypt ignores everything after 72 bytes), at least one letter and one digit.
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z
+    .string()
+    .min(8, 'At least 8 characters')
+    .max(72, 'At most 72 characters')
+    .regex(/[A-Za-z]/, 'Must contain a letter')
+    .regex(/\d/, 'Must contain a digit'),
+});
+
+const providerLogin = asyncHandler(async (req, res) => {
+  const { email, password } = loginSchema.parse(req.body);
+  return ok(res, await service.loginProvider(email, password));
+});
+
+const staffLogin = asyncHandler(async (req, res) => {
+  const { email, password } = loginSchema.parse(req.body);
+  return ok(res, await service.loginStaff(email, password));
+});
+
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+  return ok(res, await service.changePassword(req.auth, currentPassword, newPassword));
+});
+
+const me = asyncHandler(async (req, res) => ok(res, await service.getMe(req.auth)));
+
 module.exports = {
   adminLogin,
   register,
   login,
+  providerLogin,
+  staffLogin,
+  changePassword,
+  me
 };
