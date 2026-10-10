@@ -9,7 +9,10 @@ const gymRoutes = require("./routes/gym.routes.js");
 const packageRoutes = require("./routes/packages.routes.js");
 const bookingRoutes = require("./routes/booking.routes.js");
 const paymentRoutes = require("./routes/payment.routes");
-const { chapaWebhookController } = require("./controllers/payment.controller.js");
+const {
+  chapaWebhookController,
+} = require("./controllers/payment.controller.js");
+const providerRoutes = require("./routes/provider.routes.js");
 
 const app = express();
 
@@ -46,7 +49,7 @@ app.use("/api/gyms", gymRoutes);
 app.use("/api/packages", packageRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
-
+app.use("/api/providers", providerRoutes);
 // ========================================
 // HEALTH CHECK
 // ========================================
@@ -74,6 +77,6 @@ app.use((err, req, res, next) => {
 // ========================================
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });

@@ -1,4 +1,5 @@
 const express = require("express");
+const router = express.Router();
 
 const {
   GetGyms,
@@ -11,18 +12,13 @@ const {
 
 const { protect, adminOnly } = require("../middleware/auth.middleware");
 
-const router = express.Router();
-
 router.get("/", protect, GetGyms);
-
 router.get("/search", protect, searchGyms);
 
+router.get("/:id/availability", protect, checkAvailability);
 router.get("/:id", protect, getGymDetails);
 
-router.get("/:id/availability", protect, checkAvailability);
-
 router.post("/", protect, adminOnly, addGym);
-
 router.put("/:id", protect, adminOnly, updateGym);
 
 module.exports = router;
