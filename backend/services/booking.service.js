@@ -1,10 +1,18 @@
 const prisma = require("../config/prisma");
 const { allowedTransitions } = require("../config/bookingTransitions");
-const { expireStale, getUsedCapacity } = require("./bookingHelpers.service");
+
+const {
+  expireStale,
+  getUsedCapacity,
+  getOrderStatus,
+  getValidSessionStarts,
+} = require("./bookingHelpers.service");
+
+const { getNumberSetting } = require("./platformSetting.service");
 
 const isAdmin = (role) => role === "gym_admin" || role === "platform_admin";
 
-const validatePositiveId = (value, fieldName = "ID") => {
+const isPositiveId = (value, fieldName = "ID") => {
   const id = Number(value);
 
   if (!Number.isInteger(id) || id <= 0) {
@@ -13,6 +21,12 @@ const validatePositiveId = (value, fieldName = "ID") => {
 
   return id;
 };
+
+const validatePositiveId = isPositiveId;
+
+/* =========================================================
+   EXISTING BOOKING FUNCTIONS
+   ========================================================= */
 
 const createBooking = async ({
   userId,
@@ -58,7 +72,6 @@ const createBooking = async ({
 
   return prisma.$transaction(
     async (tx) => {
-      // Lock the gym row so concurrent bookings serialize capacity checks.
       const lockedGyms = await tx.$queryRaw`
         SELECT "id"
         FROM "Gym"
@@ -82,17 +95,11 @@ const createBooking = async ({
         throw new Error("Gym is not active");
       }
 
-      // Expire old unpaid bookings before checking capacity.
       await expireStale(tx, { gymId });
 
-      let selectedPackage = null;
-
       if (packageId !== null) {
-        selectedPackage = await tx.package.findFirst({
-          where: {
-            id: packageId,
-            gymId,
-          },
+        const selectedPackage = await tx.package.findFirst({
+          where: { id: packageId, gymId },
         });
 
         if (!selectedPackage) {
@@ -135,10 +142,7 @@ const createBooking = async ({
         },
       });
     },
-    {
-      maxWait: 10000,
-      timeout: 30000,
-    },
+    { maxWait: 10000, timeout: 30000 },
   );
 };
 
@@ -303,7 +307,422 @@ const getBookingStats = async () => {
   };
 };
 
+/* =========================================================
+   B4: MEMBER BOOKINGS - GET /bookings?status=
+   ========================================================= */
+
+const getMemberBookings = async (userId, status) => {
+  userId = validatePositiveId(userId, "user ID");
+
+  // Expire stale bookings and session holds before returning data.
+  await expireStale(prisma);
+
+  const where = { userId };
+
+  if (status) {
+    const allowedStatuses = [
+      "pending",
+      "confirmed",
+      "payment_failed",
+      "cancelled",
+      "checked_in",
+      "expired",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      throw new Error("Invalid booking status filter");
+    }
+
+    where.status = status;
+  }
+
+  const bookings = await prisma.booking.findMany({
+    where,
+    include: {
+      gym: true,
+      package: true,
+      payment: true,
+      order: {
+        include: {
+          items: {
+            include: {
+              provider: true,
+              purchase: true,
+              consultation: {
+                include: {
+                  consultant: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      sessions: {
+        include: {
+          provider: true,
+        },
+        orderBy: {
+          startsAt: "asc",
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  // Keep all existing booking response fields and append B4 fields.
+  return bookings.map((booking) => {
+    const consultationItems = (booking.order?.items || [])
+      .filter((item) => item.consultation)
+      .map((item) => ({
+        status: item.consultation.status,
+        consultant: item.consultation.consultant
+          ? {
+              id: item.consultation.consultant.id,
+              name: item.consultation.consultant.name,
+            }
+          : null,
+        startsAt: item.consultation.startsAt,
+        expiresAt: item.consultation.expiresAt,
+      }));
+
+    return {
+      ...booking,
+      bookingType: booking.bookingType,
+      headcount: booking.headcount,
+      packageName: booking.package?.name ?? null,
+      orderStatus: getOrderStatus(booking.order, booking),
+      sessions: booking.sessions.map((session) => ({
+        ...session,
+        providerName: session.provider?.name ?? null,
+      })),
+      consultation: consultationItems,
+    };
+  });
+};
+
+/* =========================================================
+   B4: CANCEL BOOKING - POST /bookings/:id/cancel
+   ========================================================= */
+
+const cancelMemberBooking = async (id, userId) => {
+  id = validatePositiveId(id, "booking ID");
+  userId = validatePositiveId(userId, "user ID");
+
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw`
+      SELECT "id"
+      FROM "Booking"
+      WHERE "id" = ${id}
+      FOR UPDATE
+    `;
+
+    if (locked.length === 0) {
+      throw new Error("Booking not found");
+    }
+
+    const booking = await tx.booking.findUnique({
+      where: { id },
+      include: {
+        sessions: true,
+      },
+    });
+
+    if (!booking) {
+      throw new Error("Booking not found");
+    }
+
+    if (booking.userId !== userId) {
+      throw new Error("Access denied");
+    }
+
+    if (!["pending", "confirmed"].includes(booking.status)) {
+      throw new Error("Only pending or confirmed bookings can be cancelled");
+    }
+
+    if (new Date(booking.slotStart) <= new Date()) {
+      throw new Error("Booking cannot be cancelled after its start time");
+    }
+
+    const cancelHours = await getNumberSetting("SESSION_CANCEL_HOURS");
+    const now = new Date();
+
+    for (const session of booking.sessions) {
+      if (!["HELD", "SCHEDULED"].includes(session.status)) {
+        continue;
+      }
+
+      const hoursUntilSession =
+        (new Date(session.startsAt).getTime() - now.getTime()) /
+        (1000 * 60 * 60);
+
+      // A late cancellation consumes a session credit.
+      // An early cancellation releases the reserved credit.
+      if (hoursUntilSession < cancelHours) {
+        await tx.providerPackagePurchase.update({
+          where: { id: session.purchaseId },
+          data: { sessionsUsed: { increment: 1 } },
+        });
+      }
+
+      await tx.trainingSession.update({
+        where: { id: session.id },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: now,
+        },
+      });
+    }
+
+    const updatedBooking = await tx.booking.update({
+      where: { id },
+      data: { status: "cancelled" },
+      include: {
+        gym: true,
+        package: true,
+        payment: true,
+        sessions: {
+          include: { provider: true },
+          orderBy: { startsAt: "asc" },
+        },
+      },
+    });
+
+    return updatedBooking;
+  });
+};
+
+/* =========================================================
+   B4: ADD SESSION TO BOOKING
+   POST /bookings/:bookingId/sessions
+   ========================================================= */
+
+const addSessionToBooking = async (
+  bookingId,
+  userId,
+  { purchaseId, startsAt },
+) => {
+  bookingId = validatePositiveId(bookingId, "booking ID");
+  userId = validatePositiveId(userId, "user ID");
+  purchaseId = validatePositiveId(purchaseId, "purchase ID");
+
+  if (!startsAt || Number.isNaN(new Date(startsAt).getTime())) {
+    throw new Error("Invalid session start time");
+  }
+
+  const requestedStart = new Date(startsAt);
+
+  return prisma.$transaction(
+    async (tx) => {
+      const bookingLocks = await tx.$queryRaw`
+        SELECT "id"
+        FROM "Booking"
+        WHERE "id" = ${bookingId}
+        FOR UPDATE
+      `;
+
+      if (bookingLocks.length === 0) {
+        throw new Error("Booking not found");
+      }
+
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+      });
+
+      if (!booking) {
+        throw new Error("Booking not found");
+      }
+
+      if (booking.userId !== userId) {
+        throw new Error("Access denied");
+      }
+
+      if (booking.status !== "confirmed") {
+        throw new Error("Booking must be confirmed before adding a session");
+      }
+
+      if (new Date(booking.slotStart) <= new Date()) {
+        throw new Error("Cannot add a session to a booking that has started");
+      }
+
+      await expireStale(tx);
+
+      const purchase = await tx.providerPackagePurchase.findUnique({
+        where: { id: purchaseId },
+        include: {
+          provider: true,
+        },
+      });
+
+      if (!purchase) {
+        throw new Error("Package purchase not found");
+      }
+
+      if (purchase.userId !== userId) {
+        throw new Error("This package purchase does not belong to you");
+      }
+
+      if (purchase.status !== "ACTIVE") {
+        throw new Error("Package purchase is not active");
+      }
+
+      if (new Date(purchase.expiresAt) <= new Date()) {
+        throw new Error("Package purchase has expired");
+      }
+
+      if (!purchase.provider || !purchase.provider.isActive) {
+        throw new Error("Provider is not active");
+      }
+
+      if (purchase.provider.gymId !== booking.gymId) {
+        throw new Error("Provider and booking must belong to the same gym");
+      }
+
+      // Serialize reservations for this provider to reduce race conditions.
+      const providerLocks = await tx.$queryRaw`
+        SELECT "id"
+        FROM "Provider"
+        WHERE "id" = ${purchase.providerId}
+        FOR UPDATE
+      `;
+
+      if (providerLocks.length === 0) {
+        throw new Error("Provider not found");
+      }
+
+      // Count reservations still holding a credit.
+      const reservedSessions = await tx.trainingSession.count({
+        where: {
+          purchaseId,
+          status: { in: ["HELD", "SCHEDULED"] },
+        },
+      });
+
+      const availableCredits =
+        purchase.sessionsTotal - purchase.sessionsUsed - reservedSessions;
+
+      if (availableCredits <= 0) {
+        throw new Error("No sessions remaining in this package");
+      }
+
+      const validStarts = await getValidSessionStarts(
+        tx,
+        purchase.providerId,
+        booking.slotStart,
+        booking.slotEnd,
+      );
+
+      const validStart = validStarts.some(
+        (start) => new Date(start).getTime() === requestedStart.getTime(),
+      );
+
+      if (!validStart) {
+        throw new Error(
+          "Selected session time is not available within this booking window",
+        );
+      }
+
+      const sessionMinutes = await getNumberSetting("SESSION_MINUTES");
+      const endsAt = new Date(
+        requestedStart.getTime() + sessionMinutes * 60 * 1000,
+      );
+
+      return tx.trainingSession.create({
+        data: {
+          purchaseId,
+          bookingId,
+          providerId: purchase.providerId,
+          userId,
+          startsAt: requestedStart,
+          endsAt,
+          status: "SCHEDULED",
+        },
+        include: {
+          provider: true,
+          booking: true,
+          purchase: true,
+        },
+      });
+    },
+    { maxWait: 10000, timeout: 30000 },
+  );
+};
+
+/* =========================================================
+   B4: GET MEMBER OR PROVIDER SESSIONS - GET /sessions
+   ========================================================= */
+
+const getSessionsForUser = async (userId, role, status) => {
+  userId = validatePositiveId(userId, "user ID");
+
+  await expireStale(prisma);
+
+  const normalizedRole = String(role || "").toUpperCase();
+
+  const allowedStatuses = [
+    "HELD",
+    "SCHEDULED",
+    "COMPLETED",
+    "CANCELLED",
+    "NO_SHOW",
+  ];
+
+  if (status && !allowedStatuses.includes(status)) {
+    throw new Error("Invalid session status filter");
+  }
+
+  const where = {};
+
+  if (normalizedRole === "MEMBER") {
+    where.userId = userId;
+  } else if (normalizedRole === "PROVIDER" || normalizedRole === "TRAINER") {
+    // This assumes the provider's authenticated ID matches Provider.id.
+    const provider = await prisma.provider.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!provider) {
+      throw new Error("Provider not found");
+    }
+
+    where.providerId = provider.id;
+  } else {
+    throw new Error("Only members and providers can access sessions");
+  }
+
+  if (status) {
+    where.status = status;
+  }
+
+  return prisma.trainingSession.findMany({
+    where,
+    include: {
+      booking: {
+        include: {
+          gym: true,
+          package: true,
+        },
+      },
+      provider: true,
+      purchase: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          photoUrl: true,
+        },
+      },
+    },
+    orderBy: {
+      startsAt: "asc",
+    },
+  });
+};
+
 module.exports = {
+  // Existing functions
   createBooking,
   getMyBookings,
   getBookingById,
@@ -312,4 +731,10 @@ module.exports = {
   checkInBooking,
   getGymBookings,
   getBookingStats,
+
+  // B4 functions
+  getMemberBookings,
+  cancelMemberBooking,
+  addSessionToBooking,
+  getSessionsForUser,
 };
