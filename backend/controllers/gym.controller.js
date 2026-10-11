@@ -8,58 +8,95 @@ const {
   searchGymsService,
 } = require("../services/gym.service");
 
+const sendError = (res, error, fallbackMessage) => {
+  const message = error.message || fallbackMessage;
+
+  const badRequestErrors = [
+    "Invalid ID",
+    "Invalid gym ID",
+    "Invalid user ID",
+    "Invalid admin ID",
+    "Gym name is required",
+    "Gym address is required",
+    "Gym name cannot be empty",
+    "Gym address cannot be empty",
+    "Capacity must be a positive integer",
+    "Invalid latitude",
+    "Invalid longitude",
+    "Opening time and closing time are required",
+    "Invalid opening time",
+    "Invalid closing time",
+    "Photos must be an array",
+    "Amenities must be an array",
+    "No gym details provided to update",
+    "Slot start and end are required",
+    "Invalid slot range",
+    "Booking start must be in the future",
+    "Invalid gym capacity",
+  ];
+
+  if (badRequestErrors.includes(message)) {
+    return res.status(400).json({
+      success: false,
+      message,
+    });
+  }
+
+  if (message === "Gym not found") {
+    return res.status(404).json({
+      success: false,
+      message,
+    });
+  }
+
+  if (message === "Gym is not active") {
+    return res.status(409).json({
+      success: false,
+      message,
+    });
+  }
+
+  console.error(`${fallbackMessage}:`, error);
+
+  return res.status(500).json({
+    success: false,
+    message: fallbackMessage,
+  });
+};
+
 const GetGyms = async (req, res) => {
   try {
     const gyms = await getGymsService();
 
-    if (!gyms || gyms.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "No gyms found",
-        gyms: [],
-      });
-    }
-
     return res.status(200).json({
       success: true,
+      ...(gyms.length === 0 ? { message: "No gyms found" } : {}),
       gyms,
     });
   } catch (error) {
-    console.log("Gyms Error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get gyms",
-    });
+    return sendError(res, error, "Failed to get gyms");
   }
 };
 
 const getGymDetails = async (req, res) => {
   try {
-    const { id } = req.params;
-    const gymId = Number(id);
+    const gymId = Number(req.params.id);
 
-    if (!Number.isInteger(gymId) || gymId <= 0) {
+    if (!Number.isSafeInteger(gymId) || gymId <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Invalid gym id"
-      })
+        message: "Invalid gym ID",
+      });
     }
 
     const details = await gymDetails(gymId);
-
 
     return res.status(200).json({
       success: true,
       gymDetails: details,
     });
   } catch (error) {
-    console.log("Gym Detail Error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get Gym Details",
-    });
+    return sendError(res, error, "Failed to get gym details");
   }
 };
 
@@ -77,16 +114,14 @@ const addGym = async (req, res) => {
       amenities,
     } = req.body;
 
-    const { id } = req.user;
-
     if (
       !name ||
       !address ||
-      longitude === undefined ||
       latitude === undefined ||
+      longitude === undefined ||
       !openingTime ||
       !closingTime ||
-      !capacity
+      capacity === undefined
     ) {
       return res.status(400).json({
         success: false,
@@ -94,7 +129,7 @@ const addGym = async (req, res) => {
       });
     }
 
-    const newGym = await createGym({
+    const gym = await createGym({
       name,
       address,
       latitude,
@@ -104,61 +139,41 @@ const addGym = async (req, res) => {
       capacity,
       photos,
       amenities,
-      adminId: id,
+      adminId: req.user.id,
     });
 
     return res.status(201).json({
       success: true,
-      gym: newGym,
+      gym,
     });
   } catch (error) {
-    console.log("Add Gym Error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add Gym",
-    });
+    return sendError(res, error, "Failed to add gym");
   }
 };
 
 const updateGym = async (req, res) => {
   try {
-    const { id } = req.params;
+    const gymId = Number(req.params.id);
 
-    const {
-      name,
-      address,
-      latitude,
-      longitude,
-      openingTime,
-      closingTime,
-      capacity,
-      photos,
-      amenities,
-    } = req.body;
+    if (!Number.isSafeInteger(gymId) || gymId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid gym ID",
+      });
+    }
 
-    const { id: userId } = req.user;
+    const isOwner = await checkOwnership(req.user.id, gymId);
 
-    const checkOwner = await checkOwnership(userId, id);
-
-    if (!checkOwner) {
+    if (!isOwner) {
       return res.status(403).json({
         success: false,
-        message: "Access Denied",
+        message: "You are not the owner of this gym",
       });
     }
 
     const updatedGym = await UpdateDetails({
-      id,
-      name,
-      address,
-      latitude,
-      longitude,
-      openingTime,
-      closingTime,
-      capacity,
-      photos,
-      amenities,
+      id: gymId,
+      ...req.body,
     });
 
     return res.status(200).json({
@@ -166,12 +181,21 @@ const updateGym = async (req, res) => {
       updatedGym,
     });
   } catch (error) {
-    console.log("Update Gym Error:", error.message);
+    if (error.message === "Gym not found") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update Gym",
-    });
+    if (error.message === "You are not the owner of this gym") {
+      return res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return sendError(res, error, "Failed to update gym");
   }
 };
 
@@ -187,12 +211,7 @@ const checkAvailability = async (req, res) => {
       available,
     });
   } catch (error) {
-    console.log("Availability Check Error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to check availability",
-    });
+    return sendError(res, error, "Failed to check availability");
   }
 };
 
@@ -210,25 +229,13 @@ const searchGyms = async (req, res) => {
 
     const gyms = await searchGymsService(name, location);
 
-    if (!gyms || gyms.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "No gyms found",
-        gyms: [],
-      });
-    }
-
     return res.status(200).json({
       success: true,
+      ...(gyms.length === 0 ? { message: "No gyms found" } : {}),
       gyms,
     });
   } catch (error) {
-    console.log("Search Gyms Error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to search gyms",
-    });
+    return sendError(res, error, "Failed to search gyms");
   }
 };
 

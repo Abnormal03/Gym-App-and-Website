@@ -1,138 +1,276 @@
-const prisma = require("../config/prisma")
+const prisma = require("../config/prisma");
 
+const parsePositiveId = (value, fieldName = "ID") => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    !Number.isSafeInteger(Number(value)) ||
+    Number(value) <= 0
+  ) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+
+  return Number(value);
+};
+
+const validatePackageData = (data, { creating = false } = {}) => {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Package data must be an object");
+  }
+
+  const allowedFields = [
+    "name",
+    "description",
+    "price",
+    "durationDays",
+    "sessions",
+  ];
+
+  const unknownFields = Object.keys(data).filter(
+    (key) => !allowedFields.includes(key),
+  );
+
+  if (unknownFields.length > 0) {
+    throw new Error(
+      `Cannot update or set these fields: ${unknownFields.join(", ")}`,
+    );
+  }
+
+  if (creating && !Object.prototype.hasOwnProperty.call(data, "name")) {
+    throw new Error("Package name is required");
+  }
+
+  if (creating && !Object.prototype.hasOwnProperty.call(data, "price")) {
+    throw new Error("Package price is required");
+  }
+
+  if (creating && !Object.prototype.hasOwnProperty.call(data, "durationDays")) {
+    throw new Error("Package durationDays is required");
+  }
+
+  const result = {};
+
+  if (Object.prototype.hasOwnProperty.call(data, "name")) {
+    if (typeof data.name !== "string" || !data.name.trim()) {
+      throw new Error("Package name must be a non-empty string");
+    }
+
+    result.name = data.name.trim();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "description")) {
+    if (data.description !== null && typeof data.description !== "string") {
+      throw new Error("Package description must be a string or null");
+    }
+
+    result.description = data.description;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "price")) {
+    const price = Number(data.price);
+
+    if (
+      data.price === "" ||
+      data.price === null ||
+      !Number.isFinite(price) ||
+      price < 0
+    ) {
+      throw new Error("Package price must be a non-negative number");
+    }
+
+    result.price = price;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "durationDays")) {
+    const durationDays = Number(data.durationDays);
+
+    if (
+      data.durationDays === "" ||
+      !Number.isSafeInteger(durationDays) ||
+      durationDays <= 0
+    ) {
+      throw new Error("durationDays must be a positive integer");
+    }
+
+    result.durationDays = durationDays;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "sessions")) {
+    if (data.sessions === null) {
+      result.sessions = null;
+    } else {
+      const sessions = Number(data.sessions);
+
+      if (
+        data.sessions === "" ||
+        !Number.isSafeInteger(sessions) ||
+        sessions <= 0
+      ) {
+        throw new Error("sessions must be a positive integer or null");
+      }
+
+      result.sessions = sessions;
+    }
+  }
+
+  if (creating && Object.keys(result).length === 0) {
+    throw new Error("Package details are required");
+  }
+
+  if (!creating && Object.keys(result).length === 0) {
+    throw new Error("Provide at least one package field to update");
+  }
+
+  return result;
+};
+
+// Public listing: active packages for one gym.
 const getPackages = async (id) => {
-    try {
-        const gymId = Number(id);
+  const gymId = parsePositiveId(id, "gym ID");
 
-        if (!Number.isInteger(gymId) || gymId <= 0) {
-            throw new Error("Invalid gym id");
-        }
+  return prisma.package.findMany({
+    where: {
+      gymId,
+      isActive: true,
+      gym: {
+        is: {
+          isActive: true,
+        },
+      },
+    },
+    orderBy: {
+      id: "desc",
+    },
+  });
+};
 
-        const packages = await prisma.package.findMany({
-            where: {
-                gymId,
-                isActive: true
-            }
-        })
+// Admin listing: only packages belonging to the logged-in admin's gyms.
+// If gymId is provided, the list is restricted to that gym.
+const getPackagesForAdmin = async (adminId, gymId) => {
+  const ownerId = parsePositiveId(adminId, "admin ID");
 
-        return packages;
-    } catch (error) {
-        console.log("Packages Error: ", error.message);
-        throw new Error(error.message || "Failed to fetch packages.");
-    }
-}
-const getPackagesForAdmin = async (id) => {
-    try {
-        const gymId = Number(id);
+  const where = {
+    gym: {
+      is: {
+        adminId: ownerId,
+      },
+    },
+  };
 
-        if (!Number.isInteger(gymId) || gymId <= 0) {
-            throw new Error("Invalid gym id");
-        }
+  if (gymId !== undefined && gymId !== null && gymId !== "") {
+    where.gymId = parsePositiveId(gymId, "gym ID");
+  }
 
-        const packages = await prisma.package.findMany({
-            where: {
-                gymId,
-            }
-        })
+  return prisma.package.findMany({
+    where,
+    orderBy: {
+      id: "desc",
+    },
+  });
+};
 
-        return packages;
-    } catch (error) {
-        console.log("Packages Error: ", error.message);
-        throw new Error(error.message || "Failed to fetch packages.");
-    }
-}
+const createPackage = async (packageData) => {
+  const gymId = parsePositiveId(packageData?.gymId, "gym ID");
 
+  const data = validatePackageData(packageData, { creating: true });
 
-const createPackage = async ({ gymId, name, description, price, durationDays, sessions }) => {
-    try {
-        const newPackage = await prisma.package.create({
-            data: {
-                gymId: Number(gymId),
-                name,
-                description,
-                price,
-                durationDays,
-                sessions
-            }
-        });
+  const gym = await prisma.gym.findUnique({
+    where: { id: gymId },
+    select: { id: true, isActive: true },
+  });
 
-        return newPackage;
-    } catch (error) {
-        console.log("Create Package Service Error: ", error.message);
-        throw new Error(error.message || "Failed to create package.");
-    }
-}
+  if (!gym) {
+    throw new Error("Gym not found");
+  }
 
+  if (!gym.isActive) {
+    throw new Error("Gym is not active");
+  }
+
+  return prisma.package.create({
+    data: {
+      ...data,
+      gymId,
+    },
+  });
+};
 
 const updatePackage = async (id, packageData) => {
-    try {
-        const { gymId } = packageData;
-        if (gymId !== undefined) {
-            throw new Error("Couldn't Update these fields.")
-        }
-        const updatedPackage = await prisma.package.update({
-            where: {
-                id: Number(id)
-            },
-            data: packageData
-        })
+  const packageId = parsePositiveId(id, "package ID");
+  const data = validatePackageData(packageData);
 
-        return updatedPackage;
-    } catch (error) {
-        console.log("Update Package Service Error: ", error.message);
-        throw new Error(error.message || "Failed to update package.");
-    }
-}
+  const existingPackage = await prisma.package.findUnique({
+    where: { id: packageId },
+    select: {
+      id: true,
+      isActive: true,
+    },
+  });
 
+  if (!existingPackage) {
+    throw new Error("Package not found");
+  }
 
-const deletePackage = async (id) => {
-    try {
-        const deleted = await prisma.package.update({
-            where: {
-                id: Number(id)
-            },
-            data: {
-                isActive: false
-            }
-        })
+  if (!existingPackage.isActive) {
+    throw new Error("Cannot update an inactive package");
+  }
 
-        if (deleted) {
-            return true;
-        }
+  return prisma.package.update({
+    where: { id: packageId },
+    data,
+  });
+};
 
-        return false;
-    } catch (error) {
-        console.log("Delete Package Service Error: ", error.message);
-        throw new Error(error.message || "Failed to delete package.");
-    }
-}
-
-
+// Check package status.
 const isActive = async (id) => {
-    try {
-        const pkg = await prisma.package.findUnique({
-            where: {
-                id: Number(id)
-            }
-        })
+  const packageId = parsePositiveId(id, "package ID");
 
-        if (!pkg) {
-            throw new Error("Package not found");
-        }
+  const pkg = await prisma.package.findUnique({
+    where: { id: packageId },
+    select: { isActive: true },
+  });
 
-        return pkg.isActive;
-    } catch (error) {
-        console.log("IsActive Service Error: ", error.message);
-        throw new Error(error.message || "Failed to check activity.")
-    }
-}
+  if (!pkg) {
+    throw new Error("Package not found");
+  }
 
+  return pkg.isActive;
+};
+
+// Soft-delete: keep the record, but deactivate it.
+const deletePackage = async (id) => {
+  const packageId = parsePositiveId(id, "package ID");
+
+  const pkg = await prisma.package.findUnique({
+    where: { id: packageId },
+    select: {
+      id: true,
+      isActive: true,
+    },
+  });
+
+  if (!pkg) {
+    throw new Error("Package not found");
+  }
+
+  if (!pkg.isActive) {
+    throw new Error("Package is already inactive");
+  }
+
+  await prisma.package.update({
+    where: { id: packageId },
+    data: { isActive: false },
+  });
+
+  return true;
+};
 
 module.exports = {
-    getPackages,
-    createPackage,
-    updatePackage,
-    isActive,
-    deletePackage,
-    getPackagesForAdmin
-}
+  getPackages,
+  getPackagesForAdmin,
+  createPackage,
+  updatePackage,
+  isActive,
+  deletePackage,
+};

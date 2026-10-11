@@ -1,21 +1,50 @@
 const prisma = require("../config/prisma");
 
-// Verify logged-in user owns the gym
 const verifyGymOwner = async (req, res, next) => {
   try {
-    const { id } = req.user;
-    const gymId = req.body?.gymId || req.params?.gymId;
+    // The protect middleware should populate req.user.
+    const rawUserId = req.user?.id;
+    const userId = Number(rawUserId);
 
-    if (!gymId) {
+    if (
+      rawUserId === undefined ||
+      rawUserId === null ||
+      !Number.isSafeInteger(userId) ||
+      userId <= 0
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    // Support both /gym/:gymId and requests with body.gymId.
+    const rawGymId = req.params?.gymId ?? req.body?.gymId;
+
+    if (rawGymId === undefined || rawGymId === null || rawGymId === "") {
       return res.status(400).json({
         success: false,
         message: "gymId is required",
       });
     }
+
+    const gymId = Number(rawGymId);
+
+    if (!Number.isSafeInteger(gymId) || gymId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid gymId",
+      });
+    }
+
+    // A gym is owned by the admin whose ID is stored in adminId.
     const gym = await prisma.gym.findFirst({
       where: {
-        id: Number(gymId),
-        adminId: Number(id),
+        id: gymId,
+        adminId: userId,
+      },
+      select: {
+        id: true,
       },
     });
 
@@ -26,13 +55,13 @@ const verifyGymOwner = async (req, res, next) => {
       });
     }
 
-    next();
+    return next();
   } catch (error) {
-    console.log("Verify Gym Owner Error:", error.message);
+    console.error("Gym ownership verification failed:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Gym owner verification failed",
+      message: "Failed to verify gym ownership",
     });
   }
 };
