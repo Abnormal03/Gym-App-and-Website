@@ -1,8 +1,10 @@
 const express = require('express');
 const { gymPackages, createPackage, updatePackage, deletePackage, gymPackagesForAdmin } = require('../controllers/packages.controller');
-const { protect, adminOnly } = require('../middleware/auth.middleware');
+const { protect, requireRole } = require('../middleware/auth.middleware');
 const { verifyGymOwner, verifyPackageOwner } = require('../middleware/packages.middleware');
 const router = express.Router();
+
+const adminOnly = requireRole("GYM_ADMIN")
 
 router.get('/', protect, gymPackages);
 router.get('/admin', protect, adminOnly, gymPackagesForAdmin);
