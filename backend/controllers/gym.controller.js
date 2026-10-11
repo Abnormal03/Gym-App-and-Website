@@ -6,6 +6,7 @@ const {
   checkOwnership,
   isAvailable,
   searchGymsService,
+  getGymStreakLeaderboardService,
 } = require("../services/gym.service");
 
 const sendError = (res, error, fallbackMessage) => {
@@ -239,6 +240,47 @@ const searchGyms = async (req, res) => {
   }
 };
 
+const getGymStreakLeaderboard = async (req, res) => {
+  try {
+    const gymId = req.params.id;
+    const callerUserId = req.user?.id ?? req.auth?.userId;
+
+    if (!callerUserId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const result = await getGymStreakLeaderboardService(gymId, callerUserId);
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+      gymId: result.gymId,
+      gymName: result.gymName,
+      leaderboard: result.leaderboard,
+      caller: result.caller,
+    });
+  } catch (error) {
+    if (error && error.code === "NOT_FOUND") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (error && error.code === "VALIDATION") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return sendError(res, error, "Failed to fetch gym streak leaderboard");
+  }
+};
+
 module.exports = {
   GetGyms,
   getGymDetails,
@@ -246,4 +288,5 @@ module.exports = {
   updateGym,
   checkAvailability,
   searchGyms,
+  getGymStreakLeaderboard,
 };

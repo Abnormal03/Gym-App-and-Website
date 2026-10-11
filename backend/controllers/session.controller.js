@@ -1,10 +1,14 @@
 const sessionService = require("../services/session.service");
+const { ok, asyncHandler } = require("../utils/responses");
 
 const getSessionsController = async (req, res) => {
   try {
+    const userId = req.auth?.id || req.user?.id;
+    const role = req.auth?.role || req.user?.role;
+
     const sessions = await sessionService.getSessions(
-      req.user.id,
-      req.user.role,
+      userId,
+      role,
       req.query.status,
     );
 
@@ -38,4 +42,24 @@ const getSessionsController = async (req, res) => {
   }
 };
 
-module.exports = { getSessionsController };
+const completeSessionController = asyncHandler(async (req, res) => {
+  const result = await sessionService.completeSession(req.auth, req.params.id);
+  return ok(res, result);
+});
+
+const noShowSessionController = asyncHandler(async (req, res) => {
+  const result = await sessionService.noShowSession(req.auth, req.params.id);
+  return ok(res, result);
+});
+
+const cancelSessionController = asyncHandler(async (req, res) => {
+  const result = await sessionService.cancelSession(req.auth, req.params.id);
+  return ok(res, result);
+});
+
+module.exports = {
+  getSessionsController,
+  completeSessionController,
+  noShowSessionController,
+  cancelSessionController,
+};

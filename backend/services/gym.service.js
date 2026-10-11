@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { AppError } = require("../utils/errors");
 const { getUsedCapacity, expireStale } = require("./bookingHelpers.service");
 
 const validatePositiveId = (value, fieldName = "ID") => {
@@ -413,6 +414,101 @@ const searchGymsService = async (name, location) => {
   });
 };
 
+const getGymStreakLeaderboardService = async (gymId, callerUserId) => {
+  const gymIdNumber = validatePositiveId(gymId, "gym ID");
+  const userId = Number(callerUserId);
+
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
+    throw new AppError("VALIDATION", "Invalid user ID");
+  }
+
+  const gym = await prisma.gym.findUnique({
+    where: { id: gymIdNumber },
+    select: { id: true, name: true, isActive: true },
+  });
+
+  if (!gym || !gym.isActive) {
+    throw new AppError("NOT_FOUND", "Gym not found");
+  }
+
+  if (process.env.FEATURE_STREAK_LEADERBOARD !== "true") {
+    throw new AppError("NOT_FOUND", "Leaderboard not available");
+  }
+
+  const checkedInUsers = await prisma.checkIn.groupBy({
+    by: ["userId"],
+    where: { gymId: gymIdNumber },
+  });
+
+  const memberIds = checkedInUsers.map((row) => row.userId);
+
+  if (memberIds.length === 0) {
+    return {
+      gymId: gym.id,
+      gymName: gym.name,
+      leaderboard: [],
+      caller: null,
+    };
+  }
+
+  const stats = await prisma.memberStats.findMany({
+    where: {
+      userId: { in: memberIds },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          photoUrl: true,
+        },
+      },
+    },
+  });
+
+  const rows = stats
+    .filter((stat) => stat.user)
+    .map((stat) => ({
+      userId: stat.userId,
+      name: stat.user.name,
+      photoUrl: stat.user.photoUrl,
+      currentStreak: Number(stat.currentStreak || 0),
+      totalWorkouts: Number(stat.totalWorkouts || 0),
+      longestStreak: Number(stat.longestStreak || 0),
+      lastWorkoutLocalDate: stat.lastWorkoutLocalDate,
+    }))
+    .sort((a, b) => {
+      if (b.currentStreak !== a.currentStreak) return b.currentStreak - a.currentStreak;
+      if (b.totalWorkouts !== a.totalWorkouts) return b.totalWorkouts - a.totalWorkouts;
+      const nameOrder = (a.name || "").localeCompare(b.name || "");
+      if (nameOrder !== 0) return nameOrder;
+      return a.userId - b.userId;
+    });
+
+  const leaderboard = rows.map((row, index) => ({
+    rank: index + 1,
+    ...row,
+  })).slice(0, 20);
+
+  const callerRank = rows.findIndex((row) => row.userId === userId);
+
+  return {
+    gymId: gym.id,
+    gymName: gym.name,
+    leaderboard,
+    caller: callerRank >= 0
+      ? {
+          userId,
+          rank: callerRank + 1,
+          currentStreak: rows[callerRank].currentStreak,
+          totalWorkouts: rows[callerRank].totalWorkouts,
+          name: rows[callerRank].name,
+          photoUrl: rows[callerRank].photoUrl,
+        }
+      : null,
+  };
+};
+
 module.exports = {
   getGymsService,
   gymDetails,
@@ -421,4 +517,5 @@ module.exports = {
   checkOwnership,
   isAvailable,
   searchGymsService,
+  getGymStreakLeaderboardService,
 };

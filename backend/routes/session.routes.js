@@ -1,16 +1,29 @@
 const express = require("express");
 const router = express.Router();
 
-const { protect } = require("../middleware/auth.middleware");
-
-const { getSessionsController } = require("../controllers/session.controller");
-
+const { protect, requireRole } = require("../middleware/auth.middleware");
+const {
+  getSessionsController,
+  completeSessionController,
+  noShowSessionController,
+  cancelSessionController,
+} = require("../controllers/session.controller");
 const {
   createSessionReviewController,
 } = require("../controllers/review.controller");
 
-router.get("/", protect, getSessionsController);
+const bookableProviderRoles = requireRole('TRAINER', 'PHYSIOTHERAPIST');
+const cancelRoles = requireRole('MEMBER', 'TRAINER', 'PHYSIOTHERAPIST');
 
+// Member or provider lists sessions
+router.get("/", protect, getSessionsController);
 router.post("/:id/review", protect, createSessionReviewController);
+
+// Provider session lifecycle (E-32)
+router.post("/:id/complete", ...bookableProviderRoles, completeSessionController);
+router.post("/:id/no-show", ...bookableProviderRoles, noShowSessionController);
+
+// Member or provider cancels session (E-33)
+router.post("/:id/cancel", ...cancelRoles, cancelSessionController);
 
 module.exports = router;
