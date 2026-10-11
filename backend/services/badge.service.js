@@ -1,19 +1,54 @@
-/**
- * STUB until task A4 (and A5 for provider badges). Other code already calls it, so the signature is fixed:
- *
- *   awardBadges(tx, { userId } | { providerId }, event)
- *
- * Events that will be used:
- *   member:   'CHECK_IN'          (FIRST_WORKOUT, STREAK_3, STREAK_7, STREAK_30)
- *   provider: 'SESSION_COMPLETED' (FIRST_SESSION, SESSIONS_50, SESSIONS_100)
- *             'RATING'            (RATING_4_5)
- *
- * It will insert at most one UserBadge per badge and return the badges newly awarded.
- * For now it does nothing, so callers can use it without waiting.
- */
-// eslint-disable-next-line no-unused-vars
 async function awardBadges(tx, target, event) {
+  if (event !== "RATING" || !target?.providerId) {
     return [];
+  }
+
+  const providerId = Number(target.providerId);
+
+  const provider = await tx.provider.findUnique({
+    where: { id: providerId },
+    select: {
+      ratingAvg: true,
+      ratingCount: true,
+    },
+  });
+
+  if (!provider || provider.ratingCount < 10 || provider.ratingAvg < 4.5) {
+    return [];
+  }
+
+  const badge = await tx.badge.findUnique({
+    where: { code: "RATING_4_5" },
+  });
+
+  if (!badge) {
+    return [];
+  }
+
+  const existing = await tx.userBadge.findUnique({
+    where: {
+      providerId_badgeId: {
+        providerId,
+        badgeId: badge.id,
+      },
+    },
+  });
+
+  if (existing) {
+    return [];
+  }
+
+  const awarded = await tx.userBadge.create({
+    data: {
+      providerId,
+      badgeId: badge.id,
+    },
+    include: {
+      badge: true,
+    },
+  });
+
+  return [awarded];
 }
 
 module.exports = { awardBadges };
