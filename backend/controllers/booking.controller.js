@@ -1,6 +1,5 @@
 const bookingService = require("../services/booking.service");
 
-// Validate ID helper
 const validateId = (id) => {
   const numberId = Number(id);
 
@@ -11,50 +10,73 @@ const validateId = (id) => {
   return numberId;
 };
 
-// Error handler
 const handleError = (res, error) => {
-  console.error(error.message);
+  console.error("Booking controller error:", error.message);
 
-  switch (error.message) {
-    case "Gym not found":
-    case "Package not found":
-    case "Package not found for this gym":
-    case "Booking not found":
-      return res.status(404).json({
-        success: false,
-        message: error.message,
-      });
+  const badRequestErrors = [
+    "Invalid ID",
+    "Invalid user ID",
+    "Invalid gym ID",
+    "Invalid package ID",
+    "Invalid booking ID",
+    "Headcount must be a positive integer",
+    "Invalid booking date",
+    "slotStart must be before slotEnd",
+    "Booking start must be in the future",
+    "Selected slot is fully booked",
+    "Gym is not active",
+    "Package is not active",
+  ];
 
-    case "Invalid ID":
-    case "Invalid booking date":
-    case "slotStart must be before slotEnd":
-    case "Selected slot is fully booked":
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+  const notFoundErrors = [
+    "Gym not found",
+    "Package not found",
+    "Package not found for this gym",
+    "Booking not found",
+  ];
 
-    case "Access denied":
-    case "Admin access required":
-      return res.status(403).json({
-        success: false,
-        message: error.message,
-      });
-
-    default:
-      return res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
+  if (notFoundErrors.includes(error.message)) {
+    return res.status(404).json({
+      success: false,
+      message: error.message,
+    });
   }
+
+  if (badRequestErrors.includes(error.message)) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+
+  if (
+    error.message === "Access denied" ||
+    error.message === "Admin access required"
+  ) {
+    return res.status(403).json({
+      success: false,
+      message: error.message,
+    });
+  }
+
+  if (error.message.startsWith("Cannot change booking from")) {
+    return res.status(409).json({
+      success: false,
+      message: error.message,
+    });
+  }
+
+  return res.status(500).json({
+    success: false,
+    message: "Internal server error",
+  });
 };
 
-// CREATE BOOKING
 const createBookingController = async (req, res) => {
   try {
     const booking = await bookingService.createBooking({
-      userId: req.user.id,
       ...req.body,
+      userId: req.user.id,
     });
 
     return res.status(201).json({
@@ -66,7 +88,6 @@ const createBookingController = async (req, res) => {
   }
 };
 
-// GET MY BOOKINGS
 const getMyBookingsController = async (req, res) => {
   try {
     const bookings = await bookingService.getMyBookings(req.user.id);
@@ -80,7 +101,6 @@ const getMyBookingsController = async (req, res) => {
   }
 };
 
-// GET BOOKING BY ID
 const getBookingByIdController = async (req, res) => {
   try {
     const booking = await bookingService.getBookingById(
@@ -98,7 +118,6 @@ const getBookingByIdController = async (req, res) => {
   }
 };
 
-// CANCEL BOOKING
 const cancelBookingController = async (req, res) => {
   try {
     const booking = await bookingService.cancelBooking(
@@ -116,7 +135,6 @@ const cancelBookingController = async (req, res) => {
   }
 };
 
-// CONFIRM BOOKING
 const confirmBookingController = async (req, res) => {
   try {
     const booking = await bookingService.confirmBooking(
@@ -133,7 +151,6 @@ const confirmBookingController = async (req, res) => {
   }
 };
 
-// CHECK-IN BOOKING
 const checkInBookingController = async (req, res) => {
   try {
     const booking = await bookingService.checkInBooking(
@@ -150,7 +167,6 @@ const checkInBookingController = async (req, res) => {
   }
 };
 
-// GET BOOKINGS FOR A GYM
 const getGymBookingsController = async (req, res) => {
   try {
     const bookings = await bookingService.getGymBookings(
@@ -166,7 +182,6 @@ const getGymBookingsController = async (req, res) => {
   }
 };
 
-// GET BOOKING STATISTICS
 const getBookingStatsController = async (req, res) => {
   try {
     const stats = await bookingService.getBookingStats();

@@ -10,6 +10,7 @@ const {
 const { protect } = require("../middleware/auth.middleware");
 
 const router = express.Router();
+
 router.post("/initialize", protect, initializePaymentController);
 router.get("/callback", chapaCallbackController);
 router.post("/webhook", chapaWebhookController);
