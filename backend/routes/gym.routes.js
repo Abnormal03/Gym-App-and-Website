@@ -8,6 +8,7 @@ const {
   updateGym,
   checkAvailability,
   searchGyms,
+  getGymStreakLeaderboard,
 } = require("../controllers/gym.controller");
 
 const { protect, requireRole } = require("../middleware/auth.middleware");
@@ -17,6 +18,9 @@ const adminOnly = requireRole("GYM_ADMIN")
 router.get("/", protect, GetGyms);
 router.get("/search", protect, searchGyms);
 
+router.get("/:id/leaderboard", protect, getGymStreakLeaderboard);
+router.get("/:id/streak-leaderboard", protect, getGymStreakLeaderboard);
+router.get("/:id/streakLeaderboard", protect, getGymStreakLeaderboard);
 router.get("/:id/availability", protect, checkAvailability);
 router.get("/:id", protect, getGymDetails);
 
