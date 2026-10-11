@@ -15,9 +15,6 @@ const { chapaWebhookController } = require("./controllers/payment.controller.js"
 const { errorHandler } = require("./utils/responses");
 const checkoutRoutes = require("./routes/checkout.routes");
 const sessionRoutes = require("./routes/session.routes");
-const {
-  chapaWebhookController,
-} = require("./controllers/payment.controller.js");
 const providerRoutes = require("./routes/provider.routes.js");
 
 const app = express();
