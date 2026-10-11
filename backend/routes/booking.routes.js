@@ -15,10 +15,11 @@ const {
   addSessionToBookingController,
 } = require("../controllers/booking.controller");
 
-const { protect, adminOnly } = require("../middleware/auth.middleware");
+const { protect, requireRole } = require("../middleware/auth.middleware");
 const { verifyGymOwner } = require("../middleware/gym.middleware");
 
-// Create a booking
+const adminOnly = requireRole("GYM_ADMIN");
+
 router.post("/", protect, createBookingController);
 
 // B4: Member bookings with optional status filter.

@@ -178,6 +178,23 @@ async function seedDev() {
     update: {},
     create: { name: "Dev Admin", email: "admin@gym.test", password: adminHash },
   });
+
+  const admin2 = await prisma.gymAdmin.upsert({
+    where: { email: "admin2@gym.test" },
+    update: {},
+    create: {
+      name: "Dev Admin 2",
+      email: "admin2@gym.test",
+      password: adminHash,
+    },
+  });
+
+  logins.push({
+    role: "GYM_ADMIN",
+    email: admin2.email,
+    password: ADMIN_PASSWORD,
+    note: "second admin",
+  });
   logins.push({
     role: "GYM_ADMIN",
     email: admin.email,
@@ -337,9 +354,13 @@ async function seedDev() {
 
 async function main() {
   const coreOnly = process.argv.includes("--core-only");
+  const mode = process.env.NODE_ENV;
   const isProd = process.env.NODE_ENV === "production";
 
   await seedCore();
+  if (!mode) {
+    return;
+  }
 
   if (isProd || coreOnly) {
     console.log(

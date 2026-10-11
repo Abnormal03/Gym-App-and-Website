@@ -3,10 +3,10 @@
  *   node check-a1-services.js
  */
 const assert = require('node:assert/strict');
-const { creditSessionEarning, creditConsultationEarning } = require('./services/earning.service');
-const { ensureChatThread } = require('./services/chatThread.service');
-const { awardBadges } = require('./services/badge.service');
-const { toCents } = require('./utils/money');
+const { creditSessionEarning, creditConsultationEarning } = require('../services/earning.service');
+const { ensureChatThread } = require('../services/chatThread.service');
+const { awardBadges } = require('../services/badge.service');
+const { toCents } = require('../utils/money');
 
 function makeTx({ sessions = [], items = [], providers = [] } = {}) {
     const earnings = [];

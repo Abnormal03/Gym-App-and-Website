@@ -10,7 +10,9 @@ const {
   searchGyms,
 } = require("../controllers/gym.controller");
 
-const { protect, adminOnly } = require("../middleware/auth.middleware");
+const { protect, requireRole } = require("../middleware/auth.middleware");
+const adminOnly = requireRole("GYM_ADMIN")
+
 
 router.get("/", protect, GetGyms);
 router.get("/search", protect, searchGyms);
