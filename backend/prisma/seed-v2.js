@@ -17,35 +17,21 @@ const BADGES = [
 ];
 
 async function seedCore() {
-  // Refresh descriptions without overwriting customized setting values.
-  for (const [key, setting] of Object.entries(DEFAULT_SETTINGS)) {
+  // Settings: only the description is refreshed, so a value the team changed is never overwritten.
+  for (const [key, s] of Object.entries(DEFAULT_SETTINGS)) {
     await prisma.platformSetting.upsert({
       where: { key },
-      update: { description: setting.description },
-      create: {
-        key,
-        value: setting.value,
-        description: setting.description,
-      },
+      update: { description: s.description },
+      create: { key, value: s.value, description: s.description },
     });
   }
-
-  // Create or update the platform badges.
-  for (const badge of BADGES) {
+  for (const b of BADGES) {
     await prisma.badge.upsert({
-      where: { code: badge.code },
-      update: {
-        name: badge.name,
-        audience: badge.audience,
-      },
-      create: {
-        code: badge.code,
-        name: badge.name,
-        audience: badge.audience,
-      },
+      where: { code: b.code },
+      update: { name: b.name, audience: b.audience },
+      create: { code: b.code, name: b.name, audience: b.audience },
     });
   }
-
   console.log(
     `Core seed OK: ${Object.keys(DEFAULT_SETTINGS).length} settings, ${BADGES.length} badges`,
   );
@@ -97,23 +83,10 @@ const PROVIDERS = [
     specializations: ["Strength", "Weight loss"],
     experienceYears: 6,
     certifications: ["NASM CPT"],
-    availability: {
-      days: [1, 2, 3, 4, 5],
-      periods: ["MORNING"],
-    },
+    availability: { days: [1, 2, 3, 4, 5], periods: ["MORNING"] }, // Mon-Fri mornings
     packages: [
-      {
-        name: "4 Sessions",
-        sessionCount: 4,
-        price: 1200,
-        validityDays: 30,
-      },
-      {
-        name: "8 Sessions",
-        sessionCount: 8,
-        price: 2200,
-        validityDays: 60,
-      },
+      { name: "4 Sessions", sessionCount: 4, price: 1200, validityDays: 30 },
+      { name: "8 Sessions", sessionCount: 8, price: 2200, validityDays: 60 },
     ],
   },
   {
@@ -125,23 +98,10 @@ const PROVIDERS = [
     specializations: ["Bodybuilding", "Conditioning"],
     experienceYears: 9,
     certifications: ["ACE CPT"],
-    availability: {
-      days: [0, 1, 2, 3, 4, 5, 6],
-      periods: ["EVENING"],
-    },
+    availability: { days: [0, 1, 2, 3, 4, 5, 6], periods: ["EVENING"] }, // every evening
     packages: [
-      {
-        name: "4 Sessions",
-        sessionCount: 4,
-        price: 1400,
-        validityDays: 30,
-      },
-      {
-        name: "8 Sessions",
-        sessionCount: 8,
-        price: 2600,
-        validityDays: 60,
-      },
+      { name: "4 Sessions", sessionCount: 4, price: 1400, validityDays: 30 },
+      { name: "8 Sessions", sessionCount: 8, price: 2600, validityDays: 60 },
     ],
   },
   {
@@ -153,10 +113,7 @@ const PROVIDERS = [
     specializations: ["Injury recovery", "Back pain"],
     experienceYears: 8,
     certifications: ["BSc Physiotherapy"],
-    availability: {
-      days: [6, 0],
-      periods: ["MORNING", "AFTERNOON"],
-    },
+    availability: { days: [6, 0], periods: ["MORNING", "AFTERNOON"] }, // Sat + Sun, morning and afternoon
     packages: [
       {
         name: "3 Rehab Sessions",
@@ -215,17 +172,29 @@ async function seedDev() {
   const devHash = await bcrypt.hash(DEV_PASSWORD, 10);
   const logins = [];
 
-  // Admin: owns both gyms.
+  // --- Admin ---
   const admin = await prisma.gymAdmin.upsert({
     where: { email: "admin@gym.test" },
     update: {},
+    create: { name: "Dev Admin", email: "admin@gym.test", password: adminHash },
+  });
+
+  const admin2 = await prisma.gymAdmin.upsert({
+    where: { email: "admin2@gym.test" },
+    update: {},
     create: {
-      name: "Dev Admin",
-      email: "admin@gym.test",
+      name: "Dev Admin 2",
+      email: "admin2@gym.test",
       password: adminHash,
     },
   });
 
+  logins.push({
+    role: "GYM_ADMIN",
+    email: admin2.email,
+    password: ADMIN_PASSWORD,
+    note: "second admin",
+  });
   logins.push({
     role: "GYM_ADMIN",
     email: admin.email,
@@ -233,7 +202,7 @@ async function seedDev() {
     note: "owns both gyms",
   });
 
-  // Member.
+  // --- Member ---
   const member = await prisma.user.upsert({
     where: { email: "member@gym.test" },
     update: {},
@@ -244,32 +213,26 @@ async function seedDev() {
       password: devHash,
     },
   });
+  logins.push({ role: "MEMBER", email: member.email, password: DEV_PASSWORD });
 
-  logins.push({
-    role: "MEMBER",
-    email: member.email,
-    password: DEV_PASSWORD,
-  });
-
-  // Platform-wide consultants without a gym.
-  for (const consultantData of CONSULTANTS) {
+  // --- Consultants (platform-wide: no gym) ---
+  for (const c of CONSULTANTS) {
     const consultant = await prisma.provider.upsert({
-      where: { email: consultantData.email },
+      where: { email: c.email },
       update: {},
       create: {
         type: "NUTRITION_CONSULTANT",
-        name: consultantData.name,
-        email: consultantData.email,
-        phone: consultantData.phone,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
         password: devHash,
         mustChangePassword: false,
         bio: "Registered dietitian. Chat-only consultations.",
-        specializations: consultantData.specializations,
+        specializations: c.specializations,
         experienceYears: 5,
         certifications: ["Registered Dietitian"],
       },
     });
-
     logins.push({
       role: "NUTRITION_CONSULTANT",
       email: consultant.email,
@@ -278,55 +241,41 @@ async function seedDev() {
     });
   }
 
-  // Create gyms and their associated data.
-  for (const gymData of GYMS) {
+  // --- Gyms and everything inside them ---
+  for (const g of GYMS) {
     let gym = await prisma.gym.findFirst({
-      where: {
-        adminId: admin.id,
-        name: gymData.name,
-      },
+      where: { adminId: admin.id, name: g.name },
     });
-
     if (!gym) {
       gym = await prisma.gym.create({
         data: {
           adminId: admin.id,
-          name: gymData.name,
-          address: gymData.address,
-          latitude: gymData.latitude,
-          longitude: gymData.longitude,
+          name: g.name,
+          address: g.address,
+          latitude: g.latitude,
+          longitude: g.longitude,
           openingTime: "06:00",
           closingTime: "22:00",
-          capacity: gymData.capacity,
+          capacity: g.capacity,
           photos: [],
-          amenities: [...gymData.amenities],
+          amenities: [...g.amenities],
         },
       });
     }
 
-    // Gym packages.
-    for (const packageData of GYM_PACKAGES) {
-      const existingPackage = await prisma.package.findFirst({
-        where: {
-          gymId: gym.id,
-          name: packageData.name,
-        },
+    // Gym packages
+    for (const p of GYM_PACKAGES) {
+      const exists = await prisma.package.findFirst({
+        where: { gymId: gym.id, name: p.name },
       });
-
-      if (!existingPackage) {
-        await prisma.package.create({
-          data: {
-            gymId: gym.id,
-            ...packageData,
-          },
-        });
+      if (!exists) {
+        await prisma.package.create({ data: { gymId: gym.id, ...p } });
       }
     }
 
-    // Staff: only the first gym gets a staff account.
-    if (gymData.slug === "bole") {
-      const email = `staff.${gymData.slug}@gym.test`;
-
+    // Staff (only the first gym gets one, as planned)
+    if (g.slug === "bole") {
+      const email = `staff.${g.slug}@gym.test`;
       const staff = await prisma.gymStaff.upsert({
         where: { email },
         update: {},
@@ -339,74 +288,62 @@ async function seedDev() {
           mustChangePassword: false,
         },
       });
-
       logins.push({
         role: "GYM_STAFF",
         email: staff.email,
         password: DEV_PASSWORD,
-        note: gymData.name,
+        note: g.name,
       });
     }
 
-    // Providers, availability, and provider packages.
-    for (const providerData of PROVIDERS) {
-      const email = `${providerData.key}.${gymData.slug}@gym.test`;
-
+    // Providers with availability and packages
+    for (const def of PROVIDERS) {
+      const email = `${def.key}.${g.slug}@gym.test`;
       const provider = await prisma.provider.upsert({
         where: { email },
         update: {},
         create: {
-          type: providerData.type,
+          type: def.type,
           gymId: gym.id,
-          name: providerData.name,
+          name: def.name,
           email,
-          phone: providerData.phone,
+          phone: def.phone,
           password: devHash,
           mustChangePassword: false,
-          bio: providerData.bio,
-          specializations: providerData.specializations,
-          experienceYears: providerData.experienceYears,
-          certifications: providerData.certifications,
+          bio: def.bio,
+          specializations: def.specializations,
+          experienceYears: def.experienceYears,
+          certifications: def.certifications,
         },
       });
 
-      const availabilitySlots = providerData.availability.days.flatMap(
-        (dayOfWeek) =>
-          providerData.availability.periods.map((period) => ({
-            providerId: provider.id,
-            dayOfWeek,
-            period,
-          })),
+      const slots = def.availability.days.flatMap((dayOfWeek) =>
+        def.availability.periods.map((period) => ({
+          providerId: provider.id,
+          dayOfWeek,
+          period,
+        })),
       );
-
       await prisma.providerAvailability.createMany({
-        data: availabilitySlots,
+        data: slots,
         skipDuplicates: true,
       });
 
-      for (const packageData of providerData.packages) {
-        const existingPackage = await prisma.providerPackage.findFirst({
-          where: {
-            providerId: provider.id,
-            name: packageData.name,
-          },
+      for (const pk of def.packages) {
+        const exists = await prisma.providerPackage.findFirst({
+          where: { providerId: provider.id, name: pk.name },
         });
-
-        if (!existingPackage) {
+        if (!exists) {
           await prisma.providerPackage.create({
-            data: {
-              providerId: provider.id,
-              ...packageData,
-            },
+            data: { providerId: provider.id, ...pk },
           });
         }
       }
-
       logins.push({
-        role: providerData.type,
+        role: def.type,
         email: provider.email,
         password: DEV_PASSWORD,
-        note: gymData.name,
+        note: g.name,
       });
     }
   }
@@ -417,9 +354,13 @@ async function seedDev() {
 
 async function main() {
   const coreOnly = process.argv.includes("--core-only");
+  const mode = process.env.NODE_ENV;
   const isProd = process.env.NODE_ENV === "production";
 
   await seedCore();
+  if (!mode) {
+    return;
+  }
 
   if (isProd || coreOnly) {
     console.log(
@@ -434,10 +375,8 @@ async function main() {
 }
 
 main()
-  .catch((error) => {
-    console.error("Seed failed:", error);
-    process.exitCode = 1;
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => prisma.$disconnect());

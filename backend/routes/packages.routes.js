@@ -8,7 +8,7 @@ const {
   gymPackagesForAdmin,
 } = require("../controllers/packages.controller");
 
-const { protect, adminOnly } = require("../middleware/auth.middleware");
+const { protect, requireRole } = require("../middleware/auth.middleware");
 
 const {
   verifyGymOwner,
@@ -16,6 +16,7 @@ const {
 } = require("../middleware/packages.middleware");
 
 const router = express.Router();
+const adminOnly = requireRole("GYM_ADMIN");
 
 router.get("/", protect, gymPackages);
 router.get("/admin", protect, adminOnly, gymPackagesForAdmin);
