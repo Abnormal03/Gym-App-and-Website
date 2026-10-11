@@ -9,7 +9,7 @@ const {
 } = require("../controllers/admin.controller.js");
 
 const { protect, requireRole } = require("../middleware/auth.middleware.js");
-const adminOnly = requireRole(["GYM_ADMIN"])
+const adminOnly = requireRole("GYM_ADMIN")
 
 const router = express.Router();
 

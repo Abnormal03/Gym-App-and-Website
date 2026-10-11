@@ -66,7 +66,7 @@ function getJwtSecret() {
 function normalizeLegacyPayload(p) {
   const raw = String(p.role || p.type || '').toLowerCase().replace(/[^a-z]/g, ''); // 'GYM_ADMIN' -> 'gymadmin'
   if (raw === 'gymadmin' || raw === 'admin' || (!raw && p.adminId)) {
-    const adminId = Number(p.adminId ?? p.id);
+    const adminId = Number(p.adminId ?? p.userId ?? p.id);
     return { role: 'GYM_ADMIN', id: adminId, adminId };
   }
   if (raw === 'member' || raw === 'user' || (!raw && (p.userId || p.id))) {

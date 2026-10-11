@@ -9,7 +9,9 @@ const gymRoutes = require("./routes/gym.routes.js");
 const packageRoutes = require("./routes/packages.routes.js");
 const bookingRoutes = require("./routes/booking.routes.js");
 const paymentRoutes = require("./routes/payment.routes");
+const providerPortalRoutes = require("./routes/providerPortal.routes");
 const { chapaWebhookController } = require("./controllers/payment.controller.js");
+const { errorHandler } = require("./utils/responses");
 
 const app = express();
 
@@ -46,6 +48,7 @@ app.use("/api/gyms", gymRoutes);
 app.use("/api/packages", packageRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api", providerPortalRoutes);
 
 // ========================================
 // HEALTH CHECK
@@ -60,14 +63,7 @@ app.get("/", (req, res) => {
 // ========================================
 // ERROR HANDLER
 // ========================================
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-
-  res.status(500).json({
-    success: false,
-    message: "Something went wrong",
-  });
-});
+app.use(errorHandler);
 
 // ========================================
 // SERVER
