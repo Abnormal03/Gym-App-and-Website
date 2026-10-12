@@ -200,6 +200,7 @@ const recordInitializationFailure = async ({
 
     return { payment, booking: updatedBooking };
   });
+}
 const getBookingExpiresAt = (booking) => {
   return new Date(booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000);
 };
@@ -401,326 +402,328 @@ const verifyChapaTransaction = async (txRef) => {
       },
       timeout: 30000,
     },
-    include: {
-      member: true,
-      trainer: true,
-      payment: true,
-    },
-  });
+    {
+      include: {
+        member: true,
+        trainer: true,
+        payment: true,
+      }
+    }
+  );
 
   if (!session) {
     throw new Error("Trainer session not found");
   }
 
-/* -------------------------------------------------------------------------- */
-/* Webhook signature                                                          */
-/* -------------------------------------------------------------------------- */
+  /* -------------------------------------------------------------------------- */
+  /* Webhook signature                                                          */
+  /* -------------------------------------------------------------------------- */
 
-const isValidWebhookSignature = (rawBody, signatureHeader) => {
-  if (!rawBody || !signatureHeader || !process.env.CHAPA_WEBHOOK_SECRET) {
-    return false;
-  }
-
-  const expectedHash = crypto
-    .createHmac("sha256", process.env.CHAPA_WEBHOOK_SECRET)
-    .update(rawBody)
-    .digest("hex");
-
-  const expectedBuffer = Buffer.from(expectedHash, "utf8");
-  const receivedBuffer = Buffer.from(String(signatureHeader), "utf8");
-
-  if (expectedBuffer.length !== receivedBuffer.length) return false;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Entitlement activation                                                     */
-/* -------------------------------------------------------------------------- */
-
-const activateMemberPackage = async (tx, order, paidAt) => {
-  if (!order) return;
-
-  const memberPackage = await tx.memberPackage.findUnique({
-    where: { purchaseBookingId: order.bookingId },
-    include: { package: true },
-  });
-
-  // A covered booking uses an existing package; it must not create another.
-  if (!memberPackage) return;
-
-  if (memberPackage.status === "ACTIVE") return;
-
-  if (!["PENDING", "EXPIRED"].includes(memberPackage.status)) {
-    throw new Error(
-      `Cannot activate gym package with status ${memberPackage.status}`,
-    );
-  }
-
-  await tx.memberPackage.update({
-    where: { id: memberPackage.id },
-    data: {
-      status: "ACTIVE",
-      startsAt: paidAt,
-      endsAt: addDays(paidAt, memberPackage.package.durationDays),
-    },
-  });
-};
-
-const activateProviderPackagePurchases = async (tx, order, paidAt) => {
-  if (!order) return;
-
-  const items = await tx.orderItem.findMany({
-    where: {
-      orderId: order.id,
-      type: "PROVIDER_PACKAGE",
-    },
-    include: {
-      providerPackage: true,
-      purchase: true,
-    },
-  });
-
-  const sessionMinutes = await getSessionMinutes();
-
-  for (const item of items) {
-    const providerPackage = item.providerPackage;
-
-    if (!providerPackage) {
-      throw new Error(`Provider package missing for order item ${item.id}`);
+  const isValidWebhookSignature = (rawBody, signatureHeader) => {
+    if (!rawBody || !signatureHeader || !process.env.CHAPA_WEBHOOK_SECRET) {
+      return false;
     }
 
-    const providerId = item.providerId ?? providerPackage.providerId;
+    const expectedHash = crypto
+      .createHmac("sha256", process.env.CHAPA_WEBHOOK_SECRET)
+      .update(rawBody)
+      .digest("hex");
 
-    let purchase = item.purchase;
+    const expectedBuffer = Buffer.from(expectedHash, "utf8");
+    const receivedBuffer = Buffer.from(String(signatureHeader), "utf8");
 
-    if (!purchase) {
-      purchase = await tx.providerPackagePurchase.create({
-        data: {
-          userId: order.userId,
-          providerId,
-          providerPackageId: providerPackage.id,
-          orderItemId: item.id,
-          packageName: providerPackage.name,
-          sessionsTotal: providerPackage.sessionCount,
-          pricePaid: item.amount,
-          expiresAt: addDays(paidAt, providerPackage.validityDays),
-          status: "ACTIVE",
-        },
-      });
-    } else if (purchase.status !== "ACTIVE") {
-      if (!["PENDING", "EXPIRED"].includes(purchase.status)) {
-        throw new Error(
-          `Cannot activate provider package purchase in status ${purchase.status}`,
-        );
-      }
-
-      purchase = await tx.providerPackagePurchase.update({
-        where: { id: purchase.id },
-        data: {
-          status: "ACTIVE",
-          expiresAt: addDays(paidAt, providerPackage.validityDays),
-        },
-      });
-    }
-
-    const sessions = await tx.trainingSession.findMany({
-      where: {
-        purchaseId: purchase.id,
-        bookingId: order.bookingId,
-      },
-      timeout: 30000,
-    },
-  );
-
-    for (const session of sessions) {
-      if (session.status === "SCHEDULED") continue;
-
-      if (!["HELD", "CANCELLED"].includes(session.status)) {
-        throw new Error(
-          `Cannot schedule training session in status ${session.status}`,
-        );
-      }
-
-      const startsAt = session.startsAt;
-      const endsAt =
-        session.endsAt ??
-        new Date(startsAt.getTime() + sessionMinutes * 60 * 1000);
-
-      await tx.trainingSession.update({
-        where: { id: session.id },
-        data: {
-          status: "SCHEDULED",
-          startsAt,
-          endsAt,
-          cancelledAt: null,
-        },
-      });
-    }
-
-    await ensureChatThread(tx, order.userId, providerId);
-  }
-};
-
-/* -------------------------------------------------------------------------- */
-/* Consultation assignment                                                    */
-/* -------------------------------------------------------------------------- */
-
-const selectConsultant = async (tx, requestedConsultantId) => {
-  const consultants = await tx.provider.findMany({
-    where: {
-      type: "NUTRITION_CONSULTANT",
-      isActive: true,
-      ...(requestedConsultantId ? { id: requestedConsultantId } : {}),
-    },
-    select: { id: true },
-  });
-
-  if (consultants.length === 0) {
-    throw new Error("No active nutrition consultants available");
+    if (expectedBuffer.length !== receivedBuffer.length) return false;
   }
 
-  if (requestedConsultantId) return consultants[0];
+  /* -------------------------------------------------------------------------- */
+  /* Entitlement activation                                                     */
+  /* -------------------------------------------------------------------------- */
 
-  const counts = await tx.consultationAccess.groupBy({
-    by: ["consultantId"],
-    where: {
-      consultantId: { in: consultants.map((item) => item.id) },
-      status: "ACTIVE",
-    },
-    _count: { _all: true },
-  });
+  const activateMemberPackage = async (tx, order, paidAt) => {
+    if (!order) return;
 
-  const accessCounts = new Map(
-    counts.map((item) => [item.consultantId, item._count._all]),
-  );
+    const memberPackage = await tx.memberPackage.findUnique({
+      where: { purchaseBookingId: order.bookingId },
+      include: { package: true },
+    });
 
-  const minimum = Math.min(
-    ...consultants.map((item) => accessCounts.get(item.id) ?? 0),
-  );
+    // A covered booking uses an existing package; it must not create another.
+    if (!memberPackage) return;
 
-  const leastBusy = consultants.filter(
-    (item) => (accessCounts.get(item.id) ?? 0) === minimum,
-  );
+    if (memberPackage.status === "ACTIVE") return;
 
-  return leastBusy[Math.floor(Math.random() * leastBusy.length)];
-};
-
-const activateConsultations = async (tx, order, paidAt) => {
-  if (!order) return;
-
-  const items = await tx.orderItem.findMany({
-    where: {
-      orderId: order.id,
-      type: "CONSULTATION",
-    },
-    include: { consultation: true },
-  });
-
-  if (items.length === 0) return;
-
-  const chatDays = await getConsultationChatDays();
-
-  for (const item of items) {
-    let access = item.consultation;
-
-    if (access?.status === "ACTIVE") {
-      if (!access.consultantId) {
-        throw new Error(
-          `Active consultation ${access.id} has no assigned consultant`,
-        );
-      }
-
-      await ensureChatThread(tx, access.userId, access.consultantId);
-      await creditConsultationEarning(tx, item.id, access.consultantId);
-      continue;
-    }
-
-    if (access && !["PENDING", "EXPIRED"].includes(access.status)) {
+    if (!["PENDING", "EXPIRED"].includes(memberPackage.status)) {
       throw new Error(
-        `Cannot activate consultation in status ${access.status}`,
+        `Cannot activate gym package with status ${memberPackage.status}`,
       );
     }
 
-    const consultant = await selectConsultant(tx, item.providerId ?? null);
+    await tx.memberPackage.update({
+      where: { id: memberPackage.id },
+      data: {
+        status: "ACTIVE",
+        startsAt: paidAt,
+        endsAt: addDays(paidAt, memberPackage.package.durationDays),
+      },
+    });
+  };
 
-    const data = {
-      consultantId: consultant.id,
-      status: "ACTIVE",
-      assignedAt: paidAt,
-      startsAt: paidAt,
-      expiresAt: addDays(paidAt, chatDays),
-    };
+  const activateProviderPackagePurchases = async (tx, order, paidAt) => {
+    if (!order) return;
 
-    if (!access) {
-      access = await tx.consultationAccess.create({
-        data: {
-          userId: order.userId,
-          orderItemId: item.id,
-          ...data,
-        },
-      });
-    } else {
-      access = await tx.consultationAccess.update({
-        where: { id: access.id },
-        data,
-      });
-    }
-
-    await tx.orderItem.update({
-      where: { id: item.id },
-      data: { providerId: consultant.id },
+    const items = await tx.orderItem.findMany({
+      where: {
+        orderId: order.id,
+        type: "PROVIDER_PACKAGE",
+      },
+      include: {
+        providerPackage: true,
+        purchase: true,
+      },
     });
 
-    await ensureChatThread(tx, access.userId, consultant.id);
-    await creditConsultationEarning(tx, item.id, consultant.id);
-  }
-};
+    const sessionMinutes = await getSessionMinutes();
 
-/* -------------------------------------------------------------------------- */
-/* Locking and late-payment availability checks                               */
-/* -------------------------------------------------------------------------- */
+    for (const item of items) {
+      const providerPackage = item.providerPackage;
 
-const lockGym = async (tx, gymId) => {
-  await tx.$queryRawUnsafe(
-    'SELECT "id" FROM "Gym" WHERE "id" = $1 FOR UPDATE',
-    gymId,
-  );
-};
+      if (!providerPackage) {
+        throw new Error(`Provider package missing for order item ${item.id}`);
+      }
 
-const lockProvider = async (tx, providerId) => {
-  await tx.$queryRawUnsafe(
-    'SELECT "id" FROM "Provider" WHERE "id" = $1 FOR UPDATE',
-    providerId,
-  );
-};
+      const providerId = item.providerId ?? providerPackage.providerId;
 
-const canHonorLatePayment = async (tx, booking) => {
-  // Serialize capacity checks for bookings at this gym.
-  await lockGym(tx, booking.gymId);
+      let purchase = item.purchase;
 
-  const gym = await tx.gym.findUnique({
-    where: { id: booking.gymId },
-    select: {
-      id: true,
-      capacity: true,
-      isActive: true,
-    },
-  });
+      if (!purchase) {
+        purchase = await tx.providerPackagePurchase.create({
+          data: {
+            userId: order.userId,
+            providerId,
+            providerPackageId: providerPackage.id,
+            orderItemId: item.id,
+            packageName: providerPackage.name,
+            sessionsTotal: providerPackage.sessionCount,
+            pricePaid: item.amount,
+            expiresAt: addDays(paidAt, providerPackage.validityDays),
+            status: "ACTIVE",
+          },
+        });
+      } else if (purchase.status !== "ACTIVE") {
+        if (!["PENDING", "EXPIRED"].includes(purchase.status)) {
+          throw new Error(
+            `Cannot activate provider package purchase in status ${purchase.status}`,
+          );
+        }
 
-  if (!gym || !gym.isActive) return false;
+        purchase = await tx.providerPackagePurchase.update({
+          where: { id: purchase.id },
+          data: {
+            status: "ACTIVE",
+            expiresAt: addDays(paidAt, providerPackage.validityDays),
+          },
+        });
+      }
 
-  const usedCapacity = await getUsedCapacity(
-    tx,
-    booking.gymId,
-    booking.slotStart,
-    booking.slotEnd,
-  );
+      const sessions = await tx.trainingSession.findMany({
+        where: {
+          purchaseId: purchase.id,
+          bookingId: order.bookingId,
+        },
+        timeout: 30000,
+      },
+      );
 
-  if (usedCapacity + booking.headcount > gym.capacity) {
-    return false;
-  }
+      for (const session of sessions) {
+        if (session.status === "SCHEDULED") continue;
 
-  const providerItems = booking.order
-    ? await tx.orderItem.findMany({
+        if (!["HELD", "CANCELLED"].includes(session.status)) {
+          throw new Error(
+            `Cannot schedule training session in status ${session.status}`,
+          );
+        }
+
+        const startsAt = session.startsAt;
+        const endsAt =
+          session.endsAt ??
+          new Date(startsAt.getTime() + sessionMinutes * 60 * 1000);
+
+        await tx.trainingSession.update({
+          where: { id: session.id },
+          data: {
+            status: "SCHEDULED",
+            startsAt,
+            endsAt,
+            cancelledAt: null,
+          },
+        });
+      }
+
+      await ensureChatThread(tx, order.userId, providerId);
+    }
+  };
+
+  /* -------------------------------------------------------------------------- */
+  /* Consultation assignment                                                    */
+  /* -------------------------------------------------------------------------- */
+
+  const selectConsultant = async (tx, requestedConsultantId) => {
+    const consultants = await tx.provider.findMany({
+      where: {
+        type: "NUTRITION_CONSULTANT",
+        isActive: true,
+        ...(requestedConsultantId ? { id: requestedConsultantId } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (consultants.length === 0) {
+      throw new Error("No active nutrition consultants available");
+    }
+
+    if (requestedConsultantId) return consultants[0];
+
+    const counts = await tx.consultationAccess.groupBy({
+      by: ["consultantId"],
+      where: {
+        consultantId: { in: consultants.map((item) => item.id) },
+        status: "ACTIVE",
+      },
+      _count: { _all: true },
+    });
+
+    const accessCounts = new Map(
+      counts.map((item) => [item.consultantId, item._count._all]),
+    );
+
+    const minimum = Math.min(
+      ...consultants.map((item) => accessCounts.get(item.id) ?? 0),
+    );
+
+    const leastBusy = consultants.filter(
+      (item) => (accessCounts.get(item.id) ?? 0) === minimum,
+    );
+
+    return leastBusy[Math.floor(Math.random() * leastBusy.length)];
+  };
+
+  const activateConsultations = async (tx, order, paidAt) => {
+    if (!order) return;
+
+    const items = await tx.orderItem.findMany({
+      where: {
+        orderId: order.id,
+        type: "CONSULTATION",
+      },
+      include: { consultation: true },
+    });
+
+    if (items.length === 0) return;
+
+    const chatDays = await getConsultationChatDays();
+
+    for (const item of items) {
+      let access = item.consultation;
+
+      if (access?.status === "ACTIVE") {
+        if (!access.consultantId) {
+          throw new Error(
+            `Active consultation ${access.id} has no assigned consultant`,
+          );
+        }
+
+        await ensureChatThread(tx, access.userId, access.consultantId);
+        await creditConsultationEarning(tx, item.id, access.consultantId);
+        continue;
+      }
+
+      if (access && !["PENDING", "EXPIRED"].includes(access.status)) {
+        throw new Error(
+          `Cannot activate consultation in status ${access.status}`,
+        );
+      }
+
+      const consultant = await selectConsultant(tx, item.providerId ?? null);
+
+      const data = {
+        consultantId: consultant.id,
+        status: "ACTIVE",
+        assignedAt: paidAt,
+        startsAt: paidAt,
+        expiresAt: addDays(paidAt, chatDays),
+      };
+
+      if (!access) {
+        access = await tx.consultationAccess.create({
+          data: {
+            userId: order.userId,
+            orderItemId: item.id,
+            ...data,
+          },
+        });
+      } else {
+        access = await tx.consultationAccess.update({
+          where: { id: access.id },
+          data,
+        });
+      }
+
+      await tx.orderItem.update({
+        where: { id: item.id },
+        data: { providerId: consultant.id },
+      });
+
+      await ensureChatThread(tx, access.userId, consultant.id);
+      await creditConsultationEarning(tx, item.id, consultant.id);
+    }
+  };
+
+  /* -------------------------------------------------------------------------- */
+  /* Locking and late-payment availability checks                               */
+  /* -------------------------------------------------------------------------- */
+
+  const lockGym = async (tx, gymId) => {
+    await tx.$queryRawUnsafe(
+      'SELECT "id" FROM "Gym" WHERE "id" = $1 FOR UPDATE',
+      gymId,
+    );
+  };
+
+  const lockProvider = async (tx, providerId) => {
+    await tx.$queryRawUnsafe(
+      'SELECT "id" FROM "Provider" WHERE "id" = $1 FOR UPDATE',
+      providerId,
+    );
+  };
+
+  const canHonorLatePayment = async (tx, booking) => {
+    // Serialize capacity checks for bookings at this gym.
+    await lockGym(tx, booking.gymId);
+
+    const gym = await tx.gym.findUnique({
+      where: { id: booking.gymId },
+      select: {
+        id: true,
+        capacity: true,
+        isActive: true,
+      },
+    });
+
+    if (!gym || !gym.isActive) return false;
+
+    const usedCapacity = await getUsedCapacity(
+      tx,
+      booking.gymId,
+      booking.slotStart,
+      booking.slotEnd,
+    );
+
+    if (usedCapacity + booking.headcount > gym.capacity) {
+      return false;
+    }
+
+    const providerItems = booking.order
+      ? await tx.orderItem.findMany({
         where: {
           orderId: booking.order.id,
           type: "PROVIDER_PACKAGE",
@@ -729,75 +732,75 @@ const canHonorLatePayment = async (tx, booking) => {
           providerPackage: true,
         },
       })
-    : [];
+      : [];
 
-  for (const item of providerItems) {
-    const providerPackage = item.providerPackage;
+    for (const item of providerItems) {
+      const providerPackage = item.providerPackage;
 
-    if (!providerPackage || !providerPackage.isActive) {
-      return false;
-    }
+      if (!providerPackage || !providerPackage.isActive) {
+        return false;
+      }
 
-    const providerId = item.providerId ?? providerPackage.providerId;
+      const providerId = item.providerId ?? providerPackage.providerId;
 
-    // A package must still belong to the provider being booked.
-    if (providerPackage.providerId !== providerId) {
-      return false;
-    }
+      // A package must still belong to the provider being booked.
+      if (providerPackage.providerId !== providerId) {
+        return false;
+      }
 
-    await lockProvider(tx, providerId);
+      await lockProvider(tx, providerId);
 
-    const provider = await tx.provider.findUnique({
-      where: { id: providerId },
-      select: {
-        id: true,
-        gymId: true,
-        isActive: true,
-        type: true,
-      },
-    });
-
-    if (
-      !provider ||
-      !provider.isActive ||
-      provider.gymId !== booking.gymId ||
-      !["TRAINER", "PHYSIOTHERAPIST"].includes(provider.type)
-    ) {
-      return false;
-    }
-
-    /*
-     * Check the actual training-session interval. Checking the whole gym
-     * booking interval could incorrectly reject a valid trainer appointment.
-     * A cancelled held session keeps its original startsAt and endsAt.
-     */
-    const sessions = await tx.trainingSession.findMany({
-      where: {
-        bookingId: booking.id,
-        providerId,
-      },
-      select: {
-        startsAt: true,
-        endsAt: true,
-      },
-    });
-
-    // If this order sold a provider package but its reserved session is gone,
-    // don't silently activate the purchase without a valid appointment.
-    if (sessions.length === 0) return false;
-
-    for (const session of sessions) {
-      const conflictingSession = await tx.trainingSession.findFirst({
-        where: {
-          providerId,
-          bookingId: { not: booking.id },
-          status: { in: ["HELD", "SCHEDULED"] },
-          startsAt: { lt: session.endsAt },
-          endsAt: { gt: session.startsAt },
+      const provider = await tx.provider.findUnique({
+        where: { id: providerId },
+        select: {
+          id: true,
+          gymId: true,
+          isActive: true,
+          type: true,
         },
-        select: { id: true },
       });
-    }
+
+      if (
+        !provider ||
+        !provider.isActive ||
+        provider.gymId !== booking.gymId ||
+        !["TRAINER", "PHYSIOTHERAPIST"].includes(provider.type)
+      ) {
+        return false;
+      }
+
+      /*
+       * Check the actual training-session interval. Checking the whole gym
+       * booking interval could incorrectly reject a valid trainer appointment.
+       * A cancelled held session keeps its original startsAt and endsAt.
+       */
+      const sessions = await tx.trainingSession.findMany({
+        where: {
+          bookingId: booking.id,
+          providerId,
+        },
+        select: {
+          startsAt: true,
+          endsAt: true,
+        },
+      });
+
+      // If this order sold a provider package but its reserved session is gone,
+      // don't silently activate the purchase without a valid appointment.
+      if (sessions.length === 0) return false;
+
+      for (const session of sessions) {
+        const conflictingSession = await tx.trainingSession.findFirst({
+          where: {
+            providerId,
+            bookingId: { not: booking.id },
+            status: { in: ["HELD", "SCHEDULED"] },
+            startsAt: { lt: session.endsAt },
+            endsAt: { gt: session.startsAt },
+          },
+          select: { id: true },
+        });
+      }
 
       if (conflictingSession) return false;
     }
@@ -1115,20 +1118,17 @@ const handleChapaWebhook = async (rawBody, signatureHeader) => {
   return processPaymentResult(txRef);
 };
 
-  try {
-    event = JSON.parse(rawBody.toString("utf8"));
-  } catch {
-    throw new Error("Invalid webhook JSON");
-  }
+try {
+  event = JSON.parse(rawBody.toString("utf8"));
+} catch {
+  throw new Error("Invalid webhook JSON");
+}
 
-  const txRef = event?.tx_ref || event?.trx_ref;
+const txRef = event?.tx_ref || event?.trx_ref;
 
-  if (typeof txRef !== "string" || !txRef.trim()) {
-    throw new Error("Webhook payload missing tx_ref");
-  }
-
-  return processPaymentResult(txRef);
-};
+if (typeof txRef !== "string" || !txRef.trim()) {
+  throw new Error("Webhook payload missing tx_ref");
+}
 
 /* -------------------------------------------------------------------------- */
 /* Check payment status for the authenticated owner                           */
