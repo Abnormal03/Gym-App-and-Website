@@ -18,6 +18,8 @@ const { chapaWebhookController } = require("./controllers/payment.controller.js"
 const { errorHandler } = require("./utils/responses");
 const checkoutRoutes = require("./routes/checkout.routes");
 const sessionRoutes = require("./routes/session.routes");
+const leaderboardRoutes = require("./routes/leaderboard.routes.js");
+const chatbotRoutes = require("./routes/chatbot.routes.js");
 const providerRoutes = require("./routes/provider.routes.js");
 const checkInRoutes = require("./routes/checkIn.routes.js");
 const payoutRoutes = require("./routes/payout.routes.js");
@@ -77,6 +79,8 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/providers", providerRoutes);
 app.use("/api/sessions", sessionRoutes);
+app.use("/api/leaderboard", leaderboardRoutes);
+app.use("/api/chatbot", chatbotRoutes);
 // ========================================
 // HEALTH CHECK
 // ========================================

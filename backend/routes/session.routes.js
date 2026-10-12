@@ -8,12 +8,16 @@ const {
   noShowSessionController,
   cancelSessionController,
 } = require("../controllers/session.controller");
+const {
+  createSessionReviewController,
+} = require("../controllers/review.controller");
 
 const bookableProviderRoles = requireRole('TRAINER', 'PHYSIOTHERAPIST');
 const cancelRoles = requireRole('MEMBER', 'TRAINER', 'PHYSIOTHERAPIST');
 
 // Member or provider lists sessions
 router.get("/", protect, getSessionsController);
+router.post("/:id/review", protect, createSessionReviewController);
 
 // Provider session lifecycle (E-32)
 router.post("/:id/complete", ...bookableProviderRoles, completeSessionController);
