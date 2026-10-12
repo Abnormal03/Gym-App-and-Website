@@ -423,7 +423,7 @@ const createTrainerBooking = async ({
   }
 
   // Check for overlapping active sessions
-  const overlappingSession = await prisma.trainerSession.findFirst({
+  const overlappingSession = await prisma.trainingSession.findFirst({
     where: {
       trainerId,
       status: {
@@ -445,7 +445,7 @@ const createTrainerBooking = async ({
   // Create trainer session
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-  return prisma.trainerSession.create({
+  return prisma.trainingSession.create({
     data: {
       trainerId,
       memberId,
@@ -487,7 +487,7 @@ const changeTrainerSessionStatus = async (sessionId, newStatus) => {
     throw new Error("Invalid session ID");
   }
 
-  const session = await prisma.trainerSession.findUnique({
+  const session = await prisma.trainingSession.findUnique({
     where: {
       id: sessionId,
     },
@@ -509,7 +509,7 @@ const changeTrainerSessionStatus = async (sessionId, newStatus) => {
     );
   }
 
-  return prisma.trainerSession.update({
+  return prisma.trainingSession.update({
     where: {
       id: sessionId,
     },
@@ -540,7 +540,7 @@ const cancelTrainerSession = async (sessionId, memberId) => {
   sessionId = Number(sessionId);
   memberId = Number(memberId);
 
-  const session = await prisma.trainerSession.findUnique({
+  const session = await prisma.trainingSession.findUnique({
     where: {
       id: sessionId,
     },
@@ -558,7 +558,7 @@ const cancelTrainerSession = async (sessionId, memberId) => {
 };
 
 const getMemberTrainerSessions = async (memberId) => {
-  return prisma.trainerSession.findMany({
+  return prisma.trainingSession.findMany({
     where: {
       memberId: Number(memberId),
     },
@@ -593,7 +593,7 @@ const getMemberTrainerSessions = async (memberId) => {
 const expirePendingTrainerSessions = async () => {
   const now = new Date();
 
-  const result = await prisma.trainerSession.updateMany({
+  const result = await prisma.trainingSession.updateMany({
     where: {
       status: "PENDING_PAYMENT",
       expiresAt: {
@@ -657,7 +657,7 @@ const createTrainerReview = async ({
   }
 
   // Find the member's session with this trainer
-  const session = await prisma.trainerSession.findFirst({
+  const session = await prisma.trainingSession.findFirst({
     where: {
       id: sessionId,
       trainerId,

@@ -1,9 +1,12 @@
-/*
-  Warnings:
+-- CreateEnum
+CREATE TYPE "PackageType" AS ENUM ('daily', 'weekly', 'monthly', 'annual');
 
-  - You are about to drop the `Trainer` table. If the table is not empty, all the data it contains will be lost.
+-- CreateEnum
+CREATE TYPE "BookingStatus" AS ENUM ('pending', 'confirmed', 'payment_failed', 'cancelled', 'checked_in', 'expired');
 
-*/
+-- CreateEnum
+CREATE TYPE "PaymentStatus" AS ENUM ('pending', 'success', 'failed', 'refunded');
+
 -- CreateEnum
 CREATE TYPE "ProviderType" AS ENUM ('TRAINER', 'PHYSIOTHERAPIST', 'NUTRITION_CONSULTANT');
 
@@ -34,22 +37,112 @@ CREATE TYPE "PayoutMethod" AS ENUM ('CASH', 'BANK_TRANSFER', 'OTHER');
 -- CreateEnum
 CREATE TYPE "BadgeAudience" AS ENUM ('MEMBER', 'PROVIDER');
 
--- AlterEnum
-ALTER TYPE "BookingStatus" ADD VALUE 'expired';
+-- CreateTable
+CREATE TABLE "User" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "phone" TEXT,
+    "password" TEXT NOT NULL,
+    "photoUrl" TEXT,
+    "fcmToken" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
--- AlterTable
-ALTER TABLE "Booking" ADD COLUMN     "bookingType" "BookingType" NOT NULL DEFAULT 'SINGLE',
-ADD COLUMN     "headcount" INTEGER NOT NULL DEFAULT 1,
-ADD COLUMN     "memberPackageId" INTEGER;
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
 
--- AlterTable
-ALTER TABLE "Package" ADD COLUMN     "allowedDays" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
-ADD COLUMN     "allowedPeriods" "Period"[] DEFAULT ARRAY[]::"Period"[],
-ADD COLUMN     "maxGroupSize" INTEGER NOT NULL DEFAULT 1,
-ADD COLUMN     "maxVisits" INTEGER;
+-- CreateTable
+CREATE TABLE "UserPreference" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "bookingConfirm" BOOLEAN NOT NULL DEFAULT true,
+    "sessionReminders" BOOLEAN NOT NULL DEFAULT true,
+    "offersAndPromotions" BOOLEAN NOT NULL DEFAULT false,
 
--- DropTable
-DROP TABLE "Trainer";
+    CONSTRAINT "UserPreference_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GymAdmin" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "GymAdmin_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Gym" (
+    "id" SERIAL NOT NULL,
+    "adminId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "address" TEXT NOT NULL,
+    "latitude" DOUBLE PRECISION,
+    "longitude" DOUBLE PRECISION,
+    "openingTime" TEXT NOT NULL,
+    "closingTime" TEXT NOT NULL,
+    "capacity" INTEGER NOT NULL,
+    "photos" TEXT[],
+    "amenities" TEXT[],
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Gym_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Package" (
+    "id" SERIAL NOT NULL,
+    "gymId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" "PackageType" NOT NULL DEFAULT 'daily',
+    "price" DOUBLE PRECISION NOT NULL,
+    "durationDays" INTEGER NOT NULL,
+    "benefits" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "maxVisits" INTEGER,
+    "allowedDays" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+    "allowedPeriods" "Period"[] DEFAULT ARRAY[]::"Period"[],
+    "maxGroupSize" INTEGER NOT NULL DEFAULT 1,
+
+    CONSTRAINT "Package_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Booking" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "gymId" INTEGER NOT NULL,
+    "packageId" INTEGER,
+    "slotStart" TIMESTAMP(3) NOT NULL,
+    "slotEnd" TIMESTAMP(3) NOT NULL,
+    "status" "BookingStatus" NOT NULL DEFAULT 'pending',
+    "qrCode" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "bookingType" "BookingType" NOT NULL DEFAULT 'SINGLE',
+    "headcount" INTEGER NOT NULL DEFAULT 1,
+    "memberPackageId" INTEGER,
+
+    CONSTRAINT "Booking_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Payment" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "bookingId" INTEGER NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'ETB',
+    "status" "PaymentStatus" NOT NULL DEFAULT 'pending',
+    "chapaTxRef" TEXT,
+    "chapaCheckoutUrl" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "Provider" (
@@ -336,6 +429,33 @@ CREATE TABLE "PlatformSetting" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserPreference_userId_key" ON "UserPreference"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GymAdmin_email_key" ON "GymAdmin"("email");
+
+-- CreateIndex
+CREATE INDEX "Gym_name_idx" ON "Gym"("name");
+
+-- CreateIndex
+CREATE INDEX "Gym_address_idx" ON "Gym"("address");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Booking_qrCode_key" ON "Booking"("qrCode");
+
+-- CreateIndex
+CREATE INDEX "Booking_gymId_slotStart_slotEnd_idx" ON "Booking"("gymId", "slotStart", "slotEnd");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Payment_bookingId_key" ON "Payment"("bookingId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Payment_chapaTxRef_key" ON "Payment"("chapaTxRef");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Provider_email_key" ON "Provider"("email");
 
 -- CreateIndex
@@ -416,17 +536,32 @@ CREATE UNIQUE INDEX "Earning_sessionId_key" ON "Earning"("sessionId");
 -- CreateIndex
 CREATE INDEX "PayoutRequest_gymId_status_idx" ON "PayoutRequest"("gymId", "status");
 
--- CreateIndex
-CREATE INDEX "Booking_gymId_slotStart_slotEnd_idx" ON "Booking"("gymId", "slotStart", "slotEnd");
+-- AddForeignKey
+ALTER TABLE "UserPreference" ADD CONSTRAINT "UserPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- CreateIndex
-CREATE INDEX "Gym_name_idx" ON "Gym"("name");
+-- AddForeignKey
+ALTER TABLE "Gym" ADD CONSTRAINT "Gym_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "GymAdmin"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- CreateIndex
-CREATE INDEX "Gym_address_idx" ON "Gym"("address");
+-- AddForeignKey
+ALTER TABLE "Package" ADD CONSTRAINT "Package_gymId_fkey" FOREIGN KEY ("gymId") REFERENCES "Gym"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Booking" ADD CONSTRAINT "Booking_gymId_fkey" FOREIGN KEY ("gymId") REFERENCES "Gym"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Booking" ADD CONSTRAINT "Booking_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "Package"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Booking" ADD CONSTRAINT "Booking_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Booking" ADD CONSTRAINT "Booking_memberPackageId_fkey" FOREIGN KEY ("memberPackageId") REFERENCES "MemberPackage"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "Booking"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Provider" ADD CONSTRAINT "Provider_gymId_fkey" FOREIGN KEY ("gymId") REFERENCES "Gym"("id") ON DELETE SET NULL ON UPDATE CASCADE;

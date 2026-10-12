@@ -202,10 +202,13 @@ const recordInitializationFailure = async ({
     };
   });
 };
+<<<<<<< HEAD
 
 /* -------------------------------------------------------------------------- */
 /* Chapa payment initialization                                               */
 /* -------------------------------------------------------------------------- */
+=======
+>>>>>>> origin/backend
 
 const initializePayment = async (bookingId, userId) => {
   if (!process.env.CHAPA_SECRET_KEY) {
@@ -266,7 +269,11 @@ const initializePayment = async (bookingId, userId) => {
     throw new Error("Invalid payment amount");
   }
 
+<<<<<<< HEAD
   const txRef = `booking-${bookingId}-${Date.now()}`;
+=======
+  const txRef = `booking-${bookingId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+>>>>>>> origin/backend
 
   const returnUrl = new URL(process.env.CHAPA_RETURN_URL);
   returnUrl.searchParams.set("tx_ref", txRef);
@@ -423,9 +430,13 @@ const isValidWebhookSignature = (rawBody, signatureHeader) => {
   const expectedBuffer = Buffer.from(expectedHash, "utf8");
   const receivedBuffer = Buffer.from(String(signatureHeader), "utf8");
 
+<<<<<<< HEAD
   if (expectedBuffer.length !== receivedBuffer.length) {
     return false;
   }
+=======
+  if (expectedBuffer.length !== receivedBuffer.length) return false;
+>>>>>>> origin/backend
 
   return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 };
@@ -481,7 +492,7 @@ const activateProviderPackagePurchases = async (tx, order, paidAt) => {
       purchase: true,
     },
   });
-
+  if (items.length === 0) return;
   const sessionMinutes = await getSessionMinutes();
 
   for (const item of items) {
@@ -747,14 +758,14 @@ const canHonorLatePayment = async (tx, booking) => {
 
   const providerItems = booking.order
     ? await tx.orderItem.findMany({
-        where: {
-          orderId: booking.order.id,
-          type: "PROVIDER_PACKAGE",
-        },
-        include: {
-          providerPackage: true,
-        },
-      })
+      where: {
+        orderId: booking.order.id,
+        type: "PROVIDER_PACKAGE",
+      },
+      include: {
+        providerPackage: true,
+      },
+    })
     : [];
 
   for (const item of providerItems) {
@@ -1192,7 +1203,11 @@ const handleChapaWebhook = async (
     throw new Error("Invalid webhook signature");
   }
 
+<<<<<<< HEAD
   let event = payloadOrRawBody;
+=======
+  let event;
+>>>>>>> origin/backend
 
   if (!event || typeof event !== "object" || Buffer.isBuffer(event)) {
     try {
@@ -1414,12 +1429,9 @@ const refundChapaTransaction = async (txRef, amount) => {
 
 module.exports = {
   initializePayment,
-  initializeTrainerSessionPayment,
   verifyChapaTransaction,
-  refundChapaTransaction,
   checkPaymentStatus,
   processPaymentResult,
-  processTrainerSessionPayment,
   handleChapaWebhook,
   activateMemberPackage,
   confirmFreeCheckout,

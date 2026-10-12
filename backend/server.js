@@ -34,6 +34,9 @@ const trainerRoutes = require("./routes/trainer.routes.js");
 const messageRoutes = require("./routes/message.routes.js");
 
 const { ensureThreadMembership } = require("./services/chatThread.service");
+const {
+  expirePendingTrainerSessions,
+} = require("./services/trainer.service.js");
 const { sendMessage } = require("./services/message.service.js");
 const { expireStale } = require("./services/bookingHelpers.service.js");
 
@@ -425,8 +428,17 @@ async function expirePendingOrders() {
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 
-  // Run once at startup, then every minute.
-  void expirePendingOrders();
+ // Run once at startup, then every minute.
+ void expirePendingOrders();
 
-  setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
+ setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
+
+ const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
+ setInterval(async () => {
+   try {
+     await expirePendingTrainerSessions();
+   } catch (error) {
+     console.error("Trainer session expiration error:", error);
+   }
+ }, TRAINER_SESSION_EXPIRATION_INTERVAL);
 });
