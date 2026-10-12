@@ -32,7 +32,11 @@ const expireStale = async (tx, opts = {}) => {
 
   const where = {
     status: "pending",
-    createdAt: { lt: expiryCutoff },
+    order: {
+      is: {
+        createdAt: { lt: expiryCutoff },
+      },
+    },
   };
 
   if (opts.userId !== undefined) {
