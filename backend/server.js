@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
-const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 const { socketAuth } = require("./middleware/socket.middleware.js");
@@ -29,7 +28,6 @@ const checkInRoutes = require("./routes/checkIn.routes.js");
 const payoutRoutes = require("./routes/payout.routes.js");
 const chatRoutes = require("./routes/chat.routes.js");
 const { ensureThreadMembership } = require("./services/chatThread.service");
-const paymentRoutes = require("./routes/payment.routes.js");
 const trainerRoutes = require("./routes/trainer.routes.js");
 const messageRoutes = require("./routes/message.routes.js");
 
@@ -49,15 +47,6 @@ const io = new Server(httpServer, {
 });
 const chatIo = io.of("/chat");
 app.locals.io = chatIo;
-
-const server = http.createServer(app);
-
-const io = new Server(server, {
-  cors: {
-    origin: process.env.CLIENT_URL,
-    credentials: true,
-  },
-});
 
 io.use(socketAuth);
 
@@ -389,16 +378,12 @@ chatIo.on("connection", (socket) => {
 });
 
 httpServer.listen(PORT, "0.0.0.0", () => {
-const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
-
-setInterval(async () => {
-  try {
-    await expirePendingTrainerSessions();
-  } catch (error) {
-    console.error("Trainer session expiration error:", error);
-  }
-}, TRAINER_SESSION_EXPIRATION_INTERVAL);
-
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+  const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
+  setInterval(async () => {
+    try {
+      await expirePendingTrainerSessions();
+    } catch (error) {
+      console.error("Trainer session expiration error:", error);
+    }
+  }, TRAINER_SESSION_EXPIRATION_INTERVAL);
 });
