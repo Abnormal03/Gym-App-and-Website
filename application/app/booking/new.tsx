@@ -114,7 +114,7 @@ export default function BookingNewScreen() {
       ).toISOString();
 
       // ── Save everything to store + SecureStore ───────────────────────────
-      await store.savePendingBooking({
+      const saved = await store.savePendingBooking({
         bookingId,
         txRef: paymentResponse.txRef,
         checkoutUrl: paymentResponse.checkoutUrl,
@@ -127,8 +127,11 @@ export default function BookingNewScreen() {
       });
 
       // ── Navigate to payment screen ───────────────────────────────────────
-      router.push("/booking/payment");
+      if (saved) {
+        router.push("/booking/payment");
+      }
     } catch (err) {
+      console.log(err instanceof Error ? err.message : (err as string));
       // Specific messages for each failure point
       if (step === "creating") {
         setError(err as string); // e.g. "Slot is fully booked"
@@ -184,10 +187,62 @@ export default function BookingNewScreen() {
         />
         <Divider theme={theme} />
         <Row
-          label="Total"
+          label="Gym Package Price"
           value={`ETB ${store.packagePrice?.toFixed(2) ?? "0.00"}`}
-          highlight
           theme={theme}
+        />
+      </View>
+
+      {(store.supportChoice || store.nutritionChoice) && (
+        <View style={styles.pendingAddonsCard}>
+          <Text style={styles.pendingAddonsTitle}>Saved optional choices</Text>
+          {store.supportChoice && (
+            <View style={styles.pendingAddonRow}>
+              <Text style={styles.pendingAddonLabel}>
+                {store.supportChoice.type === "trainer"
+                  ? `${store.supportChoice.name} · ${store.supportChoice.packageName}`
+                  : `${store.supportChoice.name} · Physiotherapy session`}
+              </Text>
+              <Text style={styles.pendingAddonPrice}>
+                {store.supportChoice.price === null
+                  ? "Price unavailable"
+                  : `ETB ${store.supportChoice.price.toFixed(2)}`}
+              </Text>
+            </View>
+          )}
+          {store.nutritionChoice && (
+            <View style={styles.pendingAddonRow}>
+              <Text style={styles.pendingAddonLabel}>
+                {store.nutritionChoice.name}
+              </Text>
+              <Text style={styles.pendingAddonPrice}>
+                ETB {store.nutritionChoice.price.toFixed(2)}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: theme.primary,
+          borderRadius: 20,
+          backgroundColor: theme.card,
+        }}
+      >
+        <Row
+          label="Total"
+          theme={theme}
+          value={
+            "ETB " +
+            (
+              (store.packagePrice || 0) +
+              (store?.nutritionChoice?.price || 0) +
+              (store.supportChoice?.price || 0)
+            ).toLocaleString()
+          }
+          highlight
         />
       </View>
 
@@ -220,7 +275,9 @@ export default function BookingNewScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() =>
+          error ? router.back() : router.replace("/(drawer)/(tabs)")
+        }
         disabled={loading}
         style={styles.backBtn}
       >
@@ -280,7 +337,7 @@ const rowStyles = StyleSheet.create({
 
 const createStyles = (theme: ThemePalette) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.background },
+    container: { flex: 1, backgroundColor: theme.background, paddingTop: 20 },
     content: { padding: 24 },
     heading: {
       fontSize: 24,
@@ -296,6 +353,40 @@ const createStyles = (theme: ThemePalette) =>
       borderRadius: 16,
       overflow: "hidden",
       marginBottom: 20,
+    },
+    pendingAddonsCard: {
+      padding: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 14,
+      marginBottom: 20,
+      gap: 12,
+    },
+    pendingAddonsTitle: {
+      color: theme.foreground,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    pendingAddonRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    pendingAddonLabel: {
+      flex: 1,
+      color: theme.foreground,
+      fontSize: 14,
+    },
+    pendingAddonPrice: {
+      color: theme.success,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    pendingAddonsNote: {
+      color: theme.muted,
+      fontSize: 12,
+      lineHeight: 17,
     },
 
     noticeBox: {

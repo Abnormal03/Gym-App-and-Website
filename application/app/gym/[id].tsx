@@ -5,10 +5,13 @@ import {
   ScrollView,
   FlatList,
   Image,
+  Alert,
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
   StyleSheet,
+  Pressable,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -31,6 +34,7 @@ import {
   formatDayNumber,
   isSameDay,
 } from "../../src/utils/timeSlots";
+import { MaterialIcons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 
@@ -50,6 +54,7 @@ export default function GymDetailScreen() {
     reset,
   } = useAvailability(gymId);
   const setBookingDetails = useBookingStore((s) => s.setBookingDetails);
+  const resetPendingAddons = useBookingStore((s) => s.resetPendingAddons);
 
   const days = getNextSevenDays();
 
@@ -100,7 +105,7 @@ export default function GymDetailScreen() {
     checkSlot(slotStart, slotEnd);
   };
 
-  const handleBookNow = () => {
+  const handleBookNow = async () => {
     if (!gym || !selectedPackage || !checkInTime || !duration || !checkOutTime)
       return;
 
@@ -111,19 +116,30 @@ export default function GymDetailScreen() {
       duration,
       selectedPackage.durationDays,
     );
+    const expire = new Date();
+    expire.setMinutes(expire.getMinutes() + 30);
 
-    setBookingDetails({
-      gymId: gym.id,
-      gymName: gym.name,
-      packageId: selectedPackage.id,
-      packageName: selectedPackage.name,
-      packagePrice: selectedPackage.price,
-      slotStart,
-      slotEnd,
-      durationHours: duration,
-    });
+    try {
+      await resetPendingAddons();
+      setBookingDetails({
+        gymId: gym.id,
+        gymName: gym.name,
+        packageId: selectedPackage.id,
+        packageName: selectedPackage.name,
+        packagePrice: selectedPackage.price,
+        slotStart,
+        slotEnd,
+        durationHours: duration,
+        expiresAt: expire.toISOString(),
+      });
 
-    router.push("/booking/new");
+      router.push("/booking/customize/workout-style");
+    } catch (error) {
+      Alert.alert(
+        "Unable to start booking",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   };
 
   // ─── Derived UI flags ──────────────────────────────────────────────────────
@@ -148,8 +164,8 @@ export default function GymDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#000" />
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.foreground} />
       </View>
     );
   }
@@ -171,6 +187,22 @@ export default function GymDetailScreen() {
 
   return (
     <View style={styles.container}>
+      <Pressable
+        style={[
+          styles.back,
+          {
+            backgroundColor: theme.foreground,
+          },
+        ]}
+        onPress={() => router.back()}
+      >
+        <MaterialIcons
+          name="arrow-back-ios"
+          size={30}
+          color={theme.background}
+          style={{ left: 5 }}
+        />
+      </Pressable>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* ── Photo Carousel ── */}
         {gym.photos.length > 0 ? (
@@ -487,6 +519,20 @@ const createStyles = (theme: ThemePalette) =>
       borderRadius: 8,
     },
     retryText: { color: theme.card, fontWeight: "600" },
+
+    //back buttton
+    back: {
+      position: "absolute",
+      top: Platform.OS === "web" ? 10 : 30,
+      left: Platform.OS === "web" ? 10 : 20,
+      zIndex: 100,
+      height: 40,
+      width: 40,
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 20,
+    },
 
     // Photos
     photo: { width, height: 260 },

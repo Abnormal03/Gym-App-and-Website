@@ -32,7 +32,6 @@ export const usePreference = ()=>{
                 //save locally too...
                 if (user?.preference) {
                     const {preference, ...restOfUser} = user;
-                    console.log(pref);
                     await updatePref({preference:pref, ...restOfUser},token)
                 }
             }

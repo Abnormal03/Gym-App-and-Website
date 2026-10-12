@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import {
+  Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,7 @@ import { SkeletonList } from "../../../src/components/gym/SkeletonLoading";
 import { useGyms } from "../../../src/hooks/useGym";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../../src/hooks/useTheme";
+import { MaterialIcons } from "@expo/vector-icons";
 
 export function HomeScreen() {
   const { theme: palette, mode } = useTheme();
@@ -52,6 +55,11 @@ export function HomeScreen() {
     }
   };
 
+  const handleFailReload = () => {
+    setSearch("");
+    getGyms();
+  };
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={styles.viewport}>
@@ -67,33 +75,51 @@ export function HomeScreen() {
               placeholder="Find your arena..."
               value={search}
               onChangeText={(text) => setSearch(text)}
+              onSubmitEditing={handleSearch}
               placeholderTextColor={theme.muted}
               style={[styles.searchInput, { color: theme.text }]}
             />
           </View>
           <Button
             mode={mode}
-            title="🔍"
+            title={
+              <MaterialIcons name="search" size={30} color={theme.foreground} />
+            }
+            accessibilityLabel="Search gyms"
             loading={searching}
             onPress={handleSearch}
             style={styles.mapButton}
           />
         </View>
         {searchError && (
-          <View
-            style={{
-              height: 30,
-              borderWidth: 1,
-              borderRadius: 10,
-              borderColor: theme.border,
-              alignItems: "center",
-              justifyContent: "center",
-              marginTop: 5,
-            }}
-          >
-            <Text style={{ color: theme.error, textAlign: "center" }}>
-              {searchError}
-            </Text>
+          <View>
+            <View
+              style={{
+                height: 30,
+                borderWidth: 1,
+                borderRadius: 10,
+                borderColor: theme.border,
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 10,
+                marginHorizontal: 10,
+              }}
+            >
+              <Text style={{ color: theme.error, textAlign: "center" }}>
+                {searchError}
+              </Text>
+            </View>
+            <Button
+              title="Reload"
+              mode={mode}
+              onPress={handleFailReload}
+              style={{
+                height: 10,
+                marginTop: 10,
+                minHeight: 50,
+                alignSelf: "center",
+              }}
+            />
           </View>
         )}
         <ScrollView
@@ -158,6 +184,7 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: "center",
     paddingHorizontal: 15,
+    marginTop: Platform.OS === "web" ? 20 : 0,
   },
   searchBox: {
     flex: 1,

@@ -1,15 +1,19 @@
 import {
   ActivityIndicator,
   Pressable,
+  StyleProp,
   StyleSheet,
   Text,
+  TextStyle,
   type PressableProps,
 } from "react-native";
 import { colors, type ThemeMode } from "../../constants/colors";
+import React from "react";
 
 type Props = PressableProps & {
   mode: ThemeMode;
-  title: string;
+  title: string | React.ReactNode;
+  textStyle?: StyleProp<TextStyle>;
   loading?: boolean;
   variant?: "primary" | "outline";
 };
@@ -20,6 +24,7 @@ export function Button({
   variant = "primary",
   disabled,
   style,
+  textStyle,
   ...props
 }: Props) {
   const p = colors[mode];
@@ -44,7 +49,13 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={primary ? "#fff" : p.foreground} />
       ) : (
-        <Text style={[s.text, { color: primary ? "#fff" : p.foreground }]}>
+        <Text
+          style={[
+            s.text,
+            { color: primary ? "#fff" : p.foreground },
+            textStyle,
+          ]}
+        >
           {title}
         </Text>
       )}

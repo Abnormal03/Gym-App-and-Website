@@ -23,7 +23,7 @@ export const useGyms = () => {
   };
 
   useEffect(()=>{
-    if(!searchError) return;
+    if(!searchError || gyms.length===0) return;
     const errorTimeout = setTimeout(()=>{setSearchError(null)},5000);
 
     return ()=> clearTimeout(errorTimeout)

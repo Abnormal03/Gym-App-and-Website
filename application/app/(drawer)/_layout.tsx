@@ -1,10 +1,12 @@
 // app/(drawer)/_layout.tsx
 import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Drawer, DrawerContentScrollView } from "expo-router/drawer";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { useAuthStore } from "../../src/store/auth.store";
 import { useTheme } from "../../src/hooks/useTheme";
 import type { ThemePalette } from "../../src/constants/colors";
+import React from "react";
+import { MaterialIcons } from "@expo/vector-icons";
 
 // Define props locally — no longer imported from @react-navigation/drawer
 interface DrawerContentProps {
@@ -17,6 +19,8 @@ function DrawerContent({ navigation }: DrawerContentProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { theme } = useTheme();
+
+  const pathName = usePathname();
 
   const navigate = (path: string) => {
     navigation.closeDrawer();
@@ -69,13 +73,29 @@ function DrawerContent({ navigation }: DrawerContentProps) {
       {/* Main Navigation */}
       <View style={styles.navSection}>
         <DrawerItem
-          icon="🏠"
+          icon={
+            <MaterialIcons
+              name="home"
+              size={25}
+              color={pathName === "/" ? theme.primary : theme.foreground}
+            />
+          }
+          currentPath={pathName}
+          path="/"
           label="Home"
           onPress={() => navigate("/(drawer)/(tabs)/")}
           theme={theme}
         />
         <DrawerItem
-          icon="📅"
+          icon={
+            <MaterialIcons
+              name="calendar-today"
+              size={25}
+              color={theme.foreground}
+            />
+          }
+          path="bookings"
+          currentPath={pathName}
           label="My Bookings"
           onPress={() => navigate("/(drawer)/(tabs)/bookings")}
           theme={theme}
@@ -89,6 +109,8 @@ function DrawerContent({ navigation }: DrawerContentProps) {
         <DrawerItem
           icon="⚙️"
           label="Settings"
+          path="settings"
+          currentPath={pathName}
           onPress={() => navigate("/settings")}
           theme={theme}
         />
@@ -131,15 +153,28 @@ const DrawerItem = ({
   label,
   onPress,
   theme,
+  currentPath,
+  path,
 }: {
-  icon: string;
+  icon: string | React.ReactNode;
   label: string;
   onPress: () => void;
   theme: ThemePalette;
+  currentPath?: string;
+  path?: string;
 }) => (
   <TouchableOpacity onPress={onPress} style={styles.drawerItem}>
     <Text style={styles.drawerItemIcon}>{icon}</Text>
-    <Text style={[styles.drawerItemLabel, { color: theme.foreground }]}>
+    <Text
+      style={[
+        styles.drawerItemLabel,
+        {
+          color: currentPath?.endsWith(path || "")
+            ? theme.primary
+            : theme.foreground,
+        },
+      ]}
+    >
       {label}
     </Text>
   </TouchableOpacity>

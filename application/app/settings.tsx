@@ -7,6 +7,10 @@ import {
   StyleSheet,
   Linking,
   Alert,
+  StyleProp,
+  ViewProps,
+  ViewStyle,
+  Platform,
 } from "react-native";
 import { useState, useEffect, useRef } from "react";
 import { useAuthStore } from "../src/store/auth.store";
@@ -14,6 +18,8 @@ import Constants from "expo-constants";
 import { useTheme } from "../src/hooks/useTheme";
 import { usePreference } from "../src/hooks/usePreference";
 import { Preference } from "../src/types/user.types";
+import { ScreenHeader } from "../src/components/common/ScreenHeader";
+import { router } from "expo-router";
 
 export default function SettingsScreen() {
   const { theme } = useTheme();
@@ -109,10 +115,18 @@ export default function SettingsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.bg }]}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={{ paddingHorizontal: 20 }}
     >
+      <ScreenHeader
+        title="Settings"
+        onAccountPress={() => router.push("/(drawer)/(tabs)/profile")}
+      />
       {/* Notifications */}
-      <SettingsSection title="Notifications" colors={colors}>
+      <SettingsSection
+        title="Notifications"
+        colors={colors}
+        style={{ marginTop: 20 }}
+      >
         <ToggleRow
           label="Booking confirmations"
           description="Get notified when a booking is confirmed"
@@ -215,12 +229,14 @@ const SettingsSection = ({
   title,
   children,
   colors,
+  style,
 }: {
   title: string;
   children: React.ReactNode;
   colors: Record<string, string>;
+  style?: StyleProp<ViewStyle>;
 }) => (
-  <View style={styles.section}>
+  <View style={[styles.section, style]}>
     <Text style={[styles.sectionTitle, { color: colors.muted }]}>{title}</Text>
     <View
       style={[
@@ -320,8 +336,7 @@ const InfoRow = ({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 25 },
-  content: { padding: 20 },
+  container: { flex: 1, paddingTop: Platform.OS !== "web" ? 25 : 0 },
 
   section: { marginBottom: 24 },
   sectionTitle: {

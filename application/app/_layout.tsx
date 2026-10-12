@@ -1,5 +1,6 @@
 // app/_layout.tsx
 import { useEffect } from "react";
+import { Alert } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "../src/store/auth.store";
 import { useBookingStore } from "../src/store/booking.store";
@@ -7,7 +8,11 @@ import "react-native-gesture-handler";
 
 export default function RootLayout() {
   const { user, isLoading, hydrate } = useAuthStore();
-  const { loadPendingBooking, savePendingBooking } = useBookingStore();
+  const {
+    loadPendingBooking,
+    savePendingBooking,
+    hydratePendingAddons,
+  } = useBookingStore();
   const router = useRouter();
   const segments = useSegments();
 
@@ -38,6 +43,7 @@ export default function RootLayout() {
 
   const checkForPendingBooking = async () => {
     try {
+      await hydratePendingAddons();
       const pending = await loadPendingBooking();
       if (!pending) return;
 
@@ -53,8 +59,11 @@ export default function RootLayout() {
 
       // Take user to confirmation (they may have already paid)
       router.replace(`/booking/confirmation?tx_ref=${pending.txRef}`);
-    } catch {
-      // If anything goes wrong, just let them start fresh
+    } catch (error) {
+      Alert.alert(
+        "Unable to restore booking",
+        error instanceof Error ? error.message : String(error),
+      );
     }
   };
 
