@@ -12,7 +12,7 @@ const getPaymentErrorMessage = (error, fallbackMessage) => {
     try {
       return JSON.stringify(message);
     } catch {
-      return fallbackMessage;
+      return error.message || fallbackMessage;
     }
   }
 
@@ -121,6 +121,7 @@ const chapaCallbackController = async (req, res) => {
     const result = await paymentService.processPaymentResult(txRef);
 
     const frontendUrl = process.env.FRONTEND_URL;
+
     const mobileReturnUrl = process.env.MOBILE_RETURN_URL;
 
     let destination;
@@ -178,13 +179,21 @@ const chapaCallbackController = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Unable to verify the payment. Please check its status.",
+      message: getPaymentErrorMessage(
+        error,
+        "Failed to process Chapa callback",
+      ),
     });
   }
 };
 
 const chapaWebhookController = async (req, res) => {
   try {
+    console.log("========================================");
+    console.log(">>> CHAPA WEBHOOK RECEIVED");
+    console.log("Time:", new Date().toISOString());
+    console.log("========================================");
+
     const rawBody = req.rawBody;
 
     if (
@@ -209,7 +218,13 @@ const chapaWebhookController = async (req, res) => {
       });
     }
 
-    const result = await paymentService.handleChapaWebhook(rawBody, signature);
+    const payload = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+
+    const result = await paymentService.handleChapaWebhook(
+      payload,
+      rawBody,
+      signature,
+    );
 
     return res.status(200).json({
       success: true,
@@ -267,8 +282,48 @@ const verifyPaymentController = async (req, res) => {
   }
 };
 
+const initializeTrainerSessionPaymentController = async (req, res) => {
+  try {
+    const trainerSessionId = Number(req.body.trainerSessionId);
+
+    if (!trainerSessionId || Number.isNaN(trainerSessionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid trainerSessionId is required",
+      });
+    }
+
+    const payment = await paymentService.initializeTrainerSessionPayment(
+      trainerSessionId,
+      req.user.id,
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Trainer session payment initialized successfully",
+      checkoutUrl: payment.chapaCheckoutUrl,
+      txRef: payment.chapaTxRef,
+      payment,
+    });
+  } catch (error) {
+    console.error(
+      "Initialize Trainer Session Payment Error:",
+      error.response?.data || error.message || error,
+    );
+
+    return res.status(400).json({
+      success: false,
+      message: getPaymentErrorMessage(
+        error,
+        "Failed to initialize trainer session payment",
+      ),
+    });
+  }
+};
+
 module.exports = {
   initializePaymentController,
+  initializeTrainerSessionPaymentController,
   chapaCallbackController,
   chapaWebhookController,
   verifyPaymentController,

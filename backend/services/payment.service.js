@@ -200,6 +200,20 @@ const recordInitializationFailure = async ({
 
     return { payment, booking: updatedBooking };
   });
+const getBookingExpiresAt = (booking) => {
+  return new Date(booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000);
+};
+
+const isBookingExpired = (booking) => {
+  return new Date() > getBookingExpiresAt(booking);
+};
+
+const isTrainerSessionExpired = (session) => {
+  if (!session.expiresAt) {
+    return false;
+  }
+
+  return new Date() > new Date(session.expiresAt);
 };
 
 const initializePayment = async (bookingId, userId) => {
@@ -254,9 +268,13 @@ const initializePayment = async (bookingId, userId) => {
     throw new Error("Invalid payment amount");
   }
 
-  const txRef = `booking-${bookingId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  if (!CHAPA_CALLBACK_URL || !CHAPA_RETURN_URL) {
+    throw new Error("Chapa callback and return URLs must be configured");
+  }
 
-  const returnUrl = new URL(process.env.CHAPA_RETURN_URL);
+  const txRef = `booking-${bookingId}-${Date.now()}`;
+
+  const returnUrl = new URL(CHAPA_RETURN_URL);
   returnUrl.searchParams.set("tx_ref", txRef);
 
   let chapaResponse;
@@ -383,10 +401,16 @@ const verifyChapaTransaction = async (txRef) => {
       },
       timeout: 30000,
     },
-  );
+    include: {
+      member: true,
+      trainer: true,
+      payment: true,
+    },
+  });
 
-  return response.data;
-};
+  if (!session) {
+    throw new Error("Trainer session not found");
+  }
 
 /* -------------------------------------------------------------------------- */
 /* Webhook signature                                                          */
@@ -406,9 +430,7 @@ const isValidWebhookSignature = (rawBody, signatureHeader) => {
   const receivedBuffer = Buffer.from(String(signatureHeader), "utf8");
 
   if (expectedBuffer.length !== receivedBuffer.length) return false;
-
-  return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
-};
+}
 
 /* -------------------------------------------------------------------------- */
 /* Entitlement activation                                                     */
@@ -505,7 +527,9 @@ const activateProviderPackagePurchases = async (tx, order, paidAt) => {
         purchaseId: purchase.id,
         bookingId: order.bookingId,
       },
-    });
+      timeout: 30000,
+    },
+  );
 
     for (const session of sessions) {
       if (session.status === "SCHEDULED") continue;
@@ -773,6 +797,7 @@ const canHonorLatePayment = async (tx, booking) => {
         },
         select: { id: true },
       });
+    }
 
       if (conflictingSession) return false;
     }
@@ -1087,7 +1112,8 @@ const handleChapaWebhook = async (rawBody, signatureHeader) => {
     throw new Error("Invalid webhook signature");
   }
 
-  let event;
+  return processPaymentResult(txRef);
+};
 
   try {
     event = JSON.parse(rawBody.toString("utf8"));
@@ -1193,9 +1219,12 @@ const checkPaymentStatus = async (txRef, userId) => {
 
 module.exports = {
   initializePayment,
+  initializeTrainerSessionPayment,
   verifyChapaTransaction,
+  refundChapaTransaction,
   checkPaymentStatus,
   processPaymentResult,
+  processTrainerSessionPayment,
   handleChapaWebhook,
   activateMemberPackage,
   confirmFreeCheckout,

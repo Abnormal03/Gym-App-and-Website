@@ -36,10 +36,10 @@ model User {
 model UserPreference {
   id                  Int     @id @default(autoincrement())
   userId              Int     @unique
-  user                User    @relation(fields: [userId], references: [id])
   bookingConfirm      Boolean @default(true)
   sessionReminders    Boolean @default(true)
   offersAndPromotions Boolean @default(false)
+  user                User    @relation(fields: [userId], references: [id])
 }
 
 model GymAdmin {
@@ -141,7 +141,7 @@ model Booking {
 }
 
 model Payment {
-  id               Int           @id @default(autoincrement())
+  id               Int             @id @default(autoincrement())
   userId           Int
   bookingId        Int           @unique
   amount           Float // for a V2 order: equals Order.totalAmount

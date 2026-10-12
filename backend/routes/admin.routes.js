@@ -6,6 +6,11 @@ const {
   getUserById,
   deleteUser,
   getAdminProfile,
+
+  getPendingTrainers,
+  getTrainerForVerification,
+  verifyTrainer,
+  rejectTrainer,
 } = require("../controllers/admin.controller.js");
 
 const { protect, requireRole } = require("../middleware/auth.middleware.js");
@@ -45,5 +50,12 @@ router.get('/gym-packages', protect, adminOnly, pkg.list);         // ?gymId=&is
 router.get('/gym-packages/:id', protect, adminOnly, pkg.get);
 router.patch('/gym-packages/:id', protect, adminOnly, pkg.update);
 router.delete('/gym-packages/:id', protect, adminOnly, pkg.deactivate);   // soft delete
+router.get("/trainers/pending", protect, adminOnly, getPendingTrainers);
+
+router.get("/trainers/:id", protect, adminOnly, getTrainerForVerification);
+
+router.patch("/trainers/:id/verify", protect, adminOnly, verifyTrainer);
+
+router.patch("/trainers/:id/reject", protect, adminOnly, rejectTrainer);
 
 module.exports = router;
