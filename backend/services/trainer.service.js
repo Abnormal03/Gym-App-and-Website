@@ -558,7 +558,7 @@ const cancelTrainerSession = async (sessionId, memberId) => {
 };
 
 const getMemberTrainerSessions = async (memberId) => {
-  return prisma.trainerSession.findMany({
+  return prisma.trainingSession.findMany({
     where: {
       memberId: Number(memberId),
     },
