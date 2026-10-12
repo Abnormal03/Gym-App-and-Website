@@ -5,6 +5,7 @@ const http = require("http");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
+
 const { socketAuth } = require("./middleware/socket.middleware.js");
 const prisma = require("./config/prisma.js");
 
@@ -15,9 +16,11 @@ const gymRoutes = require("./routes/gym.routes.js");
 const packageRoutes = require("./routes/packages.routes.js");
 const bookingRoutes = require("./routes/booking.routes.js");
 const orderRoutes = require("./routes/order.routes");
-const paymentRoutes = require("./routes/payment.routes");
+const paymentRoutes = require("./routes/payment.routes.js");
 const providerPortalRoutes = require("./routes/providerPortal.routes");
-const { chapaWebhookController } = require("./controllers/payment.controller.js");
+const {
+  chapaWebhookController,
+} = require("./controllers/payment.controller.js");
 const { errorHandler } = require("./utils/responses");
 const checkoutRoutes = require("./routes/checkout.routes");
 const sessionRoutes = require("./routes/session.routes");
@@ -27,28 +30,40 @@ const providerRoutes = require("./routes/provider.routes.js");
 const checkInRoutes = require("./routes/checkIn.routes.js");
 const payoutRoutes = require("./routes/payout.routes.js");
 const chatRoutes = require("./routes/chat.routes.js");
-const { ensureThreadMembership } = require("./services/chatThread.service");
 const trainerRoutes = require("./routes/trainer.routes.js");
 const messageRoutes = require("./routes/message.routes.js");
 
+const { ensureThreadMembership } = require("./services/chatThread.service");
 const {
   expirePendingTrainerSessions,
 } = require("./services/trainer.service.js");
-
 const { sendMessage } = require("./services/message.service.js");
+const { expireStale } = require("./services/bookingHelpers.service.js");
 
 const app = express();
+
+// Create ONE HTTP server.
 const httpServer = http.createServer(app);
+
+// Create ONE Socket.IO server.
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: process.env.CLIENT_URL || "*",
     methods: ["GET", "POST"],
+    credentials: Boolean(process.env.CLIENT_URL),
   },
 });
+
+// Authenticate the existing conversation/message socket events.
+io.use(socketAuth);
+
+// The separate namespace is used for V2 chat threads.
 const chatIo = io.of("/chat");
 app.locals.io = chatIo;
 
-io.use(socketAuth);
+// =====================================================
+// EXISTING CONVERSATION SOCKET EVENTS
+// =====================================================
 
 io.on("connection", (socket) => {
   console.log(
@@ -63,21 +78,17 @@ io.on("connection", (socket) => {
         socket.emit("conversation_error", {
           message: "Invalid conversation ID",
         });
-
         return;
       }
 
       const conversation = await prisma.conversation.findUnique({
-        where: {
-          id,
-        },
+        where: { id },
       });
 
       if (!conversation) {
         socket.emit("conversation_error", {
           message: "Conversation not found",
         });
-
         return;
       }
 
@@ -95,7 +106,6 @@ io.on("connection", (socket) => {
         socket.emit("conversation_error", {
           message: "You are not allowed to access this conversation",
         });
-
         return;
       }
 
@@ -121,15 +131,13 @@ io.on("connection", (socket) => {
 
   socket.on("send_message", async (data) => {
     try {
-      const { conversationId, content } = data;
-
+      const { conversationId, content } = data || {};
       const id = Number(conversationId);
 
       if (!Number.isInteger(id) || id <= 0) {
         socket.emit("message_error", {
           message: "Invalid conversation ID",
         });
-
         return;
       }
 
@@ -137,21 +145,17 @@ io.on("connection", (socket) => {
         socket.emit("message_error", {
           message: "Message content is required",
         });
-
         return;
       }
 
       const conversation = await prisma.conversation.findUnique({
-        where: {
-          id,
-        },
+        where: { id },
       });
 
       if (!conversation) {
         socket.emit("message_error", {
           message: "Conversation not found",
         });
-
         return;
       }
 
@@ -169,7 +173,6 @@ io.on("connection", (socket) => {
         socket.emit("message_error", {
           message: "You are not allowed to send messages in this conversation",
         });
-
         return;
       }
 
@@ -183,9 +186,7 @@ io.on("connection", (socket) => {
         content: content.trim(),
       });
 
-      const room = `conversation:${id}`;
-
-      io.to(room).emit("new_message", {
+      io.to(`conversation:${id}`).emit("new_message", {
         message,
       });
     } catch (error) {
@@ -272,13 +273,17 @@ io.on("connection", (socket) => {
   });
 });
 
+// =====================================================
+// HTTP MIDDLEWARE AND ROUTES
+// =====================================================
+
 app.use(cors());
 
+// Keep the Chapa webhook BEFORE express.json().
+// The webhook may need the raw request body for verification.
 app.post(
   "/api/payments/webhook",
-  express.raw({
-    type: "application/json",
-  }),
+  express.raw({ type: "application/json" }),
   (req, res, next) => {
     req.rawBody = req.body;
     next();
@@ -306,12 +311,10 @@ app.use("/api/providers", providerRoutes);
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/chatbot", chatbotRoutes);
-// ========================================
-// HEALTH CHECK
-// ========================================
 app.use("/api/trainers", trainerRoutes);
 app.use("/api/messages", messageRoutes);
 
+// Health check
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
@@ -319,18 +322,25 @@ app.get("/", (req, res) => {
   });
 });
 
-// ========================================
-// ERROR HANDLER
-// ========================================
+// Error handler must remain after the routes.
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
+
+// =====================================================
+// V2 CHAT THREAD AUTHENTICATION
+// =====================================================
 
 chatIo.use((socket, next) => {
   try {
     const tokenFromAuth = socket.handshake.auth?.token;
     const authHeader = socket.handshake.headers.authorization;
-    const token = tokenFromAuth || (authHeader && authHeader.startsWith("Bearer ") ? authHeader.replace("Bearer ", "") : null);
+
+    const token =
+      tokenFromAuth ||
+      (authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.replace("Bearer ", "")
+        : null);
 
     if (!token) {
       return next(new Error("Missing chat token"));
@@ -350,20 +360,37 @@ chatIo.use((socket, next) => {
 
     socket.data.auth = auth;
     socket.data.userId = auth.role === "MEMBER" ? Number(auth.userId) : null;
-    socket.data.providerId = ["TRAINER", "PHYSIOTHERAPIST", "NUTRITION_CONSULTANT"].includes(auth.role) ? Number(auth.providerId) : null;
+
+    socket.data.providerId = [
+      "TRAINER",
+      "PHYSIOTHERAPIST",
+      "NUTRITION_CONSULTANT",
+    ].includes(auth.role)
+      ? Number(auth.providerId)
+      : null;
+
     next();
   } catch (error) {
     next(new Error("Invalid or expired chat token"));
   }
 });
 
+// =====================================================
+// V2 CHAT THREAD EVENTS
+// =====================================================
+
 chatIo.on("connection", (socket) => {
   socket.on("thread:join", async (data) => {
     const threadId = data?.threadId;
+
     try {
       const thread = await ensureThreadMembership(socket.data.auth, threadId);
+
       socket.join(`chat:${thread.id}`);
-      socket.emit("thread:joined", { threadId: thread.id });
+
+      socket.emit("thread:joined", {
+        threadId: thread.id,
+      });
     } catch (error) {
       socket.emit("chat:error", {
         code: error.code || "INTERNAL",
@@ -377,13 +404,41 @@ chatIo.on("connection", (socket) => {
   });
 });
 
-httpServer.listen(PORT, "0.0.0.0", () => {
-  const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
-  setInterval(async () => {
-    try {
-      await expirePendingTrainerSessions();
-    } catch (error) {
-      console.error("Trainer session expiration error:", error);
+// =====================================================
+// V2 PENDING-ORDER EXPIRATION
+// =====================================================
+
+const ORDER_EXPIRATION_INTERVAL = 60 * 1000;
+
+async function expirePendingOrders() {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      return expireStale(tx);
+    });
+
+    if (result?.expiredCount > 0) {
+      console.log(`V2 expired pending bookings: ${result.expiredCount}`);
     }
-  }, TRAINER_SESSION_EXPIRATION_INTERVAL);
+  } catch (error) {
+    console.error("V2 order expiration error:", error);
+  }
+}
+
+// Start the HTTP server only once.
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+
+ // Run once at startup, then every minute.
+ void expirePendingOrders();
+
+ setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
+
+ const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
+ setInterval(async () => {
+   try {
+     await expirePendingTrainerSessions();
+   } catch (error) {
+     console.error("Trainer session expiration error:", error);
+   }
+ }, TRAINER_SESSION_EXPIRATION_INTERVAL);
 });

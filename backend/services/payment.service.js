@@ -1,22 +1,17 @@
 const axios = require("axios");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
-
 const {
   bookingTransitionsFromPayment,
 } = require("../config/bookingTransitions");
-
 const {
   getOrderExpiryMinutes,
   expireStale,
   getUsedCapacity,
 } = require("./bookingHelpers.service");
-
 const { getNumberSetting } = require("./platformSetting.service");
 const { ensureChatThread } = require("./chatThread.service");
 const { creditConsultationEarning } = require("./earning.service");
-
-// Use the project's Addis Ababa-aware date utility.
 const { addDays } = require("../utils/time");
 
 const CHAPA_BASE_URL = "https://api.chapa.co/v1";
@@ -40,7 +35,9 @@ const getPaymentErrorMessage = (error) => {
   const responseData = error.response?.data;
   const message = responseData?.message ?? responseData?.error ?? responseData;
 
-  if (typeof message === "string" && message.trim()) return message;
+  if (typeof message === "string" && message.trim()) {
+    return message;
+  }
 
   if (message && typeof message === "object") {
     try {
@@ -61,11 +58,7 @@ const getChapaStatus = (verification) =>
 const getPaymentOutcome = (status) => {
   if (status === "success") return "success";
 
-  if (
-    status === "failed" ||
-    status === "cancelled" ||
-    status === "failed/cancelled"
-  ) {
+  if (["failed", "cancelled", "failed/cancelled"].includes(status)) {
     return "failed";
   }
 
@@ -138,7 +131,7 @@ const validateVerifiedTransaction = (verification, payment, txRef) => {
 };
 
 /* -------------------------------------------------------------------------- */
-/* Chapa initialization                                                       */
+/* Record payment initialization failure                                      */
 /* -------------------------------------------------------------------------- */
 
 const recordInitializationFailure = async ({
@@ -152,14 +145,19 @@ const recordInitializationFailure = async ({
       where: { id: bookingId },
     });
 
-    if (!booking) throw new Error("Booking not found");
+    if (!booking) {
+      throw new Error("Booking not found");
+    }
 
     const existingPayment = await tx.payment.findUnique({
       where: { bookingId },
     });
 
     if (existingPayment?.status === "success") {
-      return { payment: existingPayment, booking };
+      return {
+        payment: existingPayment,
+        booking,
+      };
     }
 
     const payment = await tx.payment.upsert({
@@ -198,9 +196,19 @@ const recordInitializationFailure = async ({
       });
     }
 
-    return { payment, booking: updatedBooking };
+    return {
+      payment,
+      booking: updatedBooking,
+    };
   });
 };
+<<<<<<< HEAD
+
+/* -------------------------------------------------------------------------- */
+/* Chapa payment initialization                                               */
+/* -------------------------------------------------------------------------- */
+=======
+>>>>>>> origin/backend
 
 const initializePayment = async (bookingId, userId) => {
   if (!process.env.CHAPA_SECRET_KEY) {
@@ -229,8 +237,13 @@ const initializePayment = async (bookingId, userId) => {
     },
   });
 
-  if (!booking) throw new Error("Booking not found");
-  if (booking.userId !== userId) throw new Error("Access denied");
+  if (!booking) {
+    throw new Error("Booking not found");
+  }
+
+  if (booking.userId !== userId) {
+    throw new Error("Access denied");
+  }
 
   if (!["pending", "payment_failed"].includes(booking.status)) {
     throw new Error(`Cannot pay for a booking with status ${booking.status}`);
@@ -240,7 +253,9 @@ const initializePayment = async (bookingId, userId) => {
     throw new Error("Booking has neither an order nor a gym package");
   }
 
-  if (!booking.user) throw new Error("Booking user not found");
+  if (!booking.user) {
+    throw new Error("Booking user not found");
+  }
 
   if (booking.payment?.status === "success") {
     throw new Error("This booking has already been paid");
@@ -254,7 +269,11 @@ const initializePayment = async (bookingId, userId) => {
     throw new Error("Invalid payment amount");
   }
 
+<<<<<<< HEAD
+  const txRef = `booking-${bookingId}-${Date.now()}`;
+=======
   const txRef = `booking-${bookingId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+>>>>>>> origin/backend
 
   const returnUrl = new URL(process.env.CHAPA_RETURN_URL);
   returnUrl.searchParams.set("tx_ref", txRef);
@@ -324,7 +343,9 @@ const initializePayment = async (bookingId, userId) => {
       where: { id: bookingId },
     });
 
-    if (!currentBooking) throw new Error("Booking not found");
+    if (!currentBooking) {
+      throw new Error("Booking not found");
+    }
 
     if (!["pending", "payment_failed"].includes(currentBooking.status)) {
       throw new Error(
@@ -397,15 +418,25 @@ const isValidWebhookSignature = (rawBody, signatureHeader) => {
     return false;
   }
 
+  const body = Buffer.isBuffer(rawBody)
+    ? rawBody
+    : Buffer.from(String(rawBody), "utf8");
+
   const expectedHash = crypto
     .createHmac("sha256", process.env.CHAPA_WEBHOOK_SECRET)
-    .update(rawBody)
+    .update(body)
     .digest("hex");
 
   const expectedBuffer = Buffer.from(expectedHash, "utf8");
   const receivedBuffer = Buffer.from(String(signatureHeader), "utf8");
 
+<<<<<<< HEAD
+  if (expectedBuffer.length !== receivedBuffer.length) {
+    return false;
+  }
+=======
   if (expectedBuffer.length !== receivedBuffer.length) return false;
+>>>>>>> origin/backend
 
   return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 };
@@ -418,14 +449,17 @@ const activateMemberPackage = async (tx, order, paidAt) => {
   if (!order) return;
 
   const memberPackage = await tx.memberPackage.findUnique({
-    where: { purchaseBookingId: order.bookingId },
-    include: { package: true },
+    where: {
+      purchaseBookingId: order.bookingId,
+    },
+    include: {
+      package: true,
+    },
   });
 
-  // A covered booking uses an existing package; it must not create another.
-  if (!memberPackage) return;
-
-  if (memberPackage.status === "ACTIVE") return;
+  if (!memberPackage || memberPackage.status === "ACTIVE") {
+    return;
+  }
 
   if (!["PENDING", "EXPIRED"].includes(memberPackage.status)) {
     throw new Error(
@@ -434,7 +468,9 @@ const activateMemberPackage = async (tx, order, paidAt) => {
   }
 
   await tx.memberPackage.update({
-    where: { id: memberPackage.id },
+    where: {
+      id: memberPackage.id,
+    },
     data: {
       status: "ACTIVE",
       startsAt: paidAt,
@@ -492,7 +528,9 @@ const activateProviderPackagePurchases = async (tx, order, paidAt) => {
       }
 
       purchase = await tx.providerPackagePurchase.update({
-        where: { id: purchase.id },
+        where: {
+          id: purchase.id,
+        },
         data: {
           status: "ACTIVE",
           expiresAt: addDays(paidAt, providerPackage.validityDays),
@@ -517,12 +555,15 @@ const activateProviderPackagePurchases = async (tx, order, paidAt) => {
       }
 
       const startsAt = session.startsAt;
+
       const endsAt =
-        session.endsAt ??
+        session.endsAt ||
         new Date(startsAt.getTime() + sessionMinutes * 60 * 1000);
 
       await tx.trainingSession.update({
-        where: { id: session.id },
+        where: {
+          id: session.id,
+        },
         data: {
           status: "SCHEDULED",
           startsAt,
@@ -547,22 +588,30 @@ const selectConsultant = async (tx, requestedConsultantId) => {
       isActive: true,
       ...(requestedConsultantId ? { id: requestedConsultantId } : {}),
     },
-    select: { id: true },
+    select: {
+      id: true,
+    },
   });
 
-  if (consultants.length === 0) {
+  if (!consultants.length) {
     throw new Error("No active nutrition consultants available");
   }
 
-  if (requestedConsultantId) return consultants[0];
+  if (requestedConsultantId) {
+    return consultants[0];
+  }
 
   const counts = await tx.consultationAccess.groupBy({
     by: ["consultantId"],
     where: {
-      consultantId: { in: consultants.map((item) => item.id) },
+      consultantId: {
+        in: consultants.map((item) => item.id),
+      },
       status: "ACTIVE",
     },
-    _count: { _all: true },
+    _count: {
+      _all: true,
+    },
   });
 
   const accessCounts = new Map(
@@ -588,10 +637,12 @@ const activateConsultations = async (tx, order, paidAt) => {
       orderId: order.id,
       type: "CONSULTATION",
     },
-    include: { consultation: true },
+    include: {
+      consultation: true,
+    },
   });
 
-  if (items.length === 0) return;
+  if (!items.length) return;
 
   const chatDays = await getConsultationChatDays();
 
@@ -606,7 +657,9 @@ const activateConsultations = async (tx, order, paidAt) => {
       }
 
       await ensureChatThread(tx, access.userId, access.consultantId);
+
       await creditConsultationEarning(tx, item.id, access.consultantId);
+
       continue;
     }
 
@@ -636,17 +689,24 @@ const activateConsultations = async (tx, order, paidAt) => {
       });
     } else {
       access = await tx.consultationAccess.update({
-        where: { id: access.id },
+        where: {
+          id: access.id,
+        },
         data,
       });
     }
 
     await tx.orderItem.update({
-      where: { id: item.id },
-      data: { providerId: consultant.id },
+      where: {
+        id: item.id,
+      },
+      data: {
+        providerId: consultant.id,
+      },
     });
 
     await ensureChatThread(tx, access.userId, consultant.id);
+
     await creditConsultationEarning(tx, item.id, consultant.id);
   }
 };
@@ -670,11 +730,12 @@ const lockProvider = async (tx, providerId) => {
 };
 
 const canHonorLatePayment = async (tx, booking) => {
-  // Serialize capacity checks for bookings at this gym.
   await lockGym(tx, booking.gymId);
 
   const gym = await tx.gym.findUnique({
-    where: { id: booking.gymId },
+    where: {
+      id: booking.gymId,
+    },
     select: {
       id: true,
       capacity: true,
@@ -716,7 +777,6 @@ const canHonorLatePayment = async (tx, booking) => {
 
     const providerId = item.providerId ?? providerPackage.providerId;
 
-    // A package must still belong to the provider being booked.
     if (providerPackage.providerId !== providerId) {
       return false;
     }
@@ -724,7 +784,9 @@ const canHonorLatePayment = async (tx, booking) => {
     await lockProvider(tx, providerId);
 
     const provider = await tx.provider.findUnique({
-      where: { id: providerId },
+      where: {
+        id: providerId,
+      },
       select: {
         id: true,
         gymId: true,
@@ -742,11 +804,6 @@ const canHonorLatePayment = async (tx, booking) => {
       return false;
     }
 
-    /*
-     * Check the actual training-session interval. Checking the whole gym
-     * booking interval could incorrectly reject a valid trainer appointment.
-     * A cancelled held session keeps its original startsAt and endsAt.
-     */
     const sessions = await tx.trainingSession.findMany({
       where: {
         bookingId: booking.id,
@@ -758,20 +815,28 @@ const canHonorLatePayment = async (tx, booking) => {
       },
     });
 
-    // If this order sold a provider package but its reserved session is gone,
-    // don't silently activate the purchase without a valid appointment.
-    if (sessions.length === 0) return false;
+    if (!sessions.length) return false;
 
     for (const session of sessions) {
       const conflictingSession = await tx.trainingSession.findFirst({
         where: {
           providerId,
-          bookingId: { not: booking.id },
-          status: { in: ["HELD", "SCHEDULED"] },
-          startsAt: { lt: session.endsAt },
-          endsAt: { gt: session.startsAt },
+          bookingId: {
+            not: booking.id,
+          },
+          status: {
+            in: ["HELD", "SCHEDULED"],
+          },
+          startsAt: {
+            lt: session.endsAt,
+          },
+          endsAt: {
+            gt: session.startsAt,
+          },
         },
-        select: { id: true },
+        select: {
+          id: true,
+        },
       });
 
       if (conflictingSession) return false;
@@ -792,19 +857,25 @@ const confirmOrderInTransaction = async (tx, booking, order, paidAt) => {
     const nextStatus = bookingTransitionsFromPayment[booking.status]?.success;
 
     if (nextStatus) {
-      const data = { status: nextStatus };
+      const data = {
+        status: nextStatus,
+      };
 
       if (!booking.qrCode) {
         data.qrCode = crypto.randomUUID();
       }
 
       updatedBooking = await tx.booking.update({
-        where: { id: booking.id },
+        where: {
+          id: booking.id,
+        },
         data,
       });
     } else if (["expired", "cancelled"].includes(booking.status)) {
       updatedBooking = await tx.booking.update({
-        where: { id: booking.id },
+        where: {
+          id: booking.id,
+        },
         data: {
           status: "confirmed",
           ...(booking.qrCode ? {} : { qrCode: crypto.randomUUID() }),
@@ -826,10 +897,6 @@ const confirmOrderInTransaction = async (tx, booking, order, paidAt) => {
   return updatedBooking;
 };
 
-/**
- * Confirm a B3 order whose total is zero.
- * This function does not create a Payment record or call Chapa.
- */
 const confirmFreeCheckout = async (bookingId, userId) => {
   bookingId = validateId(bookingId, "booking ID");
   userId = validateId(userId, "user ID");
@@ -837,14 +904,21 @@ const confirmFreeCheckout = async (bookingId, userId) => {
   return prisma.$transaction(
     async (tx) => {
       const booking = await tx.booking.findUnique({
-        where: { id: bookingId },
+        where: {
+          id: bookingId,
+        },
         include: {
           order: true,
         },
       });
 
-      if (!booking) throw new Error("Booking not found");
-      if (booking.userId !== userId) throw new Error("Access denied");
+      if (!booking) {
+        throw new Error("Booking not found");
+      }
+
+      if (booking.userId !== userId) {
+        throw new Error("Access denied");
+      }
 
       if (!booking.order) {
         throw new Error("Order not found for free checkout");
@@ -854,12 +928,11 @@ const confirmFreeCheckout = async (bookingId, userId) => {
         throw new Error("Cannot confirm a non-zero order as free");
       }
 
-      if (["cancelled", "expired"].includes(booking.status)) {
-        const available = await canHonorLatePayment(tx, booking);
-
-        if (!available) {
-          throw new Error("The booking is no longer available");
-        }
+      if (
+        ["cancelled", "expired"].includes(booking.status) &&
+        !(await canHonorLatePayment(tx, booking))
+      ) {
+        throw new Error("The booking is no longer available");
       }
 
       const confirmedBooking = await confirmOrderInTransaction(
@@ -885,7 +958,7 @@ const confirmFreeCheckout = async (bookingId, userId) => {
 };
 
 /* -------------------------------------------------------------------------- */
-/* Process verified payment results                                          */
+/* Process verified payment results                                           */
 /* -------------------------------------------------------------------------- */
 
 const processPaymentResult = async (txRef) => {
@@ -894,15 +967,17 @@ const processPaymentResult = async (txRef) => {
   }
 
   const payment = await prisma.payment.findUnique({
-    where: { chapaTxRef: txRef },
+    where: {
+      chapaTxRef: txRef,
+    },
   });
 
   if (!payment) {
     throw new Error(`Payment not found for tx_ref: ${txRef}`);
   }
 
-  // Always verify with Chapa; never trust a webhook payload alone.
   const verification = await verifyChapaTransaction(txRef);
+
   const chapaStatus = getChapaStatus(verification);
   const outcome = getPaymentOutcome(chapaStatus);
 
@@ -912,8 +987,12 @@ const processPaymentResult = async (txRef) => {
 
   if (outcome === "pending") {
     const currentPayment = await prisma.payment.findUnique({
-      where: { id: payment.id },
-      include: { booking: true },
+      where: {
+        id: payment.id,
+      },
+      include: {
+        booking: true,
+      },
     });
 
     return {
@@ -926,28 +1005,31 @@ const processPaymentResult = async (txRef) => {
 
   return prisma.$transaction(
     async (tx) => {
-      /*
-       * Lock the payment row so simultaneous webhook/status requests cannot
-       * both activate entitlements or credit earnings.
-       */
       await tx.$queryRawUnsafe(
         'SELECT "id" FROM "Payment" WHERE "id" = $1 FOR UPDATE',
         payment.id,
       );
 
       const currentPayment = await tx.payment.findUnique({
-        where: { id: payment.id },
+        where: {
+          id: payment.id,
+        },
       });
 
-      if (!currentPayment) throw new Error("Payment not found");
+      if (!currentPayment) {
+        throw new Error("Payment not found");
+      }
 
       const initialBooking = await tx.booking.findUnique({
-        where: { id: currentPayment.bookingId },
+        where: {
+          id: currentPayment.bookingId,
+        },
       });
 
-      if (!initialBooking) throw new Error("Booking not found");
+      if (!initialBooking) {
+        throw new Error("Booking not found");
+      }
 
-      // A successfully processed payment is final and idempotent.
       if (currentPayment.status === "success") {
         return {
           payment: currentPayment,
@@ -959,8 +1041,12 @@ const processPaymentResult = async (txRef) => {
 
       if (outcome === "failed") {
         await tx.payment.update({
-          where: { id: currentPayment.id },
-          data: { status: "failed" },
+          where: {
+            id: currentPayment.id,
+          },
+          data: {
+            status: "failed",
+          },
         });
 
         const nextStatus =
@@ -975,13 +1061,19 @@ const processPaymentResult = async (txRef) => {
           )
         ) {
           updatedBooking = await tx.booking.update({
-            where: { id: initialBooking.id },
-            data: { status: nextStatus },
+            where: {
+              id: initialBooking.id,
+            },
+            data: {
+              status: nextStatus,
+            },
           });
         }
 
         const updatedPayment = await tx.payment.findUnique({
-          where: { id: currentPayment.id },
+          where: {
+            id: currentPayment.id,
+          },
         });
 
         return {
@@ -992,16 +1084,14 @@ const processPaymentResult = async (txRef) => {
         };
       }
 
-      /*
-       * Expire stale bookings and release held sessions before evaluating
-       * whether a late successful payment can still be honored.
-       */
       await expireStale(tx, {
         gymId: initialBooking.gymId,
       });
 
       const booking = await tx.booking.findUnique({
-        where: { id: currentPayment.bookingId },
+        where: {
+          id: currentPayment.bookingId,
+        },
         include: {
           order: {
             include: {
@@ -1011,46 +1101,59 @@ const processPaymentResult = async (txRef) => {
         },
       });
 
-      if (!booking) throw new Error("Booking not found");
+      if (!booking) {
+        throw new Error("Booking not found");
+      }
 
-      if (["expired", "cancelled"].includes(booking.status)) {
-        const available = await canHonorLatePayment(tx, booking);
+      if (
+        ["expired", "cancelled"].includes(booking.status) &&
+        !(await canHonorLatePayment(tx, booking))
+      ) {
+        await tx.payment.update({
+          where: {
+            id: currentPayment.id,
+          },
+          data: {
+            status: "success",
+          },
+        });
 
-        if (!available) {
-          await tx.payment.update({
-            where: { id: currentPayment.id },
-            data: { status: "success" },
+        if (booking.order) {
+          await tx.order.update({
+            where: {
+              id: booking.order.id,
+            },
+            data: {
+              needsManualRefund: true,
+              refundNote:
+                `Chapa reported successful payment for a ${booking.status} booking, ` +
+                "but the booking could not be honored. Review and refund manually.",
+            },
           });
-
-          if (booking.order) {
-            await tx.order.update({
-              where: { id: booking.order.id },
-              data: {
-                needsManualRefund: true,
-                refundNote:
-                  `Chapa reported successful payment for a ${booking.status} booking, ` +
-                  "but the booking could not be honored. Review and refund manually.",
-              },
-            });
-          }
-
-          const updatedPayment = await tx.payment.findUnique({
-            where: { id: currentPayment.id },
-          });
-
-          return {
-            payment: updatedPayment,
-            booking,
-            chapaStatus,
-            outcome: "success",
-            needsManualRefund: true,
-          };
         }
+
+        const updatedPayment = await tx.payment.findUnique({
+          where: {
+            id: currentPayment.id,
+          },
+        });
+
+        return {
+          payment: updatedPayment,
+          booking,
+          chapaStatus,
+          outcome: "success",
+          needsManualRefund: true,
+        };
       }
 
       await tx.payment.update({
-        where: { id: currentPayment.id },
-        data: { status: "success" },
+        where: {
+          id: currentPayment.id,
+        },
+        data: {
+          status: "success",
+        },
       });
 
       const updatedBooking = await confirmOrderInTransaction(
@@ -1061,7 +1164,9 @@ const processPaymentResult = async (txRef) => {
       );
 
       const updatedPayment = await tx.payment.findUnique({
-        where: { id: currentPayment.id },
+        where: {
+          id: currentPayment.id,
+        },
       });
 
       return {
@@ -1079,23 +1184,42 @@ const processPaymentResult = async (txRef) => {
 };
 
 /* -------------------------------------------------------------------------- */
-/* Webhook                                                                     */
+/* Chapa webhook                                                              */
+/* Supports controller signature: (parsedPayload, rawBody, signature).        */
 /* -------------------------------------------------------------------------- */
 
-const handleChapaWebhook = async (rawBody, signatureHeader) => {
+const handleChapaWebhook = async (
+  payloadOrRawBody,
+  rawBodyOrSignature,
+  maybeSignature,
+) => {
+  const rawBody =
+    maybeSignature === undefined ? payloadOrRawBody : rawBodyOrSignature;
+
+  const signatureHeader =
+    maybeSignature === undefined ? rawBodyOrSignature : maybeSignature;
+
   if (!isValidWebhookSignature(rawBody, signatureHeader)) {
     throw new Error("Invalid webhook signature");
   }
 
+<<<<<<< HEAD
+  let event = payloadOrRawBody;
+=======
   let event;
+>>>>>>> origin/backend
 
-  try {
-    event = JSON.parse(rawBody.toString("utf8"));
-  } catch {
-    throw new Error("Invalid webhook JSON");
+  if (!event || typeof event !== "object" || Buffer.isBuffer(event)) {
+    try {
+      event = JSON.parse(
+        Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody),
+      );
+    } catch {
+      throw new Error("Invalid webhook JSON");
+    }
   }
 
-  const txRef = event?.tx_ref || event?.trx_ref;
+  const txRef = event?.tx_ref || event?.trx_ref || event?.data?.tx_ref;
 
   if (typeof txRef !== "string" || !txRef.trim()) {
     throw new Error("Webhook payload missing tx_ref");
@@ -1116,17 +1240,22 @@ const checkPaymentStatus = async (txRef, userId) => {
   userId = validateId(userId, "user ID");
 
   let payment = await prisma.payment.findUnique({
-    where: { chapaTxRef: txRef },
-    include: { booking: true },
+    where: {
+      chapaTxRef: txRef,
+    },
+    include: {
+      booking: true,
+    },
   });
 
-  if (!payment) throw new Error("Payment not found");
-  if (payment.userId !== userId) throw new Error("Access denied");
+  if (!payment) {
+    throw new Error("Payment not found");
+  }
 
-  /*
-   * FIX: getOrderExpiryMinutes() is asynchronous. Await it before using the
-   * result in date arithmetic; multiplying a Promise produces NaN.
-   */
+  if (payment.userId !== userId) {
+    throw new Error("Access denied");
+  }
+
   if (payment.status === "pending" && payment.booking?.status === "pending") {
     const expiryMinutes = await getOrderExpiryMinutes();
 
@@ -1144,7 +1273,9 @@ const checkPaymentStatus = async (txRef, userId) => {
           });
 
           const freshBooking = await tx.booking.findUnique({
-            where: { id: payment.bookingId },
+            where: {
+              id: payment.bookingId,
+            },
           });
 
           if (freshBooking?.status === "expired") {
@@ -1168,17 +1299,24 @@ const checkPaymentStatus = async (txRef, userId) => {
   }
 
   payment = await prisma.payment.findUnique({
-    where: { chapaTxRef: txRef },
-    include: { booking: true },
+    where: {
+      chapaTxRef: txRef,
+    },
+    include: {
+      booking: true,
+    },
   });
 
-  if (!payment) throw new Error("Payment not found");
+  if (!payment) {
+    throw new Error("Payment not found");
+  }
 
-  // This also verifies the transaction directly with Chapa.
   const result = await processPaymentResult(txRef);
 
   const freshBooking = await prisma.booking.findUnique({
-    where: { id: payment.bookingId },
+    where: {
+      id: payment.bookingId,
+    },
   });
 
   return {
@@ -1190,6 +1328,104 @@ const checkPaymentStatus = async (txRef, userId) => {
     ...(result.needsManualRefund ? { needsManualRefund: true } : {}),
   };
 };
+
+/* -------------------------------------------------------------------------- */
+/* V2 compatibility methods                                                   */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * In V2, a TrainingSession is paid through its Order/provider-package
+ * purchase. The supplied schema has no independent trainer-session payment
+ * record, so this method fails clearly rather than using nonexistent fields.
+ */
+
+const initializeTrainerSessionPayment = async (trainerSessionId, userId) => {
+  validateId(trainerSessionId, "trainer session ID");
+  validateId(userId, "user ID");
+
+  const session = await prisma.trainingSession.findUnique({
+    where: {
+      id: trainerSessionId,
+    },
+    include: {
+      booking: {
+        include: {
+          order: true,
+        },
+      },
+      purchase: true,
+    },
+  });
+
+  if (!session) {
+    throw new Error("Trainer session not found");
+  }
+
+  if (session.userId !== userId) {
+    throw new Error("Access denied");
+  }
+
+  throw new Error(
+    "Individual trainer-session payments are not supported in V2. " +
+      "Pay for the associated provider-package order instead.",
+  );
+};
+
+const processTrainerSessionPayment = async (txRef) => {
+  if (typeof txRef !== "string" || !txRef.trim()) {
+    throw new Error("Transaction reference is required");
+  }
+
+  return processPaymentResult(txRef);
+};
+
+/* -------------------------------------------------------------------------- */
+/* Chapa refund support                                                       */
+/* -------------------------------------------------------------------------- */
+
+const refundChapaTransaction = async (txRef, amount) => {
+  if (!process.env.CHAPA_SECRET_KEY) {
+    throw new Error("CHAPA_SECRET_KEY is missing");
+  }
+
+  if (typeof txRef !== "string" || !txRef.trim()) {
+    throw new Error("Transaction reference is required");
+  }
+
+  const body = {};
+
+  if (amount !== undefined && amount !== null) {
+    const parsedAmount = Number(amount);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      throw new Error("Refund amount must be a positive number");
+    }
+
+    body.amount = parsedAmount.toFixed(2);
+  }
+
+  try {
+    const response = await axios.post(
+      `${CHAPA_BASE_URL}/transaction/refund/${encodeURIComponent(txRef)}`,
+      body,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.CHAPA_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      },
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(getPaymentErrorMessage(error));
+  }
+};
+
+/* -------------------------------------------------------------------------- */
+/* Exports                                                                    */
+/* -------------------------------------------------------------------------- */
 
 module.exports = {
   initializePayment,
