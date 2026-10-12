@@ -1,77 +1,144 @@
 const prisma = require("../config/prisma");
 
+const parseId = (value) => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    !Number.isSafeInteger(Number(value)) ||
+    Number(value) <= 0
+  ) {
+    return null;
+  }
+
+  return Number(value);
+};
+
 const verifyGymOwner = async (req, res, next) => {
-    // Implement logic to verify if the user is the owner of the gym
-    const { id } = req.user;
-    const { gymId } = req.body;
+  try {
+    const userId = parseId(req.user?.id);
+    const gymId = parseId(req.body?.gymId);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
 
     if (!gymId) {
-        return res.status(400).json({
-            success: false,
-            message: "gymId is required"
-        });
+      return res.status(400).json({
+        success: false,
+        message: "A valid gymId is required",
+      });
     }
 
-    try {
-        const gym = await prisma.gym.findFirst({
-            where: {
-                id: Number(gymId),
-                adminId: Number(id)
-            }
-        })
+    const gym = await prisma.gym.findUnique({
+      where: { id: gymId },
+      select: {
+        id: true,
+        adminId: true,
+        isActive: true,
+      },
+    });
 
-        if (!gym) {
-            return res.status(403).json({
-                success: false,
-                message: "Access Denied"
-            });
-        }
-
-        next();
-    } catch (error) {
-        console.log("Verify Middleware Error: ", error.message);
-        return res.status(400).json({
-            success: false,
-            message: "Gym Admin Only Access"
-        })
+    if (!gym) {
+      return res.status(404).json({
+        success: false,
+        message: "Gym not found",
+      });
     }
-}
 
+    if (Number(gym.adminId) !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not the owner of this gym",
+      });
+    }
+
+    if (!gym.isActive) {
+      return res.status(409).json({
+        success: false,
+        message: "Gym is not active",
+      });
+    }
+
+    return next();
+  } catch (error) {
+    console.error("verifyGymOwner error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify gym ownership",
+    });
+  }
+};
 
 const verifyPackageOwner = async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const { id: userId } = req.user;
+  try {
+    const userId = parseId(req.user?.id);
+    const packageId = parseId(req.params?.id);
 
-        const pkg = await prisma.package.findFirst({
-            where: {
-                id: Number(id),
-                gym: {
-                    is: {
-                        adminId: Number(userId)
-                    }
-                }
-            }
-        })
-
-        if (!pkg) {
-            return res.status(404).json({
-                success: false,
-                message: "Package does not exist"
-            })
-        }
-
-        next();
-    } catch (error) {
-        console.log("Verify pkg Middleware Error: ", error.message);
-        return res.status(400).json({
-            success: false,
-            message: "Package Admin Only Access"
-        })
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
     }
-}
+
+    if (!packageId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid package ID",
+      });
+    }
+
+    const pkg = await prisma.package.findUnique({
+      where: { id: packageId },
+      select: {
+        id: true,
+        isActive: true,
+        gym: {
+          select: {
+            adminId: true,
+          },
+        },
+      },
+    });
+
+    if (!pkg) {
+      return res.status(404).json({
+        success: false,
+        message: "Package not found",
+      });
+    }
+
+    if (Number(pkg.gym.adminId) !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not the owner of this package's gym",
+      });
+    }
+
+    if (!pkg.isActive) {
+      return res.status(409).json({
+        success: false,
+        message: "Package is already inactive",
+      });
+    }
+
+    return next();
+  } catch (error) {
+    console.error("verifyPackageOwner error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify package ownership",
+    });
+  }
+};
 
 module.exports = {
-    verifyGymOwner,
-    verifyPackageOwner
-}
+  verifyGymOwner,
+  verifyPackageOwner,
+};

@@ -7,20 +7,30 @@ datasource db {
 }
 
 model User {
-  id                    Int              @id @default(autoincrement())
-  name                  String
-  email                 String           @unique
-  phone                 String?
-  password              String
-  photoUrl              String?
-  fcmToken              String?
-  createdAt             DateTime         @default(now())
-  bookings              Booking[]
-  conversationsAsMember Conversation[]
-  payments              Payment[]
-  reviews               TrainerReview[]
-  trainerSessions       TrainerSession[] @relation("MemberTrainerSessions")
-  preference            UserPreference?
+  id         Int             @id @default(autoincrement())
+  name       String
+  email      String          @unique
+  phone      String?
+  password   String
+  photoUrl   String?
+  fcmToken   String?
+  createdAt  DateTime        @default(now())
+  bookings   Booking[]
+  payments   Payment[]
+  preference UserPreference?
+
+  // V2 relations
+  orders            Order[]
+  memberPackages    MemberPackage[]
+  providerPurchases ProviderPackagePurchase[]
+  sessions          TrainingSession[]
+  consultations     ConsultationAccess[]
+  chatThreads       ChatThread[]
+  messagesSent      Message[]
+  reviews           Review[]
+  badges            UserBadge[]
+  stats             MemberStats?
+  checkIns          CheckIn[]
 }
 
 model UserPreference {
@@ -39,6 +49,10 @@ model GymAdmin {
   password  String
   createdAt DateTime @default(now())
   gyms      Gym[]
+
+  // V2 relations
+  payoutDecisions PayoutRequest[]
+  scans           CheckIn[]
 }
 
 model Gym {
@@ -48,8 +62,8 @@ model Gym {
   address     String
   latitude    Float?
   longitude   Float?
-  openingTime String
-  closingTime String
+  openingTime String // Addis-local "HH:mm"
+  closingTime String // Addis-local "HH:mm"
   capacity    Int
   photos      String[]
   amenities   String[]
@@ -58,168 +72,89 @@ model Gym {
   bookings    Booking[]
   admin       GymAdmin  @relation(fields: [adminId], references: [id])
   packages    Package[]
-  trainers    Trainer[]
+
+  // V2 relations
+  providers      Provider[]
+  staff          GymStaff[]
+  orders         Order[]
+  memberPackages MemberPackage[]
+  checkIns       CheckIn[]
+  earnings       Earning[]
+  payoutRequests PayoutRequest[]
+
+  // V2 indexes (gym search by name and location/address)
+  @@index([name])
+  @@index([address])
 }
 
+// V1 `Package` is the gym package. `durationDays` is its validity (daily 1, weekly 7, monthly 30).
 model Package {
   id           Int         @id @default(autoincrement())
   gymId        Int
   name         String
   type         PackageType @default(daily)
-  price        Float
+  price        Float // per person, ETB (V1 type kept)
   durationDays Int
   benefits     String?
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
   bookings     Booking[]
   gym          Gym         @relation(fields: [gymId], references: [id])
+
+  // V2 restrictions
+  maxVisits      Int? // null = unlimited visits
+  allowedDays    Int[]           @default([]) // 0=Sun..6=Sat, empty = every day
+  allowedPeriods Period[]        @default([]) // empty = every period
+  maxGroupSize   Int             @default(1) // 1 = single booking only
+  memberPackages MemberPackage[]
 }
 
 model Booking {
   id        Int           @id @default(autoincrement())
   userId    Int
   gymId     Int
-  packageId Int?
+  packageId Int? // the gym package chosen
   slotStart DateTime
   slotEnd   DateTime
   status    BookingStatus @default(pending)
-  qrCode    String?       @unique
+  qrCode    String?       @unique // DEPRECATED in V2: the new QR identifies the member, not the booking
   createdAt DateTime      @default(now())
   gym       Gym           @relation(fields: [gymId], references: [id])
   package   Package?      @relation(fields: [packageId], references: [id])
   user      User          @relation(fields: [userId], references: [id])
   payment   Payment?
+
+  // V2 columns (all have defaults / nullable)
+  bookingType     BookingType @default(SINGLE)
+  headcount       Int         @default(1) // people covered; capacity used = headcount
+  memberPackageId Int? // set when an active package entitlement covers this booking (no new payment)
+
+  // V2 relations
+  memberPackage    MemberPackage?    @relation("CoveredBookings", fields: [memberPackageId], references: [id])
+  purchasedPackage MemberPackage?    @relation("PurchaseBooking")
+  order            Order?
+  sessions         TrainingSession[]
+  checkIn          CheckIn?
+
+  // V2 index (capacity queries)
+  @@index([gymId, slotStart, slotEnd])
 }
 
 model Payment {
   id               Int             @id @default(autoincrement())
   userId           Int
-  bookingId        Int?            @unique
-  amount           Float
-  currency         String          @default("ETB")
-  status           PaymentStatus   @default(pending)
-  chapaTxRef       String?         @unique
+  bookingId        Int           @unique
+  amount           Float // for a V2 order: equals Order.totalAmount
+  currency         String        @default("ETB")
+  status           PaymentStatus @default(pending)
+  chapaTxRef       String?       @unique
   chapaCheckoutUrl String?
-  createdAt        DateTime        @default(now())
-  trainerSessionId Int?            @unique
-  chapaRefundRef   String?         @unique
-  booking          Booking?        @relation(fields: [bookingId], references: [id])
-  trainerSession   TrainerSession? @relation(fields: [trainerSessionId], references: [id])
-  user             User            @relation(fields: [userId], references: [id])
+  createdAt        DateTime      @default(now())
+  booking          Booking       @relation(fields: [bookingId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
 }
 
-model Trainer {
-  id                     Int                   @id @default(autoincrement())
-  gymId                  Int?
-  name                   String
-  bio                    String?
-  createdAt              DateTime              @default(now())
-  email                  String                @unique
-  experienceYears        Int?
-  passwordHash           String
-  profilePhotoUrl        String?
-  rating                 Float                 @default(0)
-  sessionPrice           Decimal?              @db.Decimal(10, 2)
-  specialization         String?
-  verificationStatus     VerificationStatus    @default(PENDING)
-  phone                  String?
-  conversationsAsTrainer Conversation[]
-  gym                    Gym?                  @relation(fields: [gymId], references: [id])
-  availability           TrainerAvailability[]
-  credentials            TrainerCredential[]
-  reviews                TrainerReview[]
-  sessions               TrainerSession[]      @relation("TrainerSessions")
-}
-
-model TrainerCredential {
-  id         Int      @id @default(autoincrement())
-  trainerId  Int
-  fileUrl    String
-  label      String?
-  uploadedAt DateTime @default(now())
-  trainer    Trainer  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-}
-
-model TrainerAvailability {
-  id        Int     @id @default(autoincrement())
-  trainerId Int
-  dayOfWeek Int
-  startTime String
-  endTime   String
-  trainer   Trainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-
-  @@index([trainerId, dayOfWeek])
-}
-
-model TrainerSession {
-  id         Int            @id @default(autoincrement())
-  trainerId  Int
-  memberId   Int
-  startTime  DateTime
-  endTime    DateTime
-  status     SessionStatus  @default(PENDING_PAYMENT)
-  price      Decimal        @db.Decimal(10, 2)
-  chapaTxRef String?        @unique
-  createdAt  DateTime       @default(now())
-  expiresAt  DateTime?
-  payment    Payment?
-  review     TrainerReview?
-  member     User           @relation("MemberTrainerSessions", fields: [memberId], references: [id])
-  trainer    Trainer        @relation("TrainerSessions", fields: [trainerId], references: [id])
-
-  @@index([trainerId, startTime])
-  @@index([memberId, startTime])
-  @@index([status, expiresAt])
-}
-
-model TrainerReview {
-  id        Int            @id @default(autoincrement())
-  trainerId Int
-  memberId  Int
-  sessionId Int            @unique
-  rating    Int
-  review    String?
-  createdAt DateTime       @default(now())
-  member    User           @relation(fields: [memberId], references: [id])
-  session   TrainerSession @relation(fields: [sessionId], references: [id])
-  trainer   Trainer        @relation(fields: [trainerId], references: [id])
-
-  @@index([trainerId])
-  @@index([memberId])
-}
-
-model Conversation {
-  id        Int       @id @default(autoincrement())
-  memberId  Int
-  trainerId Int
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  member    User      @relation(fields: [memberId], references: [id])
-  trainer   Trainer   @relation(fields: [trainerId], references: [id])
-  messages  Message[]
-
-  @@unique([memberId, trainerId])
-  @@index([memberId])
-  @@index([trainerId])
-}
-
-model Message {
-  id             Int               @id @default(autoincrement())
-  conversationId Int
-  senderType     MessageSenderType
-  senderId       Int
-  content        String
-  isRead         Boolean           @default(false)
-  createdAt      DateTime          @default(now())
-  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@index([conversationId, createdAt])
-}
-
-enum MessageSenderType {
-  MEMBER
-  TRAINER
-}
+// ---------- V1 enums ----------
 
 enum PackageType {
   daily
@@ -231,9 +166,10 @@ enum PackageType {
 enum BookingStatus {
   pending
   confirmed
-  cancelled
-  checked_in
   payment_failed
+  cancelled // a real cancellation (member or admin)
+  checked_in // attended
+  expired // V2: unpaid booking timed out (ORDER_EXPIRY_MINUTES)
 }
 
 enum PaymentStatus {
@@ -241,19 +177,443 @@ enum PaymentStatus {
   success
   failed
   refunded
-  refund_pending
 }
 
-enum VerificationStatus {
-  PENDING
-  VERIFIED
-  REJECTED
+enum ProviderType {
+  TRAINER
+  PHYSIOTHERAPIST
+  NUTRITION_CONSULTANT
+}
+
+enum Period {
+  MORNING // 06:00-12:00 Addis
+  AFTERNOON // 12:00-17:00
+  EVENING // 17:00-22:00
+}
+
+enum BookingType {
+  SINGLE
+  GROUP
+}
+
+enum OrderItemType {
+  GYM_BOOKING
+  PROVIDER_PACKAGE
+  CONSULTATION
 }
 
 enum SessionStatus {
-  PENDING_PAYMENT
-  CONFIRMED
+  HELD // reserved while the order is unpaid
+  SCHEDULED
   COMPLETED
   CANCELLED
-  PAYMENT_FAILED
+  NO_SHOW
+}
+
+enum AccessStatus {
+  PENDING // created at checkout, not paid yet
+  ACTIVE
+  EXPIRED
+}
+
+enum EarningStatus {
+  AVAILABLE
+  REQUESTED
+  PAID
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  REJECTED
+}
+
+enum PayoutMethod {
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum BadgeAudience {
+  MEMBER
+  PROVIDER
+}
+
+// ---------- Providers (own login, like GymAdmin) ----------
+
+model Provider {
+  id                 Int          @id @default(autoincrement())
+  type               ProviderType
+  gymId              Int? // null ONLY for NUTRITION_CONSULTANT (platform-wide)
+  name               String
+  email              String       @unique
+  phone              String?
+  password           String
+  mustChangePassword Boolean      @default(true) // forced change on first login
+  photoUrl           String?
+  fcmToken           String?
+  bio                String?
+  specializations    String[]
+  experienceYears    Int          @default(0)
+  certifications     String[]
+  sharePercent       Int          @default(100) // 0-100, set by the gym admin (consultants: by the dev team)
+  isActive           Boolean      @default(true) // soft delete
+  ratingAvg          Float        @default(0) // cached, updated with each review
+  ratingCount        Int          @default(0)
+  sessionsCompleted  Int          @default(0)
+  createdAt          DateTime     @default(now())
+
+  gym            Gym?                      @relation(fields: [gymId], references: [id])
+  availability   ProviderAvailability[]
+  packages       ProviderPackage[]
+  orderItems     OrderItem[]
+  purchases      ProviderPackagePurchase[]
+  sessions       TrainingSession[]
+  consultations  ConsultationAccess[] // as the assigned consultant
+  threads        ChatThread[]
+  messagesSent   Message[]
+  reviews        Review[]
+  earnings       Earning[]
+  payoutRequests PayoutRequest[]
+  badges         UserBadge[]
+
+  @@index([gymId, type, isActive])
+}
+
+model ProviderAvailability {
+  id         Int    @id @default(autoincrement())
+  providerId Int
+  dayOfWeek  Int // 0=Sunday .. 6=Saturday (Addis day)
+  period     Period
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@unique([providerId, dayOfWeek, period])
+}
+
+model ProviderPackage {
+  id           Int      @id @default(autoincrement())
+  providerId   Int
+  name         String
+  description  String?
+  sessionCount Int
+  price        Decimal  @db.Decimal(12, 2)
+  validityDays Int // set by the provider
+  isActive     Boolean  @default(true) // stop selling / soft delete
+  createdAt    DateTime @default(now())
+
+  provider   Provider                  @relation(fields: [providerId], references: [id])
+  purchases  ProviderPackagePurchase[]
+  orderItems OrderItem[]
+}
+
+// ---------- Gym staff (front desk, check-in) ----------
+
+model GymStaff {
+  id                 Int      @id @default(autoincrement())
+  gymId              Int // exactly one gym
+  name               String
+  email              String   @unique
+  phone              String?
+  password           String
+  mustChangePassword Boolean  @default(true)
+  isActive           Boolean  @default(true) // soft delete
+  createdAt          DateTime @default(now())
+
+  gym   Gym       @relation(fields: [gymId], references: [id])
+  scans CheckIn[]
+
+  @@index([gymId, isActive])
+}
+
+// ---------- Orders: a wrapper around the V1 Booking + Payment ----------
+// An Order has NO status of its own. It is derived from Booking.status / Payment.status (see getOrderStatus below).
+
+model Order {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  gymId             Int
+  bookingId         Int      @unique // the gym booking this order pays for
+  totalAmount       Decimal  @db.Decimal(12, 2)
+  needsManualRefund Boolean  @default(false) // paid after the slot was gone (late webhook)
+  refundNote        String?
+  createdAt         DateTime @default(now()) // UTC; expiry = createdAt + ORDER_EXPIRY_MINUTES
+
+  user    User        @relation(fields: [userId], references: [id])
+  gym     Gym         @relation(fields: [gymId], references: [id])
+  booking Booking     @relation(fields: [bookingId], references: [id])
+  items   OrderItem[]
+
+  @@index([userId, createdAt])
+}
+
+model OrderItem {
+  id                Int           @id @default(autoincrement())
+  orderId           Int
+  type              OrderItemType
+  label             String // snapshot text shown to the member
+  amount            Decimal       @db.Decimal(12, 2) // snapshot price
+  providerId        Int? // PROVIDER_PACKAGE: chosen provider. CONSULTATION: set when assigned.
+  providerPackageId Int? // PROVIDER_PACKAGE only
+
+  order           Order                    @relation(fields: [orderId], references: [id])
+  provider        Provider?                @relation(fields: [providerId], references: [id])
+  providerPackage ProviderPackage?         @relation(fields: [providerPackageId], references: [id])
+  purchase        ProviderPackagePurchase?
+  consultation    ConsultationAccess?
+  earnings        Earning[]
+}
+
+// ---------- Gym package entitlement ----------
+// Created when the order is paid. While ACTIVE, later bookings can be covered without a new payment.
+
+model MemberPackage {
+  id                Int          @id @default(autoincrement())
+  userId            Int
+  gymId             Int
+  packageId         Int
+  purchaseBookingId Int          @unique // the booking that paid for it
+  startsAt          DateTime // UTC, moment of payment
+  endsAt            DateTime // UTC = startsAt + Package.durationDays
+  maxVisits         Int? // snapshot of Package.maxVisits
+  visitsUsed        Int          @default(0) // +1 at check-in
+  status            AccessStatus @default(PENDING) // becomes EXPIRED lazily after endsAt
+
+  user            User      @relation(fields: [userId], references: [id])
+  gym             Gym       @relation(fields: [gymId], references: [id])
+  package         Package   @relation(fields: [packageId], references: [id])
+  purchaseBooking Booking   @relation("PurchaseBooking", fields: [purchaseBookingId], references: [id])
+  coveredBookings Booking[] @relation("CoveredBookings")
+  checkIns        CheckIn[]
+
+  @@index([userId, gymId, status])
+}
+
+// ---------- Provider packages and private sessions ----------
+
+model ProviderPackagePurchase {
+  id                Int          @id @default(autoincrement())
+  userId            Int
+  providerId        Int
+  providerPackageId Int
+  orderItemId       Int          @unique
+  // snapshots: later edits to the package never change an old purchase
+  packageName       String
+  sessionsTotal     Int
+  pricePaid         Decimal      @db.Decimal(12, 2)
+  sessionsUsed      Int          @default(0) // COMPLETED + NO_SHOW (HELD/SCHEDULED count as reserved in code)
+  expiresAt         DateTime // UTC = paidAt + validityDays; unused sessions are lost
+  status            AccessStatus @default(PENDING)
+  createdAt         DateTime     @default(now())
+
+  user            User              @relation(fields: [userId], references: [id])
+  provider        Provider          @relation(fields: [providerId], references: [id])
+  providerPackage ProviderPackage   @relation(fields: [providerPackageId], references: [id])
+  orderItem       OrderItem         @relation(fields: [orderItemId], references: [id])
+  sessions        TrainingSession[]
+
+  @@index([userId, status])
+}
+
+model TrainingSession {
+  id          Int           @id @default(autoincrement())
+  purchaseId  Int
+  bookingId   Int // the gym booking this session lives inside
+  providerId  Int
+  userId      Int
+  startsAt    DateTime // UTC
+  endsAt      DateTime // UTC (startsAt + SESSION_MINUTES)
+  status      SessionStatus @default(HELD)
+  completedAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime      @default(now())
+
+  purchase ProviderPackagePurchase @relation(fields: [purchaseId], references: [id])
+  booking  Booking                 @relation(fields: [bookingId], references: [id])
+  provider Provider                @relation(fields: [providerId], references: [id])
+  user     User                    @relation(fields: [userId], references: [id])
+  review   Review?
+  earnings Earning[]
+
+  @@index([providerId, startsAt, endsAt]) // overlap check
+  @@index([userId, status])
+}
+
+// ---------- Nutrition consultation (random assignment) ----------
+
+model ConsultationAccess {
+  id           Int          @id @default(autoincrement())
+  userId       Int
+  orderItemId  Int          @unique
+  consultantId Int? // NULL until assigned (at payment)
+  status       AccessStatus @default(PENDING)
+  assignedAt   DateTime?
+  startsAt     DateTime? // UTC, set at payment
+  expiresAt    DateTime? // UTC = startsAt + CONSULTATION_CHAT_DAYS
+  createdAt    DateTime     @default(now())
+
+  user       User      @relation(fields: [userId], references: [id])
+  orderItem  OrderItem @relation(fields: [orderItemId], references: [id])
+  consultant Provider? @relation(fields: [consultantId], references: [id])
+
+  @@index([consultantId, status])
+}
+
+// ---------- Chat ----------
+// One thread per (member, provider). "Can the member write?" is computed from active access, not stored.
+
+model ChatThread {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  providerId Int
+  createdAt  DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id])
+  provider Provider  @relation(fields: [providerId], references: [id])
+  messages Message[]
+
+  @@unique([userId, providerId])
+}
+
+model Message {
+  id               Int       @id @default(autoincrement())
+  threadId         Int
+  senderUserId     Int? // exactly ONE of senderUserId / senderProviderId is set (checked in code)
+  senderProviderId Int?
+  body             String
+  createdAt        DateTime  @default(now())
+  readAt           DateTime?
+
+  thread         ChatThread @relation(fields: [threadId], references: [id])
+  senderUser     User?      @relation(fields: [senderUserId], references: [id])
+  senderProvider Provider?  @relation(fields: [senderProviderId], references: [id])
+
+  @@index([threadId, createdAt])
+}
+
+// ---------- Reviews, badges, member stats ----------
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  sessionId  Int      @unique // proof of a real session; one review per session
+  userId     Int
+  providerId Int
+  rating     Int // 1-5 (validated in code)
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  session  TrainingSession @relation(fields: [sessionId], references: [id])
+  user     User            @relation(fields: [userId], references: [id])
+  provider Provider        @relation(fields: [providerId], references: [id])
+
+  @@index([providerId, createdAt])
+}
+
+model Badge {
+  id         Int           @id @default(autoincrement())
+  code       String        @unique // FIRST_WORKOUT, STREAK_7, SESSIONS_50 ...
+  name       String
+  audience   BadgeAudience
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  id         Int      @id @default(autoincrement())
+  badgeId    Int
+  userId     Int?
+  providerId Int?
+  awardedAt  DateTime @default(now())
+
+  badge    Badge     @relation(fields: [badgeId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+  provider Provider? @relation(fields: [providerId], references: [id])
+
+  @@unique([userId, badgeId])
+  @@unique([providerId, badgeId])
+}
+
+model MemberStats {
+  userId               Int     @id
+  totalWorkouts        Int     @default(0)
+  currentStreak        Int     @default(0)
+  longestStreak        Int     @default(0)
+  lastWorkoutLocalDate String? // ADDIS-LOCAL "YYYY-MM-DD"
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ---------- Check-in (QR identifies the member; one row per booking) ----------
+
+model CheckIn {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  gymId            Int
+  bookingId        Int?     @unique // one check-in per booking (null for a package walk-in)
+  memberPackageId  Int?
+  localDate        String // ADDIS-LOCAL "YYYY-MM-DD" (streaks)
+  guestCount       Int      @default(1) // people admitted (group booking headcount)
+  checkedInAt      DateTime @default(now()) // UTC
+  scannedByAdminId Int? // exactly ONE of scannedByAdminId / scannedByStaffId is set (checked in code)
+  scannedByStaffId Int?
+
+  user           User           @relation(fields: [userId], references: [id])
+  gym            Gym            @relation(fields: [gymId], references: [id])
+  booking        Booking?       @relation(fields: [bookingId], references: [id])
+  memberPackage  MemberPackage? @relation(fields: [memberPackageId], references: [id])
+  scannedByAdmin GymAdmin?      @relation(fields: [scannedByAdminId], references: [id])
+  scannedByStaff GymStaff?      @relation(fields: [scannedByStaffId], references: [id])
+
+  @@index([userId, gymId, localDate])
+}
+
+// ---------- Money ledger (the platform records; the gym admin pays outside the app) ----------
+
+model Earning {
+  id              Int           @id @default(autoincrement())
+  providerId      Int
+  gymId           Int // which gym's admin will pay this
+  orderItemId     Int
+  sessionId       Int? // package earnings: one per completed session
+  payoutRequestId Int?
+  amount          Decimal       @db.Decimal(12, 2)
+  status          EarningStatus @default(AVAILABLE)
+  createdAt       DateTime      @default(now())
+
+  provider      Provider         @relation(fields: [providerId], references: [id])
+  gym           Gym              @relation(fields: [gymId], references: [id])
+  orderItem     OrderItem        @relation(fields: [orderItemId], references: [id])
+  session       TrainingSession? @relation(fields: [sessionId], references: [id])
+  payoutRequest PayoutRequest?   @relation(fields: [payoutRequestId], references: [id])
+
+  @@unique([sessionId]) // a session is credited only once
+  @@index([providerId, gymId, status])
+}
+
+model PayoutRequest {
+  id               Int           @id @default(autoincrement())
+  providerId       Int
+  gymId            Int
+  amount           Decimal       @db.Decimal(12, 2)
+  status           PayoutStatus  @default(PENDING)
+  paidMethod       PayoutMethod?
+  paidReference    String?
+  note             String?
+  createdAt        DateTime      @default(now())
+  decidedAt        DateTime?
+  decidedByAdminId Int?
+
+  provider  Provider  @relation(fields: [providerId], references: [id])
+  gym       Gym       @relation(fields: [gymId], references: [id])
+  decidedBy GymAdmin? @relation(fields: [decidedByAdminId], references: [id])
+  earnings  Earning[]
+
+  @@index([gymId, status])
+}
+
+// ---------- Settings (change rules without a deploy) ----------
+
+model PlatformSetting {
+  key         String  @id
+  value       String // parsed in code (number / boolean)
+  description String?
 }

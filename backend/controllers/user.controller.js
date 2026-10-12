@@ -1,156 +1,152 @@
-const prisma = require('../config/prisma.js');
-const bcrypt = require('bcryptjs');
+const userService = require("../services/user.service.js");
 
-// GET /api/users/me
+const parseUserId = (value) => {
+  const id = Number(value);
+
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return null;
+  }
+
+  return id;
+};
+
+const handleError = (res, error, operation) => {
+  const statusCode = error.statusCode || (error.code === "P2025" ? 404 : 500);
+
+  if (statusCode >= 500) {
+    console.error(`${operation}:`, error);
+  }
+
+  return res.status(statusCode).json({
+    success: false,
+    message:
+      statusCode < 500 ? error.message : "An unexpected server error occurred",
+  });
+};
+
 const getMe = async (req, res) => {
-    try {
-        const user = await prisma.user.findUnique({
-            where: { id: req.user.id },
-            select: {
-                id: true, name: true, email: true, phone: true, photoUrl: true, createdAt: true, fcmToken: true, _count: {
-                    select: {
-                        bookings: {
-                            where: {
-                                status: {
-                                    in: ['confirmed', 'checked_in']
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
+  try {
+    const userId = parseUserId(req.user?.id);
 
-        const { _count, ...restOfUser } = user;
-
-        res.json({ success: true, user: { ...restOfUser, totalBookings: _count.bookings } });
-    } catch (error) {
-        console.log('Get User Error: ', error.message);
-        res.status(500).json({ success: false, message: 'Server error' });
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
     }
+
+    const user = await userService.getMeService(userId);
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    return handleError(res, error, "Get user error");
+  }
 };
 
-// PUT /api/users/me
 const updateMe = async (req, res) => {
-    try {
-        const { name, phone, photoUrl, fcmToken } = req.body;
+  try {
+    const userId = parseUserId(req.user?.id);
 
-        const user = await prisma.user.update({
-            where: { id: req.user.id },
-            data: { name, phone, photoUrl, fcmToken },
-            select: { id: true, name: true, email: true, phone: true, photoUrl: true }
-        });
-
-        res.json({ success: true, user });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Server error' });
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
     }
-};
 
+    const user = await userService.updateMeService(userId, req.body || {});
+
+    return res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    return handleError(res, error, "Update user error");
+  }
+};
 
 const changePassword = async (req, res) => {
-    try {
-        const { currentPassword, newPassword } = req.body;
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({ success: false, message: 'Please provide current and new password' })
-        }
+  try {
+    const userId = parseUserId(req.user?.id);
 
-        const user = await prisma.user.findUnique({
-            where: { id: req.user.id }
-        });
-
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' })
-        }
-
-        const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
-        if (!isCurrentPasswordValid) {
-            return res.status(400).json({ success: false, message: 'Invalid current password' })
-        }
-
-        if (Buffer.byteLength(newPassword, 'utf8') > 72) {
-            return res.status(400).json({ success: false, message: 'Password cannot exceed 72 bytes' });
-        }
-
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-        await prisma.user.update({
-            where: { id: req.user.id },
-            data: { password: hashedPassword }
-        });
-
-        res.json({ success: true, message: 'Password changed successfully' })
-
-    } catch (error) {
-        console.log('Change password error: ', error.message);
-        res.status(500).json({ success: false, message: 'Server error' })
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
     }
-}
+
+    const { currentPassword, newPassword } = req.body || {};
+
+    const result = await userService.changePasswordService(
+      userId,
+      currentPassword,
+      newPassword,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    return handleError(res, error, "Change password error");
+  }
+};
 
 const updateUserPreference = async (req, res) => {
-    try {
-        const { bookingConfirm, sessionReminders, offersAndPromotions } = req.body;
+  try {
+    const userId = parseUserId(req.user?.id);
 
-        const user = await prisma.user.findUnique({
-            where: { id: req.user.id },
-            select: {
-                id: true,
-                preference: true
-            }
-        });
-
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' })
-        }
-
-        const preference = await prisma.userPreference.upsert({
-            where: { userId: req.user.id },
-            update: {
-                bookingConfirm,
-                sessionReminders,
-                offersAndPromotions
-            },
-            create: {
-                userId: req.user.id,
-                bookingConfirm,
-                sessionReminders,
-                offersAndPromotions
-            }
-        });
-
-        res.json({ success: true, preference });
-    } catch (error) {
-        console.log('Update user preference error: ', error.message);
-        res.status(500).json({ success: false, message: 'Server error' })
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
     }
-}
+
+    const preference = await userService.updateUserPreferenceService(
+      userId,
+      req.body || {},
+    );
+
+    return res.status(200).json({
+      success: true,
+      preference,
+    });
+  } catch (error) {
+    return handleError(res, error, "Update user preference error");
+  }
+};
 
 const getPreference = async (req, res) => {
-    try {
-        const preference = await prisma.userPreference.findUnique({
-            where: { userId: req.user.id },
-            select: {
-                bookingConfirm: true,
-                sessionReminders: true,
-                offersAndPromotions: true
-            }
-        });
+  try {
+    const userId = parseUserId(req.user?.id);
 
-        if (!preference) {
-            return res.status(404).json({ success: false, message: 'User preference not found' })
-        }
-
-        res.json({ success: true, preference })
-    } catch (error) {
-        console.log('Get user preference error: ', error.message);
-        res.status(500).json({ success: false, message: 'Server error' });
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
     }
-}
+
+    const preference = await userService.getPreferenceService(userId);
+
+    return res.status(200).json({
+      success: true,
+      preference,
+    });
+  } catch (error) {
+    return handleError(res, error, "Get preference error");
+  }
+};
 
 module.exports = {
-    updateMe,
-    getMe,
-    changePassword,
-    updateUserPreference,
-    getPreference
-}
+  updateMe,
+  getMe,
+  changePassword,
+  updateUserPreference,
+  getPreference,
+};

@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "postinstall": "prisma generate",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "seed:v2": "tsx prisma/seed-v2.js",
+    "seed:v2:core": "tsx prisma/seed-v2.js --core-only",
+    "check:helpers": "tsx scripts/check-helpers.js"
   },
   "keywords": [],
   "author": "",
@@ -20,14 +23,19 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "groq-sdk": "^1.6.0",
+    "firebase-admin": "^13.10.0",
     "jsonwebtoken": "^9.0.3",
+    "openai": "^7.32.0",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "socket.io": "^4.8.4",
+    "zod": "^4.6.5"
     "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "tsx": "^4.23.15"
   }
 }
