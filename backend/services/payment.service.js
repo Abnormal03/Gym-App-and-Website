@@ -1357,7 +1357,7 @@ const initializeTrainerSessionPayment = async (trainerSessionId, userId) => {
 
   throw new Error(
     "Individual trainer-session payments are not supported in V2. " +
-      "Pay for the associated provider-package order instead.",
+    "Pay for the associated provider-package order instead.",
   );
 };
 
