@@ -42,7 +42,12 @@ const toPublicProvider = (p) => ({
 
 const GYM_SELECT = { select: { id: true, name: true, adminId: true } };
 
-const searchProvidersService = async ({ name, type, gymId, specialization }) => {
+const searchProvidersService = async ({
+  name,
+  type,
+  gymId,
+  specialization,
+}) => {
   const where = {
     isActive: true,
   };
@@ -214,9 +219,83 @@ async function resetProviderPassword(adminId, providerId) {
   const temporaryPassword = generateTempPassword();
   await prisma.provider.update({
     where: { id: provider.id },
-    data: { password: await hashPassword(temporaryPassword), mustChangePassword: true },
+    data: {
+      password: await hashPassword(temporaryPassword),
+      mustChangePassword: true,
+    },
   });
   return { id: provider.id, temporaryPassword };
+}
+
+async function getPublicProviderPackages(providerId) {
+  const id = toId(providerId, "providerId");
+
+  const provider = await prisma.provider.findFirst({
+    where: {
+      id,
+      isActive: true,
+      type: { in: ["TRAINER", "PHYSIOTHERAPIST"] },
+    },
+    select: { id: true },
+  });
+
+  if (!provider) {
+    throw new AppError("NOT_FOUND", "Provider not found");
+  }
+
+  const packages = await prisma.providerPackage.findMany({
+    where: {
+      providerId: id,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      sessionCount: true,
+      price: true,
+      validityDays: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return packages.map((pkg) => ({
+    ...pkg,
+    price: Number(pkg.price),
+  }));
+}
+
+async function getPublicProviderAvailability(providerId) {
+  const id = toId(providerId, "providerId");
+
+  const provider = await prisma.provider.findFirst({
+    where: {
+      id,
+      isActive: true,
+      type: { in: ["TRAINER", "PHYSIOTHERAPIST"] },
+    },
+    select: { id: true },
+  });
+
+  if (!provider) {
+    throw new AppError("NOT_FOUND", "Provider not found");
+  }
+
+  const rows = await prisma.providerAvailability.findMany({
+    where: { providerId: id },
+    select: {
+      dayOfWeek: true,
+      period: true,
+    },
+    orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }],
+  });
+
+  return {
+    slots: rows.map((slot) => ({
+      dayOfWeek: slot.dayOfWeek,
+      period: slot.period,
+    })),
+  };
 }
 
 module.exports = {
@@ -226,4 +305,6 @@ module.exports = {
   getProvider,
   updateProvider,
   resetProviderPassword,
+  getPublicProviderPackages,
+  getPublicProviderAvailability,
 };

@@ -29,8 +29,6 @@ const protect = (req, res, next) => {
   }
 };
 
-
-
 /**
  * V2 authentication + role checks. Does NOT replace the V1 middleware: V1 routes keep using it.
  *
@@ -46,15 +44,15 @@ const protect = (req, res, next) => {
  * Provider and staff are re-loaded from the DB on every request, so a deactivated account stops working
  * immediately and a role/gym change is never stale.
  */
-const prismaModule = require('../config/prisma');
+const prismaModule = require("../config/prisma");
 const prisma = prismaModule.prisma || prismaModule;
-const { AppError } = require('../utils/errors');
+const { AppError } = require("../utils/errors");
 
-const PROVIDER_ROLES = ['TRAINER', 'PHYSIOTHERAPIST', 'NUTRITION_CONSULTANT'];
+const PROVIDER_ROLES = ["TRAINER", "PHYSIOTHERAPIST", "NUTRITION_CONSULTANT"];
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET is not set');
+  if (!secret) throw new Error("JWT_SECRET is not set");
   return secret;
 }
 
@@ -64,14 +62,16 @@ function getJwtSecret() {
  * Handles: { role:'admin'|'user'|..., id } , { adminId } , { userId } , { id } (member).
  */
 function normalizeLegacyPayload(p) {
-  const raw = String(p.role || p.type || '').toLowerCase().replace(/[^a-z]/g, ''); // 'GYM_ADMIN' -> 'gymadmin'
-  if (raw === 'gymadmin' || raw === 'admin' || (!raw && p.adminId)) {
+  const raw = String(p.role || p.type || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, ""); // 'GYM_ADMIN' -> 'gymadmin'
+  if (raw === "gymadmin" || raw === "admin" || (!raw && p.adminId)) {
     const adminId = Number(p.adminId ?? p.userId ?? p.id);
-    return { role: 'GYM_ADMIN', id: adminId, adminId };
+    return { role: "GYM_ADMIN", id: adminId, adminId };
   }
-  if (raw === 'member' || raw === 'user' || (!raw && (p.userId || p.id))) {
+  if (raw === "member" || raw === "user" || (!raw && (p.userId || p.id))) {
     const userId = Number(p.userId ?? p.id);
-    return { role: 'MEMBER', id: userId, userId };
+    return { role: "MEMBER", id: userId, userId };
   }
   return null;
 }
@@ -79,10 +79,23 @@ function normalizeLegacyPayload(p) {
 async function loadProvider(id) {
   const p = await prisma.provider.findUnique({
     where: { id },
-    select: { id: true, type: true, gymId: true, isActive: true, mustChangePassword: true },
+    select: {
+      id: true,
+      type: true,
+      gymId: true,
+      isActive: true,
+      mustChangePassword: true,
+    },
   });
-  if (!p || !p.isActive) throw new AppError('UNAUTHORIZED', 'Account not found or deactivated');
-  return { role: p.type, id: p.id, providerId: p.id, gymId: p.gymId, mustChangePassword: p.mustChangePassword };
+  if (!p || !p.isActive)
+    throw new AppError("UNAUTHORIZED", "Account not found or deactivated");
+  return {
+    role: p.type,
+    id: p.id,
+    providerId: p.id,
+    gymId: p.gymId,
+    mustChangePassword: p.mustChangePassword,
+  };
 }
 
 async function loadStaff(id) {
@@ -90,32 +103,46 @@ async function loadStaff(id) {
     where: { id },
     select: { id: true, gymId: true, isActive: true, mustChangePassword: true },
   });
-  if (!s || !s.isActive) throw new AppError('UNAUTHORIZED', 'Account not found or deactivated');
-  return { role: 'GYM_STAFF', id: s.id, staffId: s.id, gymId: s.gymId, mustChangePassword: s.mustChangePassword };
+  if (!s || !s.isActive)
+    throw new AppError("UNAUTHORIZED", "Account not found or deactivated");
+  return {
+    role: "GYM_STAFF",
+    id: s.id,
+    staffId: s.id,
+    gymId: s.gymId,
+    mustChangePassword: s.mustChangePassword,
+  };
 }
 
 function makeAuthenticate({ allowPasswordChange = false } = {}) {
   return async function authenticate(req, _res, next) {
     try {
-      const [scheme, token] = (req.headers.authorization || '').split(' ');
-      if (scheme !== 'Bearer' || !token) throw new AppError('UNAUTHORIZED', 'Missing token');
+      const [scheme, token] = (req.headers.authorization || "").split(" ");
+      if (scheme !== "Bearer" || !token)
+        throw new AppError("UNAUTHORIZED", "Missing token");
 
       let payload;
       try {
         payload = jwt.verify(token, getJwtSecret());
       } catch (e) {
-        if (e.message === 'JWT_SECRET is not set') throw e;
-        throw new AppError('UNAUTHORIZED', 'Invalid or expired token');
+        if (e.message === "JWT_SECRET is not set") throw e;
+        throw new AppError("UNAUTHORIZED", "Invalid or expired token");
       }
 
       let auth;
-      if (PROVIDER_ROLES.includes(payload.role)) auth = await loadProvider(Number(payload.id));
-      else if (payload.role === 'GYM_STAFF') auth = await loadStaff(Number(payload.id));
+      if (PROVIDER_ROLES.includes(payload.role))
+        auth = await loadProvider(Number(payload.id));
+      else if (payload.role === "GYM_STAFF")
+        auth = await loadStaff(Number(payload.id));
       else auth = normalizeLegacyPayload(payload);
 
-      if (!auth || !Number.isInteger(auth.id) || auth.id <= 0) throw new AppError('UNAUTHORIZED', 'Invalid token');
+      if (!auth || !Number.isInteger(auth.id) || auth.id <= 0)
+        throw new AppError("UNAUTHORIZED", "Invalid token");
       if (auth.mustChangePassword && !allowPasswordChange) {
-        throw new AppError('PASSWORD_CHANGE_REQUIRED', 'You must change your password first');
+        throw new AppError(
+          "PASSWORD_CHANGE_REQUIRED",
+          "You must change your password first",
+        );
       }
 
       req.auth = auth;
@@ -129,13 +156,17 @@ function makeAuthenticate({ allowPasswordChange = false } = {}) {
 /** Normal authentication: blocks accounts that still must change their temporary password. */
 const authenticate = makeAuthenticate();
 /** Only for /auth/change-password and /auth/me. */
-const authenticateAllowingPasswordChange = makeAuthenticate({ allowPasswordChange: true });
+const authenticateAllowingPasswordChange = makeAuthenticate({
+  allowPasswordChange: true,
+});
 
 /** Authenticates AND checks the role in one go. Returns an array of two handlers (Express accepts that). */
 function requireRole(...roles) {
   const check = (req, _res, next) => {
-    if (!req.auth) return next(new AppError('UNAUTHORIZED', 'Authentication required'));
-    if (!roles.includes(req.auth.role)) return next(new AppError('FORBIDDEN', 'You are not allowed to do this'));
+    if (!req.auth)
+      return next(new AppError("UNAUTHORIZED", "Authentication required"));
+    if (!roles.includes(req.auth.role))
+      return next(new AppError("FORBIDDEN", "You are not allowed to do this"));
     return next();
   };
   return [authenticate, check];
@@ -143,5 +174,8 @@ function requireRole(...roles) {
 
 module.exports = {
   protect,
-  authenticate, authenticateAllowingPasswordChange, requireRole, PROVIDER_ROLES
+  authenticate,
+  authenticateAllowingPasswordChange,
+  requireRole,
+  PROVIDER_ROLES,
 };

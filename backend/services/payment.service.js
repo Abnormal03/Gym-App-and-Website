@@ -50,10 +50,12 @@ const getPaymentErrorMessage = (error) => {
   return error.message || "Chapa payment initialization failed";
 };
 
-const getChapaData = (verification) => verification?.data?.data ?? {};
+const getChapaData = (verification) => verification?.data ?? {};
 
 const getChapaStatus = (verification) =>
-  String(getChapaData(verification).status ?? "").toLowerCase();
+  String(
+    verification?.status ?? getChapaData(verification).status ?? "",
+  ).toLowerCase();
 
 const getPaymentOutcome = (status) => {
   if (status === "success") return "success";
@@ -202,14 +204,9 @@ const recordInitializationFailure = async ({
     };
   });
 };
-<<<<<<< HEAD
-
 /* -------------------------------------------------------------------------- */
 /* Chapa payment initialization                                               */
 /* -------------------------------------------------------------------------- */
-=======
->>>>>>> origin/backend
-
 const initializePayment = async (bookingId, userId) => {
   if (!process.env.CHAPA_SECRET_KEY) {
     throw new Error("CHAPA_SECRET_KEY is missing");
@@ -269,11 +266,7 @@ const initializePayment = async (bookingId, userId) => {
     throw new Error("Invalid payment amount");
   }
 
-<<<<<<< HEAD
-  const txRef = `booking-${bookingId}-${Date.now()}`;
-=======
   const txRef = `booking-${bookingId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
->>>>>>> origin/backend
 
   const returnUrl = new URL(process.env.CHAPA_RETURN_URL);
   returnUrl.searchParams.set("tx_ref", txRef);
@@ -292,8 +285,9 @@ const initializePayment = async (bookingId, userId) => {
         tx_ref: txRef,
         callback_url: process.env.CHAPA_CALLBACK_URL,
         return_url: returnUrl.toString(),
+
         customization: {
-          title: booking.order ? "Gym Marketplace Order" : "Gym Booking",
+          title: booking.order ? "Gym Order" : "Gym Booking",
           description: booking.order
             ? `Payment for order ${booking.order.id}`
             : `Payment for booking ${bookingId}`,
@@ -430,13 +424,9 @@ const isValidWebhookSignature = (rawBody, signatureHeader) => {
   const expectedBuffer = Buffer.from(expectedHash, "utf8");
   const receivedBuffer = Buffer.from(String(signatureHeader), "utf8");
 
-<<<<<<< HEAD
   if (expectedBuffer.length !== receivedBuffer.length) {
     return false;
   }
-=======
-  if (expectedBuffer.length !== receivedBuffer.length) return false;
->>>>>>> origin/backend
 
   return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 };
@@ -758,14 +748,14 @@ const canHonorLatePayment = async (tx, booking) => {
 
   const providerItems = booking.order
     ? await tx.orderItem.findMany({
-      where: {
-        orderId: booking.order.id,
-        type: "PROVIDER_PACKAGE",
-      },
-      include: {
-        providerPackage: true,
-      },
-    })
+        where: {
+          orderId: booking.order.id,
+          type: "PROVIDER_PACKAGE",
+        },
+        include: {
+          providerPackage: true,
+        },
+      })
     : [];
 
   for (const item of providerItems) {
@@ -978,6 +968,10 @@ const processPaymentResult = async (txRef) => {
 
   const verification = await verifyChapaTransaction(txRef);
 
+  console.log(
+    "Chapa verification response:",
+    JSON.stringify(verification, null, 2),
+  );
   const chapaStatus = getChapaStatus(verification);
   const outcome = getPaymentOutcome(chapaStatus);
 
@@ -1203,11 +1197,7 @@ const handleChapaWebhook = async (
     throw new Error("Invalid webhook signature");
   }
 
-<<<<<<< HEAD
   let event = payloadOrRawBody;
-=======
-  let event;
->>>>>>> origin/backend
 
   if (!event || typeof event !== "object" || Buffer.isBuffer(event)) {
     try {
