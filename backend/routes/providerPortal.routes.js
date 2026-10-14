@@ -4,10 +4,12 @@ const profile = require('../controllers/providerProfile.controller');
 const availability = require('../controllers/providerAvailability.controller');
 const packages = require('../controllers/providerPackage.controller');
 const clients = require('../controllers/providerClient.controller');
+const consultationPlan = require('../controllers/consultationPlan.controller');
 
 const router = express.Router();
 const providerRoles = ['TRAINER', 'PHYSIOTHERAPIST', 'NUTRITION_CONSULTANT'];
 const bookableProviderRoles = ['TRAINER', 'PHYSIOTHERAPIST'];
+const consultantRoles = ['NUTRITION_CONSULTANT'];
 
 router.get('/me/provider', ...requireRole(...providerRoles), profile.get);
 router.put('/me/provider', ...requireRole(...providerRoles), profile.update);
@@ -22,5 +24,11 @@ router.patch('/me/packages/:id', ...requireRole(...bookableProviderRoles), packa
 router.delete('/me/packages/:id', ...requireRole(...bookableProviderRoles), packages.deactivate);
 
 router.get('/me/clients', ...requireRole(...providerRoles), clients.list);
+
+// Issue 6: Nutrition consultant sets their own price and chat days.
+// GET returns the effective values (custom or platform default).
+// PUT { consultationPrice?: number|null, chatDays?: number|null } — null resets to platform default.
+router.get('/me/consultation-plan', ...requireRole(...consultantRoles), consultationPlan.get);
+router.put('/me/consultation-plan', ...requireRole(...consultantRoles), consultationPlan.update);
 
 module.exports = router;

@@ -120,7 +120,7 @@ const noShowSession = async (auth, sessionIdParam) => {
 };
 
 /** E-33: Member or provider cancels session */
-const cancelSession = async (auth, sessionIdParam) => {
+const cancelSession = async (auth, sessionIdParam, reason) => {
     const sessionId = toId(sessionIdParam, 'sessionId');
     const now = new Date();
 
@@ -169,6 +169,7 @@ const cancelSession = async (auth, sessionIdParam) => {
             data: {
                 status: 'CANCELLED',
                 cancelledAt: now,
+                ...(reason ? { cancelReason: reason } : {}),
             },
         });
 
@@ -177,6 +178,7 @@ const cancelSession = async (auth, sessionIdParam) => {
             sessionId,
             status: 'CANCELLED',
             consumed,
+            ...(reason ? { cancelReason: reason } : {}),
         };
     });
 };

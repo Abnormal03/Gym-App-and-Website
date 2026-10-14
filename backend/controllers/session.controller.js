@@ -19,7 +19,11 @@ const getSessionsController = async (req, res) => {
   } catch (error) {
     console.error("Get sessions error:", error.message);
 
-    const badRequestErrors = ["Invalid session status", "Invalid user ID"];
+    // Matches the exact strings thrown in booking.service.js getSessionsForUser
+    const badRequestErrors = [
+      "Invalid session status filter", // status query param not in allowed list
+      "Invalid user ID",               // validatePositiveId failure
+    ];
 
     if (badRequestErrors.includes(error.message)) {
       return res.status(400).json({
@@ -52,8 +56,10 @@ const noShowSessionController = asyncHandler(async (req, res) => {
   return ok(res, result);
 });
 
+// Accepts optional { reason: string } in the body.
 const cancelSessionController = asyncHandler(async (req, res) => {
-  const result = await sessionService.cancelSession(req.auth, req.params.id);
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : undefined;
+  const result = await sessionService.cancelSession(req.auth, req.params.id, reason);
   return ok(res, result);
 });
 

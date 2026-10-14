@@ -261,6 +261,9 @@ model Provider {
   ratingAvg          Float        @default(0) // cached, updated with each review
   ratingCount        Int          @default(0)
   sessionsCompleted  Int          @default(0)
+  // NUTRITION_CONSULTANT only – overrides platform defaults when set
+  consultationPrice  Decimal?     @db.Decimal(12, 2) // price in ETB; null = use CONSULTATION_PRICE setting
+  chatDays           Int? // days of chat access; null = use CONSULTATION_CHAT_DAYS setting
   createdAt          DateTime     @default(now())
 
   gym            Gym?                      @relation(fields: [gymId], references: [id])
@@ -416,17 +419,18 @@ model ProviderPackagePurchase {
 }
 
 model TrainingSession {
-  id          Int           @id @default(autoincrement())
-  purchaseId  Int
-  bookingId   Int // the gym booking this session lives inside
-  providerId  Int
-  userId      Int
-  startsAt    DateTime // UTC
-  endsAt      DateTime // UTC (startsAt + SESSION_MINUTES)
-  status      SessionStatus @default(HELD)
-  completedAt DateTime?
-  cancelledAt DateTime?
-  createdAt   DateTime      @default(now())
+  id            Int           @id @default(autoincrement())
+  purchaseId    Int
+  bookingId     Int // the gym booking this session lives inside
+  providerId    Int
+  userId        Int
+  startsAt      DateTime // UTC
+  endsAt        DateTime // UTC (startsAt + SESSION_MINUTES)
+  status        SessionStatus @default(HELD)
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  cancelReason  String? // optional free-text reason provided at cancellation
+  createdAt     DateTime      @default(now())
 
   purchase ProviderPackagePurchase @relation(fields: [purchaseId], references: [id])
   booking  Booking                 @relation(fields: [bookingId], references: [id])
