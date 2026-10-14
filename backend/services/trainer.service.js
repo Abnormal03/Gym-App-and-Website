@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const prisma = require("../config/prisma.js");
+const { expireStale } = require("./bookingHelpers.service.js");
 
 const {
   allowedTrainerSessionTransitions,
@@ -592,16 +593,26 @@ const getMemberTrainerSessions = async (memberId) => {
 
 const expirePendingTrainerSessions = async () => {
   const now = new Date();
+  const expiryMinutes =
+    await require("./bookingHelpers.service.js").getOrderExpiryMinutes();
+
+  const expiryCutoff = new Date(now.getTime() - expiryMinutes * 60_000);
 
   const result = await prisma.trainingSession.updateMany({
     where: {
-      status: "PENDING_PAYMENT",
-      expiresAt: {
-        lte: now,
+      status: "HELD",
+      booking: {
+        status: "pending",
+        order: {
+          is: {
+            createdAt: { lt: expiryCutoff },
+          },
+        },
       },
     },
     data: {
       status: "CANCELLED",
+      cancelledAt: now,
     },
   });
 

@@ -120,9 +120,37 @@ const handleError = (res, error) => {
 
 const createBookingController = async (req, res) => {
   try {
+    const body = req.body || {};
+
+    // Accept both camelCase and snake_case fields.
+    const gymId = body.gymId ?? body.gym_id;
+    const packageId = body.packageId ?? body.package_id ?? null;
+    const slotStart = body.slotStart ?? body.slot_start;
+    const slotEnd = body.slotEnd ?? body.slot_end;
+    const headcount = body.headcount ?? 1;
+
+    // Validate required booking information.
+    if (!gymId) {
+      return res.status(400).json({
+        success: false,
+        message: "gymId is required",
+      });
+    }
+
+    if (!slotStart || !slotEnd) {
+      return res.status(400).json({
+        success: false,
+        message: "slotStart and slotEnd are required",
+      });
+    }
+
     const booking = await bookingService.createBooking({
-      ...req.body,
       userId: req.user.id,
+      gymId: Number(gymId),
+      packageId: packageId === null ? null : Number(packageId),
+      slotStart,
+      slotEnd,
+      headcount: Number(headcount),
     });
 
     return res.status(201).json({
@@ -130,7 +158,29 @@ const createBookingController = async (req, res) => {
       booking,
     });
   } catch (error) {
-    return handleError(res, error);
+    // Keep your existing controller's error-handling conventions.
+    // If your current file has a shared error handler, use it here.
+    console.error("Create booking error:", error);
+
+    const message = error.message || "Failed to create booking";
+
+    const statusCode =
+      message.startsWith("Invalid ") ||
+      message.includes("required") ||
+      message.includes("must be") ||
+      message.includes("positive")
+        ? 400
+        : message.includes("not found")
+          ? 404
+          : message.includes("not available") ||
+              message.includes("fully booked")
+            ? 409
+            : 500;
+
+    return res.status(statusCode).json({
+      success: false,
+      message,
+    });
   }
 };
 
