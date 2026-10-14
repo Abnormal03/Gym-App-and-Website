@@ -1,5 +1,7 @@
 const prisma = require("../config/prisma");
 
+const { initializePayment, confirmFreeCheckout } = require("./payment.service");
+
 const {
   expireStale,
   getUsedCapacity,
@@ -737,16 +739,49 @@ const createCheckout = async (request) => {
 
   const { total, requiresPayment, ...response } = result;
 
-  // Chapa must be initialized after the database transaction commits.
-  // Free orders must go through the shared free-checkout confirmation
-  // logic so provider purchases and consultation access are activated.
-  //
-  // This service does not guess the signature of your payment service.
-  // The controller/payment integration must handle both paths.
+  // Free checkout: confirm the booking and activate
+  // any purchased entitlements using the shared payment logic.
+  if (!requiresPayment) {
+    const freeResult = await confirmFreeCheckout(
+      response.bookingId,
+      input.userId,
+    );
+
+    return {
+      ...response,
+      status: "CONFIRMED",
+      bookingStatus: freeResult.booking.status,
+      checkoutUrl: null,
+      requiresPayment: false,
+    };
+  }
+
+  // Paid checkout: initialize Chapa after the database
+  // transaction has committed.
+  const payment = await initializePayment(response.bookingId, input.userId);
 
   return {
     ...response,
-    checkoutUrl: null,
+    status: "PENDING",
+    checkoutUrl: payment.chapaCheckoutUrl,
+    txRef: payment.chapaTxRef,
+    requiresPayment: true,
+  };
+
+  return {
+    orderId: order.id,
+    bookingId: booking.id,
+
+    // Return the actual times saved in the database.
+    slotStart: booking.slotStart,
+    slotEnd: booking.slotEnd,
+
+    totalAmount: order.totalAmount.toString(),
+    currency: "ETB",
+    status: requiresPayment ? "PENDING" : "CONFIRMED",
+    expiresAt,
+    items: order.items,
+    total: quote.total,
     requiresPayment,
   };
 };

@@ -676,8 +676,9 @@ const getSessionsForUser = async (userId, role, status) => {
 
   if (normalizedRole === "MEMBER") {
     where.userId = userId;
-  } else if (normalizedRole === "PROVIDER" || normalizedRole === "TRAINER") {
-    // This assumes the provider's authenticated ID matches Provider.id.
+  } else if (
+    ["PROVIDER", "TRAINER", "PHYSIOTHERAPIST"].includes(normalizedRole)
+  ) {
     const provider = await prisma.provider.findUnique({
       where: { id: userId },
       select: { id: true },
@@ -689,7 +690,9 @@ const getSessionsForUser = async (userId, role, status) => {
 
     where.providerId = provider.id;
   } else {
-    throw new Error("Only members and providers can access sessions");
+    throw new Error(
+      "Only members, trainers, and physiotherapists can access sessions",
+    );
   }
 
   if (status) {
@@ -705,7 +708,20 @@ const getSessionsForUser = async (userId, role, status) => {
           package: true,
         },
       },
-      provider: true,
+      provider: {
+        select: {
+          id: true,
+          type: true,
+          name: true,
+          photoUrl: true,
+          bio: true,
+          specializations: true,
+          experienceYears: true,
+          certifications: true,
+          ratingAvg: true,
+          ratingCount: true,
+        },
+      },
       purchase: true,
       user: {
         select: {
