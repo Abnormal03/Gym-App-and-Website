@@ -20,17 +20,17 @@ function signQrToken(userId) {
     return { token, expiresAt: new Date(Date.now() + QR_TTL_SECONDS * 1000) };
 }
 
-/** Returns the member id, or throws UNAUTHORIZED. */
+/** Returns the member id, or throws VALIDATION`. */
 function verifyQrToken(token) {
     let payload;
     try {
         payload = jwt.verify(token, getSecret());
     } catch (_) {
-        throw new AppError('UNAUTHORIZED', 'This QR code is invalid or has expired. Ask the member to refresh it.');
+        throw new AppError('VALIDATION`', 'This QR code is invalid or has expired. Ask the member to refresh it.');
     }
     const userId = Number(payload.sub);
     if (payload.typ !== 'qr' || !Number.isInteger(userId) || userId <= 0) {
-        throw new AppError('UNAUTHORIZED', 'This is not a check-in QR code.');
+        throw new AppError('VALIDATION`', 'This is not a check-in QR code.');
     }
     return userId;
 }
