@@ -1,6 +1,10 @@
 const paymentService = require("../services/payment.service");
 
+const { isInternalDbError } = require("../utils/safeError");
+
 const getPaymentErrorMessage = (error, fallbackMessage) => {
+  if (isInternalDbError(error)) return fallbackMessage;
+
   const responseData = error.response?.data;
   const message = responseData?.message ?? responseData?.error;
 
@@ -253,6 +257,8 @@ const chapaWebhookController = async (req, res) => {
 };
 
 const verifyPaymentController = async (req, res) => {
+  console.log("VERIFY ROUTE REACHED:", req.params.txRef);
+
   try {
     const { txRef } = req.params;
 
@@ -263,17 +269,22 @@ const verifyPaymentController = async (req, res) => {
       });
     }
 
+    console.log("BEFORE checkPaymentStatus");
+
     const result = await paymentService.checkPaymentStatus(txRef, req.user.id);
+
+    console.log("AFTER checkPaymentStatus");
 
     return res.status(200).json({
       success: true,
       result,
     });
   } catch (error) {
-    console.error(
-      "Payment status check error:",
-      error.response?.data || error.message || error,
-    );
+    console.error("Payment status check error:", {
+      message: error.message,
+      stack: error.stack,
+      response: error.response?.data,
+    });
 
     return res.status(getHttpStatus(error)).json({
       success: false,

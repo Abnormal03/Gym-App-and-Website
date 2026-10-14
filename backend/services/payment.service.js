@@ -956,17 +956,27 @@ const processPaymentResult = async (txRef) => {
     throw new Error("Transaction reference is required");
   }
 
-  const payment = await prisma.payment.findUnique({
-    where: {
-      chapaTxRef: txRef,
-    },
+  payment = await prisma.payment.findUnique({
+    where: { chapaTxRef: txRef },
+    include: { booking: true },
   });
 
   if (!payment) {
-    throw new Error(`Payment not found for tx_ref: ${txRef}`);
+    throw new Error("Payment not found");
   }
 
-  const verification = await verifyChapaTransaction(txRef);
+  // A locally failed payment does not need another Chapa verification.
+  if (payment.status === "failed") {
+    return {
+      localStatus: payment.status,
+      chapaStatus: null,
+      bookingStatus: payment.booking?.status ?? null,
+      qrCode: payment.booking?.qrCode ?? null,
+      expired: payment.booking?.status === "expired",
+    };
+  }
+
+  const result = await processPaymentResult(txRef);
 
   console.log(
     "Chapa verification response:",
@@ -1229,6 +1239,8 @@ const checkPaymentStatus = async (txRef, userId) => {
 
   userId = validateId(userId, "user ID");
 
+  // Fetch the payment and its associated booking.
+
   let payment = await prisma.payment.findUnique({
     where: {
       chapaTxRef: txRef,
@@ -1242,10 +1254,35 @@ const checkPaymentStatus = async (txRef, userId) => {
     throw new Error("Payment not found");
   }
 
+  // A member can only check their own payment.
   if (payment.userId !== userId) {
     throw new Error("Access denied");
   }
 
+  // A successful payment has already been verified.
+  // Return its existing state without contacting Chapa again.
+  if (payment.status === "success") {
+    return {
+      localStatus: "success",
+      chapaStatus: "success",
+      bookingStatus: payment.booking?.status ?? null,
+      qrCode: payment.booking?.qrCode ?? null,
+      expired: payment.booking?.status === "expired",
+    };
+  }
+
+  // A failed payment should not be re-verified with Chapa.
+  if (payment.status === "failed") {
+    return {
+      localStatus: "failed",
+      chapaStatus: null,
+      bookingStatus: payment.booking?.status ?? null,
+      qrCode: payment.booking?.qrCode ?? null,
+      expired: payment.booking?.status === "expired",
+    };
+  }
+
+  // Expire stale pending bookings before checking their payment.
   if (payment.status === "pending" && payment.booking?.status === "pending") {
     const expiryMinutes = await getOrderExpiryMinutes();
 
@@ -1288,6 +1325,8 @@ const checkPaymentStatus = async (txRef, userId) => {
     }
   }
 
+  // Refresh the payment after expiry handling.
+
   payment = await prisma.payment.findUnique({
     where: {
       chapaTxRef: txRef,
@@ -1301,20 +1340,62 @@ const checkPaymentStatus = async (txRef, userId) => {
     throw new Error("Payment not found");
   }
 
-  const result = await processPaymentResult(txRef);
+  // Expiry handling may have changed the payment status.
+  if (payment.status === "success") {
+    return {
+      localStatus: "success",
+      chapaStatus: "success",
+      bookingStatus: payment.booking?.status ?? null,
+      qrCode: payment.booking?.qrCode ?? null,
+      expired: payment.booking?.status === "expired",
+    };
+  }
 
-  const freshBooking = await prisma.booking.findUnique({
+  if (payment.status === "failed") {
+    return {
+      localStatus: "failed",
+      chapaStatus: null,
+      bookingStatus: payment.booking?.status ?? null,
+      qrCode: payment.booking?.qrCode ?? null,
+      expired: payment.booking?.status === "expired",
+    };
+  }
+
+  // Verify pending payments with Chapa.
+  // Verify pending payments with Chapa.
+  let result;
+
+  try {
+    result = await processPaymentResult(txRef);
+  } catch (error) {
+    console.error("Payment verification failed:", {
+      message: error.message,
+      status: error.response?.status,
+      chapaMessage: error.response?.data?.message,
+    });
+
+    throw error;
+  }
+
+  const freshPayment = await prisma.payment.findUnique({
     where: {
-      id: payment.bookingId,
+      chapaTxRef: txRef,
+    },
+    include: {
+      booking: true,
     },
   });
 
+  if (!freshPayment) {
+    throw new Error("Payment not found");
+  }
+
   return {
-    localStatus: result.payment?.status ?? payment.status,
+    localStatus: result.payment?.status ?? freshPayment.status,
     chapaStatus: result.chapaStatus,
-    bookingStatus: freshBooking?.status ?? null,
-    qrCode: freshBooking?.qrCode ?? null,
-    expired: freshBooking?.status === "expired",
+    bookingStatus: freshPayment.booking?.status ?? null,
+    qrCode: freshPayment.booking?.qrCode ?? null,
+    expired: freshPayment.booking?.status === "expired",
     ...(result.needsManualRefund ? { needsManualRefund: true } : {}),
   };
 };
@@ -1357,7 +1438,7 @@ const initializeTrainerSessionPayment = async (trainerSessionId, userId) => {
 
   throw new Error(
     "Individual trainer-session payments are not supported in V2. " +
-    "Pay for the associated provider-package order instead.",
+      "Pay for the associated provider-package order instead.",
   );
 };
 

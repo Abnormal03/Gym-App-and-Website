@@ -34,6 +34,7 @@ const sendError = (res, error, fallbackMessage) => {
     "Invalid slot range",
     "Booking start must be in the future",
     "Invalid gym capacity",
+    "No gym details provided to update",
   ];
 
   if (badRequestErrors.includes(message)) {
@@ -174,6 +175,7 @@ const updateGym = async (req, res) => {
 
     const updatedGym = await UpdateDetails({
       id: gymId,
+      adminId: req.user.id,
       ...req.body,
     });
 

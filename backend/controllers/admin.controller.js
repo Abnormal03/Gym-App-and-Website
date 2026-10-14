@@ -9,6 +9,9 @@ const {
   getTrainerForVerification: getTrainerForVerificationService,
   verifyTrainer: verifyTrainerService,
   rejectTrainer: rejectTrainerService,
+
+  getAdminGyms: getAdminGymsService,
+  getAdminRevenue: getAdminRevenueService,
 } = require("../services/admin.service");
 
 const getDashboard = async (req, res) => {
@@ -271,6 +274,56 @@ const rejectTrainer = async (req, res) => {
   }
 };
 
+const getAdminGymsList = async (req, res) => {
+  try {
+    // Support both legacy protect middleware (req.user) and V2 authenticate (req.auth).
+    const adminId = Number(req.auth?.adminId ?? req.auth?.id ?? req.user?.id);
+
+    if (!Number.isInteger(adminId) || adminId <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid admin ID" });
+    }
+
+    const gyms = await getAdminGymsService(adminId);
+
+    return res.status(200).json({ success: true, count: gyms.length, gyms });
+  } catch (error) {
+    console.error("Get admin gyms error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to get gyms" });
+  }
+};
+
+const getAdminRevenueController = async (req, res) => {
+  try {
+    const adminId = Number(req.auth?.adminId ?? req.auth?.id ?? req.user?.id);
+
+    if (!Number.isInteger(adminId) || adminId <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid admin ID" });
+    }
+
+    const { gymId, from, to } = req.query;
+
+    const data = await getAdminRevenueService({ adminId, gymId, from, to });
+
+    return res.status(200).json({ success: true, ...data });
+  } catch (error) {
+    console.error("Admin revenue error:", error.message);
+
+    if (
+      error.message === "Invalid gymId" ||
+      error.message === "Invalid from date" ||
+      error.message === "Invalid to date"
+    ) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    if (error.message === "Gym not found or not owned by you") {
+      return res.status(403).json({ success: false, message: error.message });
+    }
+
+    return res.status(500).json({ success: false, message: "Failed to get revenue" });
+  }
+};
+
 module.exports = {
   getDashboard,
 
@@ -284,4 +337,7 @@ module.exports = {
   getTrainerForVerification,
   verifyTrainer,
   rejectTrainer,
+
+  getAdminGymsList,
+  getAdminRevenueController,
 };

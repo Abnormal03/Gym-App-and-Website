@@ -758,7 +758,17 @@ const createCheckout = async (request) => {
 
   // Paid checkout: initialize Chapa after the database
   // transaction has committed.
-  const payment = await initializePayment(response.bookingId, input.userId);
+  let payment;
+  try {
+    payment = await initializePayment(response.bookingId, input.userId);
+  } catch (error) {
+    // The order and booking are already saved. Keep the full error in the server log.
+    console.error(
+      `Checkout: order ${response.orderId} (booking ${response.bookingId}) was created but payment initialization failed:`,
+      error,
+    );
+    throw error;
+  }
 
   return {
     ...response,

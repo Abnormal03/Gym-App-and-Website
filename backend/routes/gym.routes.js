@@ -11,6 +11,10 @@ const {
   getGymStreakLeaderboard,
 } = require("../controllers/gym.controller");
 
+const {
+  getGymProvidersController,
+} = require("../controllers/provider.controller");
+
 const { protect, requireRole } = require("../middleware/auth.middleware");
 const adminOnly = requireRole("GYM_ADMIN")
 
@@ -22,6 +26,10 @@ router.get("/:id/leaderboard", protect, getGymStreakLeaderboard);
 router.get("/:id/streak-leaderboard", protect, getGymStreakLeaderboard);
 router.get("/:id/streakLeaderboard", protect, getGymStreakLeaderboard);
 router.get("/:id/availability", protect, checkAvailability);
+
+// B-1: providers at a gym with optional time-window filtering
+router.get("/:id/providers", protect, getGymProvidersController);
+
 router.get("/:id", protect, getGymDetails);
 
 router.post("/", protect, adminOnly, addGym);
