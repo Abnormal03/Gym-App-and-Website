@@ -21,10 +21,6 @@ const {
   isWithinGymOpeningHours,
 } = require("../utils/time");
 
-// --------------------------------------------------
-// GENERAL HELPERS
-// --------------------------------------------------
-
 const validateId = (value, name) => {
   const id = Number(value);
 

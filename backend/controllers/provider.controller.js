@@ -246,6 +246,28 @@ const getManagedProviderController = async (req, res, next) => {
       provider,
     });
   } catch (error) {
+    if (error.code === "NOT_FOUND") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (error.code === "FORBIDDEN") {
+      return res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (error.code === "VALIDATION") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    console.error("[getManagedProviderController]", error);
     return next(error);
   }
 };

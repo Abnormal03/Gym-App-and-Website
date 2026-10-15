@@ -1,0 +1,3 @@
+ALTER TABLE "Provider"
+  ADD COLUMN IF NOT EXISTS "consultationPrice" DECIMAL(12,2),
+  ADD COLUMN IF NOT EXISTS "chatDays" INTEGER;
