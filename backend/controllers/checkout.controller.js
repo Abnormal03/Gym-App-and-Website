@@ -2,6 +2,7 @@ const {
   quoteCheckout,
   createCheckout,
 } = require("../services/checkout.service");
+const { clientMessage } = require("../utils/safeError");
 
 const quoteCheckoutController = async (req, res) => {
   try {
@@ -27,7 +28,7 @@ const quoteCheckoutController = async (req, res) => {
       success: false,
       message: clientErrorCodes.has(error.message)
         ? error.message
-        : error.message,
+        : clientMessage(error, "Failed to calculate the price"),
     });
   }
 };
@@ -45,7 +46,10 @@ const createCheckoutController = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message: error.message || "Failed to create checkout",
+      message: clientMessage(
+        error,
+        "Payment could not be initialized. Please retry.",
+      ),
     });
   }
 };

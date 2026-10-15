@@ -200,6 +200,7 @@ const checkOwnership = async (userId, gymId) => {
 
 const UpdateDetails = async ({
   id,
+  adminId,
   name,
   address,
   latitude,
@@ -211,13 +212,35 @@ const UpdateDetails = async ({
   amenities,
 }) => {
   const gymId = validatePositiveId(id, "gym ID");
+  const ownerId = validatePositiveId(adminId, "admin ID");
+
+  const allowedFields = [
+    "name",
+    "address",
+    "latitude",
+    "longitude",
+    "openingTime",
+    "closingTime",
+    "capacity",
+    "photos",
+    "amenities",
+  ];
+
+  const suppliedFields = Object.keys(arguments[0] || {});
+  const unsupportedFields = suppliedFields.filter(
+    (field) => !["id", "adminId", ...allowedFields].includes(field),
+  );
+
+  if (unsupportedFields.length > 0) {
+    throw new Error(`Unsupported gym fields: ${unsupportedFields.join(", ")}`);
+  }
+
   const updateData = {};
 
   if (name !== undefined) {
     if (typeof name !== "string" || !name.trim()) {
       throw new Error("Gym name cannot be empty");
     }
-
     updateData.name = name.trim();
   }
 
@@ -225,7 +248,6 @@ const UpdateDetails = async ({
     if (typeof address !== "string" || !address.trim()) {
       throw new Error("Gym address cannot be empty");
     }
-
     updateData.address = address.trim();
   }
 
@@ -239,7 +261,6 @@ const UpdateDetails = async ({
     ) {
       throw new Error("Invalid latitude");
     }
-
     updateData.latitude = Number(latitude);
   }
 
@@ -253,24 +274,27 @@ const UpdateDetails = async ({
     ) {
       throw new Error("Invalid longitude");
     }
-
     updateData.longitude = Number(longitude);
   }
 
   if (openingTime !== undefined) {
-    if (typeof openingTime !== "string" || !openingTime.trim()) {
+    if (
+      typeof openingTime !== "string" ||
+      !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(openingTime)
+    ) {
       throw new Error("Invalid opening time");
     }
-
-    updateData.openingTime = openingTime.trim();
+    updateData.openingTime = openingTime;
   }
 
   if (closingTime !== undefined) {
-    if (typeof closingTime !== "string" || !closingTime.trim()) {
+    if (
+      typeof closingTime !== "string" ||
+      !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime)
+    ) {
       throw new Error("Invalid closing time");
     }
-
-    updateData.closingTime = closingTime.trim();
+    updateData.closingTime = closingTime;
   }
 
   if (capacity !== undefined) {
@@ -278,18 +302,22 @@ const UpdateDetails = async ({
   }
 
   if (photos !== undefined) {
-    if (!Array.isArray(photos)) {
+    if (
+      !Array.isArray(photos) ||
+      !photos.every((photo) => typeof photo === "string")
+    ) {
       throw new Error("Photos must be an array");
     }
-
     updateData.photos = photos;
   }
 
   if (amenities !== undefined) {
-    if (!Array.isArray(amenities)) {
+    if (
+      !Array.isArray(amenities) ||
+      !amenities.every((amenity) => typeof amenity === "string")
+    ) {
       throw new Error("Amenities must be an array");
     }
-
     updateData.amenities = amenities;
   }
 
@@ -297,24 +325,29 @@ const UpdateDetails = async ({
     throw new Error("No gym details provided to update");
   }
 
-  const existingGym = await prisma.gym.findUnique({
+  const result = await prisma.gym.updateMany({
     where: {
       id: gymId,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (!existingGym) {
-    throw new Error("Gym not found");
-  }
-
-  return prisma.gym.update({
-    where: {
-      id: gymId,
+      adminId: ownerId,
     },
     data: updateData,
+  });
+
+  if (result.count === 0) {
+    const gym = await prisma.gym.findUnique({
+      where: { id: gymId },
+      select: { id: true },
+    });
+
+    if (!gym) {
+      throw new Error("Gym not found");
+    }
+
+    throw new Error("You are not the owner of this gym");
+  }
+
+  return prisma.gym.findUnique({
+    where: { id: gymId },
   });
 };
 
@@ -478,17 +511,21 @@ const getGymStreakLeaderboardService = async (gymId, callerUserId) => {
       lastWorkoutLocalDate: stat.lastWorkoutLocalDate,
     }))
     .sort((a, b) => {
-      if (b.currentStreak !== a.currentStreak) return b.currentStreak - a.currentStreak;
-      if (b.totalWorkouts !== a.totalWorkouts) return b.totalWorkouts - a.totalWorkouts;
+      if (b.currentStreak !== a.currentStreak)
+        return b.currentStreak - a.currentStreak;
+      if (b.totalWorkouts !== a.totalWorkouts)
+        return b.totalWorkouts - a.totalWorkouts;
       const nameOrder = (a.name || "").localeCompare(b.name || "");
       if (nameOrder !== 0) return nameOrder;
       return a.userId - b.userId;
     });
 
-  const leaderboard = rows.map((row, index) => ({
-    rank: index + 1,
-    ...row,
-  })).slice(0, 20);
+  const leaderboard = rows
+    .map((row, index) => ({
+      rank: index + 1,
+      ...row,
+    }))
+    .slice(0, 20);
 
   const callerRank = rows.findIndex((row) => row.userId === userId);
 
@@ -496,16 +533,17 @@ const getGymStreakLeaderboardService = async (gymId, callerUserId) => {
     gymId: gym.id,
     gymName: gym.name,
     leaderboard,
-    caller: callerRank >= 0
-      ? {
-          userId,
-          rank: callerRank + 1,
-          currentStreak: rows[callerRank].currentStreak,
-          totalWorkouts: rows[callerRank].totalWorkouts,
-          name: rows[callerRank].name,
-          photoUrl: rows[callerRank].photoUrl,
-        }
-      : null,
+    caller:
+      callerRank >= 0
+        ? {
+            userId,
+            rank: callerRank + 1,
+            currentStreak: rows[callerRank].currentStreak,
+            totalWorkouts: rows[callerRank].totalWorkouts,
+            name: rows[callerRank].name,
+            photoUrl: rows[callerRank].photoUrl,
+          }
+        : null,
   };
 };
 

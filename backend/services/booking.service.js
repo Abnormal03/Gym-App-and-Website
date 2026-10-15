@@ -372,34 +372,37 @@ const getMemberBookings = async (userId, status) => {
   });
 
   // Keep all existing booking response fields and append B4 fields.
-  return bookings.map((booking) => {
-    const consultationItems = (booking.order?.items || [])
-      .filter((item) => item.consultation)
-      .map((item) => ({
-        status: item.consultation.status,
-        consultant: item.consultation.consultant
-          ? {
-              id: item.consultation.consultant.id,
-              name: item.consultation.consultant.name,
-            }
-          : null,
-        startsAt: item.consultation.startsAt,
-        expiresAt: item.consultation.expiresAt,
-      }));
+  // getOrderStatus is async, so every booking is mapped with await (otherwise orderStatus is {}).
+  return Promise.all(
+    bookings.map(async (booking) => {
+      const consultationItems = (booking.order?.items || [])
+        .filter((item) => item.consultation)
+        .map((item) => ({
+          status: item.consultation.status,
+          consultant: item.consultation.consultant
+            ? {
+                id: item.consultation.consultant.id,
+                name: item.consultation.consultant.name,
+              }
+            : null,
+          startsAt: item.consultation.startsAt,
+          expiresAt: item.consultation.expiresAt,
+        }));
 
-    return {
-      ...booking,
-      bookingType: booking.bookingType,
-      headcount: booking.headcount,
-      packageName: booking.package?.name ?? null,
-      orderStatus: getOrderStatus(booking.order, booking),
-      sessions: booking.sessions.map((session) => ({
-        ...session,
-        providerName: session.provider?.name ?? null,
-      })),
-      consultation: consultationItems,
-    };
-  });
+      return {
+        ...booking,
+        bookingType: booking.bookingType,
+        headcount: booking.headcount,
+        packageName: booking.package?.name ?? null,
+        orderStatus: await getOrderStatus(booking.order, booking),
+        sessions: booking.sessions.map((session) => ({
+          ...session,
+          providerName: session.provider?.name ?? null,
+        })),
+        consultation: consultationItems,
+      };
+    }),
+  );
 };
 
 /* =========================================================

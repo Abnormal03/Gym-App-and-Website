@@ -11,6 +11,9 @@ const {
   getTrainerForVerification,
   verifyTrainer,
   rejectTrainer,
+
+  getAdminGymsList,
+  getAdminRevenueController,
 } = require("../controllers/admin.controller.js");
 
 const { protect, requireRole } = require("../middleware/auth.middleware.js");
@@ -20,6 +23,12 @@ const router = express.Router();
 
 
 router.get("/dashboard", protect, adminOnly, getDashboard);
+
+// B-3: gyms owned by the calling admin
+router.get("/gyms", protect, adminOnly, getAdminGymsList);
+
+// W3 / B-4: per-gym revenue summary
+router.get("/revenue", protect, adminOnly, getAdminRevenueController);
 
 router.get("/users", protect, adminOnly, getAllUsers);
 

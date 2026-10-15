@@ -48,7 +48,8 @@ const getOrderStatusController = async (req, res) => {
       });
     }
 
-    const status = getOrderStatus(order, order.booking);
+    // getOrderStatus is async: without await the JSON shows "status": {}
+    const status = await getOrderStatus(order, order.booking);
     const payment = order.booking.payment;
 
     return res.status(200).json({
