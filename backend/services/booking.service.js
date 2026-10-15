@@ -9,6 +9,7 @@ const {
 } = require("./bookingHelpers.service");
 
 const { getNumberSetting } = require("./platformSetting.service");
+const { parseUtcInstant } = require("../utils/time");
 
 const isAdmin = (role) => role === "gym_admin" || role === "platform_admin";
 
@@ -55,8 +56,8 @@ const createBooking = async ({
     throw new Error("Invalid booking date");
   }
 
-  const start = new Date(slotStart);
-  const end = new Date(slotEnd);
+  const start = parseUtcInstant(slotStart);
+  const end = parseUtcInstant(slotEnd);
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new Error("Invalid booking date");
@@ -510,11 +511,10 @@ const addSessionToBooking = async (
   userId = validatePositiveId(userId, "user ID");
   purchaseId = validatePositiveId(purchaseId, "purchase ID");
 
-  if (!startsAt || Number.isNaN(new Date(startsAt).getTime())) {
+  const requestedStart = startsAt ? parseUtcInstant(startsAt) : null;
+  if (!requestedStart || Number.isNaN(requestedStart.getTime())) {
     throw new Error("Invalid session start time");
   }
-
-  const requestedStart = new Date(startsAt);
 
   return prisma.$transaction(
     async (tx) => {

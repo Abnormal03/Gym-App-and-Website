@@ -425,20 +425,20 @@ async function expirePendingOrders() {
 }
 
 // Start the HTTP server only once.
-httpServer.listen(PORT, "0.0.0.0", () => {
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 
- // Run once at startup, then every minute.
- void expirePendingOrders();
+  // Run once at startup, then every minute.
+  void expirePendingOrders();
 
- setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
+  setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
 
- const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
- setInterval(async () => {
-   try {
-     await expirePendingTrainerSessions();
-   } catch (error) {
-     console.error("Trainer session expiration error:", error);
-   }
- }, TRAINER_SESSION_EXPIRATION_INTERVAL);
+  const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
+  setInterval(async () => {
+    try {
+      await expirePendingTrainerSessions();
+    } catch (error) {
+      console.error("Trainer session expiration error:", error);
+    }
+  }, TRAINER_SESSION_EXPIRATION_INTERVAL);
 });

@@ -10,6 +10,7 @@ const { assertAdminOwnsGym, adminGymIds, toId } = require("../utils/scope");
 const { hashPassword, generateTempPassword } = require("../utils/password");
 const { parsePagination, paginated } = require("../utils/pagination");
 const { getValidSessionStarts } = require("./bookingHelpers.service");
+const { parseUtcInstant } = require("../utils/time");
 
 const VALID_PROVIDER_TYPES = [
   "TRAINER",
@@ -357,8 +358,8 @@ async function getGymProviders(gymId, { type, startsAt, endsAt }) {
     return providers.map(({ availability, ...p }) => p);
   }
 
-  const windowStart = new Date(startsAt);
-  const windowEnd = new Date(endsAt);
+  const windowStart = parseUtcInstant(startsAt);
+  const windowEnd = parseUtcInstant(endsAt);
 
   if (
     Number.isNaN(windowStart.getTime()) ||
@@ -441,8 +442,8 @@ async function getMemberProviderDetail(providerId, { startsAt, endsAt }) {
   let validSessionStarts = [];
 
   if (startsAt && endsAt) {
-    const windowStart = new Date(startsAt);
-    const windowEnd = new Date(endsAt);
+    const windowStart = parseUtcInstant(startsAt);
+    const windowEnd = parseUtcInstant(endsAt);
 
     if (
       Number.isNaN(windowStart.getTime()) ||
@@ -500,8 +501,8 @@ function parseProviderWindow(startsAt, endsAt) {
     );
   }
 
-  const start = new Date(startsAt);
-  const end = new Date(endsAt);
+  const start = parseUtcInstant(startsAt);
+  const end = parseUtcInstant(endsAt);
 
   if (
     !Number.isFinite(start.getTime()) ||

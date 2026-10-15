@@ -1,6 +1,6 @@
 /**
  * Weekly availability of a trainer / physiotherapist: a set of (dayOfWeek, period) slots.
- * Periods (Addis time): MORNING 06-12, AFTERNOON 12-17, EVENING 17-22. dayOfWeek: 0 = Sunday.
+ * Periods (UTC): MORNING 06-12, AFTERNOON 12-17, EVENING 17-22. dayOfWeek: 0 = Sunday.
  * Changing availability only affects NEW bookings; sessions that are already scheduled stay as they are.
  */
 const prismaModule = require('../config/prisma');

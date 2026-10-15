@@ -1,5 +1,9 @@
 const prisma = require("../config/prisma");
 const { AppError } = require("../utils/errors");
+const {
+  parseUtcSlotRange,
+  isWithinGymOpeningHours,
+} = require("../utils/time");
 const { getUsedCapacity, expireStale } = require("./bookingHelpers.service");
 
 const validatePositiveId = (value, fieldName = "ID") => {
@@ -23,22 +27,7 @@ const validateCapacity = (capacity) => {
 };
 
 const validateSlotRange = (slotStart, slotEnd) => {
-  if (!slotStart || !slotEnd) {
-    throw new Error("Slot start and end are required");
-  }
-
-  const start = new Date(slotStart);
-  const end = new Date(slotEnd);
-
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
-    throw new Error("Invalid slot range");
-  }
-
-  if (start >= end) {
-    throw new Error("Invalid slot range");
-  }
-
-  return { start, end };
+  return parseUtcSlotRange(slotStart, slotEnd);
 };
 
 const getGymsService = async () => {
@@ -383,6 +372,8 @@ const isAvailable = async (id, slot_start, slot_end) => {
         id: true,
         capacity: true,
         isActive: true,
+        openingTime: true,
+        closingTime: true,
       },
     });
 
@@ -403,11 +394,18 @@ const isAvailable = async (id, slot_start, slot_end) => {
     }
 
     const booked = await getUsedCapacity(tx, gymId, start, end);
+    const withinOpeningHours = isWithinGymOpeningHours(
+      start,
+      end,
+      gym.openingTime,
+      gym.closingTime,
+    );
 
     return {
       capacity,
       booked,
-      available: Math.max(0, capacity - booked),
+      available: withinOpeningHours ? Math.max(0, capacity - booked) : 0,
+      withinOpeningHours,
     };
   });
 };
@@ -538,13 +536,13 @@ const getGymStreakLeaderboardService = async (gymId, callerUserId) => {
     caller:
       callerRank >= 0
         ? {
-            userId,
-            rank: callerRank + 1,
-            currentStreak: rows[callerRank].currentStreak,
-            totalWorkouts: rows[callerRank].totalWorkouts,
-            name: rows[callerRank].name,
-            photoUrl: rows[callerRank].photoUrl,
-          }
+          userId,
+          rank: callerRank + 1,
+          currentStreak: rows[callerRank].currentStreak,
+          totalWorkouts: rows[callerRank].totalWorkouts,
+          name: rows[callerRank].name,
+          photoUrl: rows[callerRank].photoUrl,
+        }
         : null,
   };
 };
