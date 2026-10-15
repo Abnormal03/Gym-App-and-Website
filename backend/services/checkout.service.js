@@ -13,10 +13,6 @@ const { getNumberSetting } = require("./platformSetting.service");
 
 const { addMinutes, addDays, periodOf, periodOfEnd } = require("../utils/time");
 
-// --------------------------------------------------
-// GENERAL HELPERS
-// --------------------------------------------------
-
 const validateId = (value, name) => {
   const id = Number(value);
 
