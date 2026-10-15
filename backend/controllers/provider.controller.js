@@ -4,6 +4,13 @@ const {
   getPublicProviderAvailability,
   getPublicProvidersAtGym,
   getPublicProviderDetails,
+
+  // Gym admin provider management
+  createProvider: createProviderService,
+  listProviders: listProvidersService,
+  getProvider: getProviderService,
+  updateProvider: updateProviderService,
+  resetProviderPassword: resetProviderPasswordService,
 } = require("../services/provider.service");
 
 // GET /api/providers/search?name=&type=&gymId=&specialization=
@@ -171,11 +178,156 @@ const getMemberProviderDetailController = async (req, res, next) => {
   }
 };
 
+const createProviderController = async (req, res, next) => {
+  try {
+    const provider = await createProviderService(req.user.id, req.body);
+
+    return res.status(201).json({
+      success: true,
+      message: "Provider created successfully",
+      provider,
+    });
+  } catch (error) {
+    if (error.code === "ALREADY_EXISTS") {
+      return res.status(409).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (error.code === "FORBIDDEN") {
+      return res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return next(error);
+  }
+};
+
+const listProvidersController = async (req, res, next) => {
+  try {
+    const { gymId, type, isActive, page, limit } = req.query;
+
+    const query = { gymId, type };
+
+    if (isActive !== undefined) {
+      if (!["true", "false"].includes(isActive)) {
+        return res.status(400).json({
+          success: false,
+          message: "isActive must be true or false",
+        });
+      }
+
+      query.isActive = isActive === "true";
+    }
+
+    const result = await listProvidersService(req.user.id, query, {
+      page,
+      limit,
+    });
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getManagedProviderController = async (req, res, next) => {
+  try {
+    const provider = await getProviderService(req.user.id, req.params.id);
+
+    return res.status(200).json({
+      success: true,
+      provider,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updateProviderController = async (req, res, next) => {
+  try {
+    // Only allow editable fields.
+    // Never accept type, email, gymId, password, or password hash.
+    const allowedFields = [
+      "name",
+      "phone",
+      "photoUrl",
+      "bio",
+      "specializations",
+      "experienceYears",
+      "certifications",
+      "sharePercent",
+      "isActive",
+    ];
+
+    const input = {};
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        input[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(input).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No editable provider fields were supplied",
+      });
+    }
+
+    const provider = await updateProviderService(
+      req.user.id,
+      req.params.id,
+      input,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Provider updated successfully",
+      provider,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const resetProviderPasswordController = async (req, res, next) => {
+  try {
+    const result = await resetProviderPasswordService(
+      req.user.id,
+      req.params.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Temporary password generated successfully",
+      ...result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 // Keep this export because provider.routes.js uses it.
+
 module.exports = {
+  // Existing controllers
   searchProviders,
   getProviderPackages,
   getProviderAvailability,
   getGymProvidersController,
   getMemberProviderDetailController,
+
+  // New admin controllers
+  createProviderController,
+  listProvidersController,
+  getManagedProviderController,
+  updateProviderController,
+  resetProviderPasswordController,
 };
