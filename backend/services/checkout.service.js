@@ -11,7 +11,15 @@ const {
 
 const { getNumberSetting } = require("./platformSetting.service");
 
-const { addMinutes, addDays, periodOf, periodOfEnd } = require("../utils/time");
+const {
+  addMinutes,
+  addDays,
+  utcDayOfWeek,
+  parseUtcInstant,
+  periodOf,
+  periodOfEnd,
+  isWithinGymOpeningHours,
+} = require("../utils/time");
 
 const validateId = (value, name) => {
   const id = Number(value);
@@ -36,67 +44,23 @@ const money = (value) => {
 const isValidDate = (value) =>
   value instanceof Date && Number.isFinite(value.getTime());
 
-const getAddisParts = (date) => {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Africa/Addis_Ababa",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-
-  const values = Object.fromEntries(
-    parts.map(({ type, value }) => [type, value]),
-  );
-
-  const weekdays = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-
-  return {
-    weekday: weekdays[values.weekday],
-    hour: Number(values.hour),
-    minute: Number(values.minute),
-    time: `${values.hour}:${values.minute}`,
-  };
-};
-
-const isValidClockTime = (value) => {
-  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) {
-    return false;
-  }
-
-  const [hour, minute] = value.split(":").map(Number);
-
-  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
-};
-
 // --------------------------------------------------
 // GYM OPENING HOURS
 // --------------------------------------------------
 
 const validateGymOpeningHours = (gym, start, end) => {
-  const opening = gym.openingTime;
-  const closing = gym.closingTime;
-
   if (
-    !isValidClockTime(opening) ||
-    !isValidClockTime(closing) ||
-    opening >= closing
+    !isWithinGymOpeningHours(
+      start,
+      end,
+      gym.openingTime,
+      gym.closingTime,
+    )
   ) {
-    throw new Error("Invalid gym opening hours");
-  }
-
-  const startTime = getAddisParts(start).time;
-  const endTime = getAddisParts(end).time;
-
-  if (startTime < opening || endTime > closing) {
+    console.log("Start: ", start)
+    console.log("end ", start)
+    console.log("gym Start ", gym?.openingTime)
+    console.log("gym End ", gym?.closingTime)
     throw new Error("OUTSIDE_GYM_OPENING_HOURS");
   }
 };
@@ -109,9 +73,7 @@ const assertPackageRestrictions = (gymPackage, start, end) => {
   const allowedDays = gymPackage.allowedDays || [];
   const allowedPeriods = gymPackage.allowedPeriods || [];
 
-  const startParts = getAddisParts(start);
-
-  if (allowedDays.length > 0 && !allowedDays.includes(startParts.weekday)) {
+  if (allowedDays.length > 0 && !allowedDays.includes(utcDayOfWeek(start))) {
     throw new Error("PACKAGE_RESTRICTED");
   }
 
@@ -155,7 +117,7 @@ const validateInput = (request) => {
     throw new Error("Booking start time is required");
   }
 
-  const start = new Date(startsAt);
+  const start = parseUtcInstant(startsAt);
 
   if (!isValidDate(start) || start <= new Date()) {
     throw new Error("Invalid booking date or time");
@@ -218,7 +180,9 @@ const validateInput = (request) => {
       throw new Error("firstSessionStartsAt is required");
     }
 
-    input.provider.sessionStart = new Date(input.provider.firstSessionStartsAt);
+    input.provider.sessionStart = parseUtcInstant(
+      input.provider.firstSessionStartsAt,
+    );
 
     if (
       !isValidDate(input.provider.sessionStart) ||

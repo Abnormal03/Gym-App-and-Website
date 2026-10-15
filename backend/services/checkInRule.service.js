@@ -1,12 +1,12 @@
 /**
  * Pure rules for check-in (no database). Easy to unit test: see scripts/check-a4-core.js.
- * Dates are UTC instants; "today" and weekdays are Addis time (via utils/time.js).
+ * Dates, weekdays, periods, and clock values are evaluated in UTC.
  */
-const { addisDayOfWeek, periodOf, addisMinutesOfDay, parseHHmm, previousAddisDate } = require('../utils/time');
+const { utcDayOfWeek, periodOf, utcMinutesOfDay, parseHHmm, previousUtcDate } = require('../utils/time');
 
 /** Does the package's weekday / period restriction allow `now`? (empty list = no restriction) */
 function packageAllowsNow(pkg, now) {
-    if (pkg.allowedDays.length > 0 && !pkg.allowedDays.includes(addisDayOfWeek(now))) {
+    if (pkg.allowedDays.length > 0 && !pkg.allowedDays.includes(utcDayOfWeek(now))) {
         return { ok: false, reason: 'WRONG_DAY' };
     }
     const period = periodOf(now);
@@ -16,14 +16,14 @@ function packageAllowsNow(pkg, now) {
     return { ok: true };
 }
 
-/** Gym.openingTime / closingTime are Addis-local 'HH:mm' strings. Open from opening (inclusive) to closing (exclusive). */
+/** Gym.openingTime / closingTime are 'HH:mm' UTC clock values. Open from opening (inclusive) to closing (exclusive). */
 function isWithinGymHours(gym, now) {
-    const minutes = addisMinutesOfDay(now);
+    const minutes = utcMinutesOfDay(now);
     return minutes >= parseHHmm(gym.openingTime) && minutes < parseHHmm(gym.closingTime);
 }
 
 /**
- * New streak numbers after a workout on `today` ('YYYY-MM-DD', Addis).
+ * New streak numbers after a workout on `today` ('YYYY-MM-DD', UTC).
  *  - same day as the last workout  -> streak unchanged (it is still the same day of the streak)
  *  - the day after the last one    -> streak + 1
  *  - any other gap (or first ever) -> streak restarts at 1
@@ -34,7 +34,7 @@ function computeStreak(stats, today) {
     const last = prev.lastWorkoutLocalDate;
     let current;
     if (last && last >= today) current = Math.max(prev.currentStreak, 1); // same day (or clock oddity): unchanged
-    else if (last === previousAddisDate(today)) current = prev.currentStreak + 1;
+    else if (last === previousUtcDate(today)) current = prev.currentStreak + 1;
     else current = 1;
     return {
         totalWorkouts: prev.totalWorkouts + 1,
@@ -48,7 +48,7 @@ function computeStreak(stats, today) {
 function effectiveStreak(stats, today) {
     if (!stats || !stats.lastWorkoutLocalDate) return 0;
     const last = stats.lastWorkoutLocalDate;
-    return last >= today || last === previousAddisDate(today) ? stats.currentStreak : 0;
+    return last >= today || last === previousUtcDate(today) ? stats.currentStreak : 0;
 }
 
 /** '+251911000999' -> '+2519*****999'. Staff can recognise a member without seeing the whole number. */

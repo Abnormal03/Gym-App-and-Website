@@ -1,7 +1,7 @@
 const { getNumberSetting } = require("./platformSetting.service");
 
 const {
-  addisDayOfWeek,
+  utcDayOfWeek,
   periodOf,
   periodOfEnd,
   addMinutes,
@@ -180,7 +180,7 @@ const isProviderFree = async (tx, providerId, start, end) => {
  *
  * Candidate starts are on 30-minute boundaries. A session
  * must fit inside the booking window and inside one provider
- * availability period in Addis Ababa time.
+ * availability period in UTC.
  */
 const getValidSessionStarts = async (
   tx,
@@ -221,8 +221,7 @@ const getValidSessionStarts = async (
     availability.map(({ dayOfWeek, period }) => `${dayOfWeek}:${period}`),
   );
 
-  // Addis time is UTC+3 year-round. Since this is a whole-hour
-  // offset, 30-minute boundaries align in UTC and Addis time.
+  // Candidate times are aligned to UTC 30-minute boundaries.
   const firstCandidate = new Date(start);
   firstCandidate.setUTCSeconds(0, 0);
 
@@ -248,7 +247,7 @@ const getValidSessionStarts = async (
 
     if (sessionEnd > end) continue;
 
-    const day = addisDayOfWeek(candidate);
+    const day = utcDayOfWeek(candidate);
     const period = periodOf(candidate);
 
     if (!period) continue;

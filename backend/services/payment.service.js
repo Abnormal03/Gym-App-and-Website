@@ -744,14 +744,14 @@ const canHonorLatePayment = async (tx, booking) => {
 
   const providerItems = booking.order
     ? await tx.orderItem.findMany({
-        where: {
-          orderId: booking.order.id,
-          type: "PROVIDER_PACKAGE",
-        },
-        include: {
-          providerPackage: true,
-        },
-      })
+      where: {
+        orderId: booking.order.id,
+        type: "PROVIDER_PACKAGE",
+      },
+      include: {
+        providerPackage: true,
+      },
+    })
     : [];
 
   for (const item of providerItems) {
@@ -969,12 +969,6 @@ const processPaymentResult = async (txRef) => {
   }
 
   const verification = await verifyChapaTransaction(txRef);
-
-  console.log(
-    "Chapa verification response:",
-    JSON.stringify(verification, null, 2),
-  );
-
   const chapaStatus = getChapaStatus(verification);
   const outcome = getPaymentOutcome(chapaStatus);
 
@@ -1433,7 +1427,7 @@ const initializeTrainerSessionPayment = async (trainerSessionId, userId) => {
 
   throw new Error(
     "Individual trainer-session payments are not supported in V2. " +
-      "Pay for the associated provider-package order instead.",
+    "Pay for the associated provider-package order instead.",
   );
 };
 

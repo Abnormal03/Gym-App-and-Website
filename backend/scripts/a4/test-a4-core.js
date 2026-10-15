@@ -12,7 +12,7 @@ const {
     maskPhone,
 } = require('../../services/checkInRule.service');
 const { signQrToken, verifyQrToken } = require('../../services/qrToken.service');
-const { addisToUtc, addDays, toAddisDate } = require('../../utils/time');
+const { utcFromDateTime } = require('../../utils/time');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-for-a4-checks-12345';
 
@@ -63,12 +63,12 @@ console.log('  ✔ Effective streak drops silently to 0 after missed day');
 
 // 3. Package restriction filters (days & periods)
 console.log('3. Testing package restrictions...');
-// Addis Monday: 2026-10-12T07:00:00+03:00 (UTC 04:00)
-const mondayMorning = addisToUtc('2026-10-12', '08:00');
-// Addis Sunday: 2026-10-11T08:00:00+03:00 (UTC 05:00)
-const sundayMorning = addisToUtc('2026-10-11', '08:00');
-// Addis Monday Afternoon: 14:00
-const mondayAfternoon = addisToUtc('2026-10-12', '14:00');
+// Monday in UTC
+const mondayMorning = utcFromDateTime('2026-10-12', '08:00');
+// Sunday in UTC
+const sundayMorning = utcFromDateTime('2026-10-11', '08:00');
+// Monday afternoon in UTC
+const mondayAfternoon = utcFromDateTime('2026-10-12', '14:00');
 
 // Weekday morning only package: days 1..5 (Mon-Fri), period MORNING
 const weekdayMorningPkg = {
@@ -93,9 +93,9 @@ console.log('  ✔ Package restrictions correctly validate allowed days and peri
 // 4. Gym operating hours
 console.log('4. Testing gym operating hours...');
 const gym = { openingTime: '06:00', closingTime: '22:00' };
-const openTime = addisToUtc('2026-10-12', '10:00');
-const beforeOpen = addisToUtc('2026-10-12', '05:30');
-const afterClose = addisToUtc('2026-10-12', '22:30');
+const openTime = utcFromDateTime('2026-10-12', '10:00');
+const beforeOpen = utcFromDateTime('2026-10-12', '05:30');
+const afterClose = utcFromDateTime('2026-10-12', '22:30');
 
 assert.equal(isWithinGymHours(gym, openTime), true);
 assert.equal(isWithinGymHours(gym, beforeOpen), false);

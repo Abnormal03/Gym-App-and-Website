@@ -5,7 +5,7 @@
  */
 const assert = require('node:assert/strict');
 const { signQrToken } = require('../../services/qrToken.service');
-const { toAddisDate, addMinutes } = require('../../utils/time');
+const { toUtcDate, addMinutes } = require('../../utils/time');
 
 process.env.JWT_SECRET = 'test-secret-123456';
 process.env.QR_SECRET = 'test-qr-secret-123456';
@@ -15,7 +15,7 @@ console.log('\n--- Running A4 Check-In Flow Integration Logic Tests ---');
 
 async function runFlowTests() {
     const now = new Date();
-    const today = toAddisDate(now);
+    const today = toUtcDate(now);
 
     // 1. QR Token verification
     const { token } = signQrToken(99);

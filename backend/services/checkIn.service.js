@@ -2,7 +2,7 @@ const prismaModule = require('../config/prisma');
 const prisma = prismaModule.prisma || prismaModule;
 const { AppError } = require('../utils/errors');
 const { toId, assertStaffInGym, assertAdminOwnsGym } = require('../utils/scope');
-const { toAddisDate, addMinutes } = require('../utils/time');
+const { toUtcDate, addMinutes } = require('../utils/time');
 const { verifyQrToken, signQrToken } = require('./qrToken.service');
 const { packageAllowsNow, isWithinGymHours } = require('../utils/checkInRules');
 const { getBoolSetting } = require('./platformSetting.service');
@@ -112,7 +112,7 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
     }
 
     const now = new Date();
-    const todayStr = toAddisDate(now);
+    const todayStr = toUtcDate(now);
 
     return prisma.$transaction(async (tx) => {
         await expireStale(tx, { userId: targetUserId, gymId });
@@ -287,7 +287,7 @@ async function getTodayCheckIns(auth, gymIdParam) {
     const gymId = toId(gymIdParam, 'gymId');
     await assertScannerAuth(auth, gymId);
 
-    const todayStr = toAddisDate(new Date());
+    const todayStr = toUtcDate(new Date());
     const list = await prisma.checkIn.findMany({
         where: { gymId, localDate: todayStr },
         include: {
@@ -317,7 +317,7 @@ async function searchMembers(auth, gymIdParam, query) {
     if (!q) return [];
 
     const now = new Date();
-    const todayStr = toAddisDate(now);
+    const todayStr = toUtcDate(now);
 
     const members = await prisma.user.findMany({
         where: {

@@ -62,8 +62,8 @@ model Gym {
   address     String
   latitude    Float?
   longitude   Float?
-  openingTime String // Addis-local "HH:mm"
-  closingTime String // Addis-local "HH:mm"
+  openingTime String // UTC clock "HH:mm"
+  closingTime String // UTC clock "HH:mm"
   capacity    Int
   photos      String[]
   amenities   String[]
@@ -141,7 +141,7 @@ model Booking {
 }
 
 model Payment {
-  id               Int             @id @default(autoincrement())
+  id               Int           @id @default(autoincrement())
   userId           Int
   bookingId        Int           @unique
   amount           Float // for a V2 order: equals Order.totalAmount
@@ -186,9 +186,9 @@ enum ProviderType {
 }
 
 enum Period {
-  MORNING // 06:00-12:00 Addis
-  AFTERNOON // 12:00-17:00
-  EVENING // 17:00-22:00
+  MORNING // 06:00-12:00 UTC
+  AFTERNOON // 12:00-17:00 UTC
+  EVENING // 17:00-22:00 UTC
 }
 
 enum BookingType {
@@ -286,7 +286,7 @@ model Provider {
 model ProviderAvailability {
   id         Int    @id @default(autoincrement())
   providerId Int
-  dayOfWeek  Int // 0=Sunday .. 6=Saturday (Addis day)
+  dayOfWeek  Int // 0=Sunday .. 6=Saturday (UTC day)
   period     Period
 
   provider Provider @relation(fields: [providerId], references: [id])
@@ -419,18 +419,18 @@ model ProviderPackagePurchase {
 }
 
 model TrainingSession {
-  id            Int           @id @default(autoincrement())
-  purchaseId    Int
-  bookingId     Int // the gym booking this session lives inside
-  providerId    Int
-  userId        Int
-  startsAt      DateTime // UTC
-  endsAt        DateTime // UTC (startsAt + SESSION_MINUTES)
-  status        SessionStatus @default(HELD)
-  completedAt   DateTime?
-  cancelledAt   DateTime?
-  cancelReason  String? // optional free-text reason provided at cancellation
-  createdAt     DateTime      @default(now())
+  id           Int           @id @default(autoincrement())
+  purchaseId   Int
+  bookingId    Int // the gym booking this session lives inside
+  providerId   Int
+  userId       Int
+  startsAt     DateTime // UTC
+  endsAt       DateTime // UTC (startsAt + SESSION_MINUTES)
+  status       SessionStatus @default(HELD)
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  cancelReason String? // optional free-text reason provided at cancellation
+  createdAt    DateTime      @default(now())
 
   purchase ProviderPackagePurchase @relation(fields: [purchaseId], references: [id])
   booking  Booking                 @relation(fields: [bookingId], references: [id])

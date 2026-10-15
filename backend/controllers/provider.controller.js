@@ -13,16 +13,18 @@ const {
   resetProviderPassword: resetProviderPasswordService,
 } = require("../services/provider.service");
 
-// GET /api/providers/search?name=&type=&gymId=&specialization=
+// GET /api/providers/search?name=&type=&gymId=&specialization=&startsAt=&endsAt=
 const searchProviders = async (req, res, next) => {
   try {
-    const { name, type, gymId, specialization } = req.query;
+    const { name, type, gymId, specialization, startsAt, endsAt } = req.query;
 
     const providers = await searchProvidersService({
       name,
       type,
       gymId,
       specialization,
+      startsAt,
+      endsAt,
     });
 
     return res.status(200).json({
@@ -33,7 +35,8 @@ const searchProviders = async (req, res, next) => {
   } catch (error) {
     if (
       error.message?.startsWith("Invalid provider type") ||
-      error.message === "Invalid gym ID"
+      error.message === "Invalid gym ID" ||
+      error.code === "VALIDATION"
     ) {
       return res.status(400).json({
         success: false,

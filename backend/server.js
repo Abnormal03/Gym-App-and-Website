@@ -424,7 +424,7 @@ async function expirePendingOrders() {
 }
 
 // Start the HTTP server only once.
-httpServer.listen(PORT, "0.0.0.0", () => {
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 
   // Run once at startup, then every minute.
