@@ -23,16 +23,10 @@ const {
   authenticate,
 } = require("../middleware/auth.middleware");
 
-// Only gym administrators can manage providers.
 const adminOnly = requireRole("GYM_ADMIN");
 
-// Search providers
 router.get("/search", protect, searchProviders);
-
-// Create a provider
 router.post("/", protect, ...adminOnly, createProviderController);
-
-// Admin provider management
 router.get("/admin/manage", protect, ...adminOnly, listProvidersController);
 
 router.get(
@@ -56,7 +50,6 @@ router.post(
   resetProviderPasswordController,
 );
 
-// Public/member provider details
 router.get("/:id", protect, getMemberProviderDetailController);
 
 router.get("/:id/packages", getProviderPackages);
