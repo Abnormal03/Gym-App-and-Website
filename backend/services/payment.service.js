@@ -17,10 +17,6 @@ const { addDays } = require("../utils/time");
 const CHAPA_BASE_URL = "https://api.chapa.co/v1";
 const DEFAULT_CONSULTATION_CHAT_DAYS = 30;
 
-/* -------------------------------------------------------------------------- */
-/* General helpers                                                            */
-/* -------------------------------------------------------------------------- */
-
 const validateId = (value, fieldName = "ID") => {
   const id = Number(value);
 
@@ -947,10 +943,6 @@ const confirmFreeCheckout = async (bookingId, userId) => {
   );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Process verified payment results                                           */
-/* -------------------------------------------------------------------------- */
-
 const processPaymentResult = async (txRef) => {
   if (typeof txRef !== "string" || !txRef.trim()) {
     throw new Error("Transaction reference is required");
@@ -983,6 +975,8 @@ const processPaymentResult = async (txRef) => {
   if (outcome === "success") {
     validateVerifiedTransaction(verification, payment, txRef);
   }
+
+  // Keep the rest of your existing function unchanged.
 
   if (outcome === "pending") {
     const currentPayment = await prisma.payment.findUnique({
