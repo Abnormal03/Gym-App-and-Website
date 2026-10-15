@@ -413,87 +413,93 @@ const cancelMemberBooking = async (id, userId) => {
   id = validatePositiveId(id, "booking ID");
   userId = validatePositiveId(userId, "user ID");
 
-  return prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw`
+  return prisma.$transaction(
+    async (tx) => {
+      const locked = await tx.$queryRaw`
       SELECT "id"
       FROM "Booking"
       WHERE "id" = ${id}
       FOR UPDATE
     `;
 
-    if (locked.length === 0) {
-      throw new Error("Booking not found");
-    }
-
-    const booking = await tx.booking.findUnique({
-      where: { id },
-      include: {
-        sessions: true,
-      },
-    });
-
-    if (!booking) {
-      throw new Error("Booking not found");
-    }
-
-    if (booking.userId !== userId) {
-      throw new Error("Access denied");
-    }
-
-    if (!["pending", "confirmed"].includes(booking.status)) {
-      throw new Error("Only pending or confirmed bookings can be cancelled");
-    }
-
-    if (new Date(booking.slotStart) <= new Date()) {
-      throw new Error("Booking cannot be cancelled after its start time");
-    }
-
-    const cancelHours = await getNumberSetting("SESSION_CANCEL_HOURS");
-    const now = new Date();
-
-    for (const session of booking.sessions) {
-      if (!["HELD", "SCHEDULED"].includes(session.status)) {
-        continue;
+      if (locked.length === 0) {
+        throw new Error("Booking not found");
       }
 
-      const hoursUntilSession =
-        (new Date(session.startsAt).getTime() - now.getTime()) /
-        (1000 * 60 * 60);
+      const booking = await tx.booking.findUnique({
+        where: { id },
+        include: {
+          sessions: true,
+        },
+      });
 
-      // A late cancellation consumes a session credit.
-      // An early cancellation releases the reserved credit.
-      if (hoursUntilSession < cancelHours) {
-        await tx.providerPackagePurchase.update({
-          where: { id: session.purchaseId },
-          data: { sessionsUsed: { increment: 1 } },
+      if (!booking) {
+        throw new Error("Booking not found");
+      }
+
+      if (booking.userId !== userId) {
+        throw new Error("Access denied");
+      }
+
+      if (!["pending", "confirmed"].includes(booking.status)) {
+        throw new Error("Only pending or confirmed bookings can be cancelled");
+      }
+
+      if (new Date(booking.slotStart) <= new Date()) {
+        throw new Error("Booking cannot be cancelled after its start time");
+      }
+
+      const cancelHours = await getNumberSetting("SESSION_CANCEL_HOURS");
+      const now = new Date();
+
+      for (const session of booking.sessions) {
+        if (!["HELD", "SCHEDULED"].includes(session.status)) {
+          continue;
+        }
+
+        const hoursUntilSession =
+          (new Date(session.startsAt).getTime() - now.getTime()) /
+          (1000 * 60 * 60);
+
+        // A late cancellation consumes a session credit.
+        // An early cancellation releases the reserved credit.
+        if (hoursUntilSession < cancelHours) {
+          await tx.providerPackagePurchase.update({
+            where: { id: session.purchaseId },
+            data: { sessionsUsed: { increment: 1 } },
+          });
+        }
+
+        await tx.trainingSession.update({
+          where: { id: session.id },
+          data: {
+            status: "CANCELLED",
+            cancelledAt: now,
+          },
         });
       }
 
-      await tx.trainingSession.update({
-        where: { id: session.id },
-        data: {
-          status: "CANCELLED",
-          cancelledAt: now,
+      const updatedBooking = await tx.booking.update({
+        where: { id },
+        data: { status: "cancelled" },
+        include: {
+          gym: true,
+          package: true,
+          payment: true,
+          sessions: {
+            include: { provider: true },
+            orderBy: { startsAt: "asc" },
+          },
         },
       });
-    }
 
-    const updatedBooking = await tx.booking.update({
-      where: { id },
-      data: { status: "cancelled" },
-      include: {
-        gym: true,
-        package: true,
-        payment: true,
-        sessions: {
-          include: { provider: true },
-          orderBy: { startsAt: "asc" },
-        },
-      },
-    });
-
-    return updatedBooking;
-  });
+      return updatedBooking;
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
+    },
+  );
 };
 
 /* =========================================================

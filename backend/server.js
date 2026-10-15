@@ -322,14 +322,9 @@ app.get("/", (req, res) => {
   });
 });
 
-// Error handler must remain after the routes.
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-
-// =====================================================
-// V2 CHAT THREAD AUTHENTICATION
-// =====================================================
 
 chatIo.use((socket, next) => {
   try {
@@ -375,10 +370,6 @@ chatIo.use((socket, next) => {
   }
 });
 
-// =====================================================
-// V2 CHAT THREAD EVENTS
-// =====================================================
-
 chatIo.on("connection", (socket) => {
   socket.on("thread:join", async (data) => {
     const threadId = data?.threadId;
@@ -404,16 +395,22 @@ chatIo.on("connection", (socket) => {
   });
 });
 
-// =====================================================
-// V2 PENDING-ORDER EXPIRATION
-// =====================================================
-
 const ORDER_EXPIRATION_INTERVAL = 60 * 1000;
 
+let expirationJobRunning = false;
+
 async function expirePendingOrders() {
+  // Prevent another run from starting while this one is still active.
+  if (expirationJobRunning) {
+    return;
+  }
+
+  expirationJobRunning = true;
+
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      return expireStale(tx);
+    const result = await prisma.$transaction(async (tx) => expireStale(tx), {
+      maxWait: 10000,
+      timeout: 30000,
     });
 
     if (result?.expiredCount > 0) {
@@ -421,6 +418,8 @@ async function expirePendingOrders() {
     }
   } catch (error) {
     console.error("V2 order expiration error:", error);
+  } finally {
+    expirationJobRunning = false;
   }
 }
 
@@ -428,17 +427,17 @@ async function expirePendingOrders() {
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 
- // Run once at startup, then every minute.
- void expirePendingOrders();
+  // Run once at startup, then every minute.
+  void expirePendingOrders();
 
- setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
+  setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
 
- const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
- setInterval(async () => {
-   try {
-     await expirePendingTrainerSessions();
-   } catch (error) {
-     console.error("Trainer session expiration error:", error);
-   }
- }, TRAINER_SESSION_EXPIRATION_INTERVAL);
+  const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
+  setInterval(async () => {
+    try {
+      await expirePendingTrainerSessions();
+    } catch (error) {
+      console.error("Trainer session expiration error:", error);
+    }
+  }, TRAINER_SESSION_EXPIRATION_INTERVAL);
 });

@@ -581,9 +581,8 @@ async function getPublicProvidersAtGym(gymId, { type, startsAt, endsAt }) {
 // GET /api/providers/:id
 // --------------------------------------------------
 
-async function getPublicProviderDetails(providerId, startsAt, endsAt) {
+async function getPublicProviderDetails(providerId) {
   const id = toId(providerId, "providerId");
-  const { start, end } = parseDateWindow(startsAt, endsAt);
 
   const provider = await prisma.provider.findFirst({
     where: {
@@ -600,7 +599,7 @@ async function getPublicProviderDetails(providerId, startsAt, endsAt) {
     throw new AppError("NOT_FOUND", "Provider not found");
   }
 
-  const [packages, availability, validStarts] = await Promise.all([
+  const [packages, availability] = await Promise.all([
     prisma.providerPackage.findMany({
       where: {
         providerId: id,
@@ -624,8 +623,6 @@ async function getPublicProviderDetails(providerId, startsAt, endsAt) {
       },
       orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }],
     }),
-
-    getValidSessionStarts(prisma, id, start, end),
   ]);
 
   return {
@@ -637,7 +634,6 @@ async function getPublicProviderDetails(providerId, startsAt, endsAt) {
     availability: {
       slots: availability,
     },
-    validSessionStarts: validStarts.map((date) => date.toISOString()),
   };
 }
 
