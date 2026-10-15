@@ -67,8 +67,8 @@ function parseDateWindow(startsAt, endsAt) {
     throw new AppError("VALIDATION", "Both startsAt and endsAt are required");
   }
 
-  const start = new Date(startsAt);
-  const end = new Date(endsAt);
+  const start = parseUtcInstant(startsAt);
+  const end = parseUtcInstant(endsAt);
 
   if (
     !Number.isFinite(start.getTime()) ||
@@ -117,7 +117,23 @@ function toPublicProvider(provider) {
 // GET /api/providers/search
 // --------------------------------------------------
 
-async function searchProvidersService({ name, type, gymId, specialization }) {
+async function searchProvidersService({
+  name,
+  type,
+  gymId,
+  specialization,
+  startsAt,
+  endsAt,
+}) {
+  const hasAvailabilityWindow = startsAt !== undefined || endsAt !== undefined;
+  let availabilityWindow = null;
+  if (hasAvailabilityWindow) {
+    if (!gymId) {
+      throw new AppError("VALIDATION", "gymId is required when searching by availability");
+    }
+    availabilityWindow = parseDateWindow(startsAt, endsAt);
+  }
+
   const where = {
     isActive: true,
   };
@@ -126,6 +142,13 @@ async function searchProvidersService({ name, type, gymId, specialization }) {
 
   if (normalizedType) {
     where.type = normalizedType;
+  }
+
+  if (availabilityWindow) {
+    if (normalizedType && !["TRAINER", "PHYSIOTHERAPIST"].includes(normalizedType)) {
+      throw new AppError("VALIDATION", "Availability search only supports TRAINER or PHYSIOTHERAPIST providers");
+    }
+    where.type = normalizedType || { in: ["TRAINER", "PHYSIOTHERAPIST"] };
   }
 
   if (name && String(name).trim()) {
@@ -138,13 +161,17 @@ async function searchProvidersService({ name, type, gymId, specialization }) {
   if (gymId !== undefined && gymId !== "") {
     const id = toId(gymId, "gymId");
 
-    where.OR = [
-      { gymId: id },
-      {
-        type: "NUTRITION_CONSULTANT",
-        gymId: null,
-      },
-    ];
+    if (availabilityWindow) {
+      where.gymId = id;
+    } else {
+      where.OR = [
+        { gymId: id },
+        {
+          type: "NUTRITION_CONSULTANT",
+          gymId: null,
+        },
+      ];
+    }
   }
 
   if (specialization && String(specialization).trim()) {
@@ -153,7 +180,7 @@ async function searchProvidersService({ name, type, gymId, specialization }) {
     };
   }
 
-  return prisma.provider.findMany({
+  const providers = await prisma.provider.findMany({
     where,
     select: {
       id: true,
@@ -178,6 +205,27 @@ async function searchProvidersService({ name, type, gymId, specialization }) {
     },
     orderBy: [{ ratingAvg: "desc" }, { name: "asc" }],
   });
+
+  if (!availabilityWindow) {
+    return providers;
+  }
+
+  const results = await Promise.all(
+    providers.map(async (provider) => {
+      const starts = await getValidSessionStarts(
+        prisma,
+        provider.id,
+        availabilityWindow.start,
+        availabilityWindow.end,
+      );
+      return {
+        ...provider,
+        validSessionStarts: starts.map((date) => date.toISOString()),
+      };
+    }),
+  );
+
+  return results.filter((provider) => provider.validSessionStarts.length > 0);
 }
 
 // --------------------------------------------------
