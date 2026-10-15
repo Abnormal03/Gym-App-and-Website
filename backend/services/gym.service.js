@@ -198,19 +198,21 @@ const checkOwnership = async (userId, gymId) => {
   return Boolean(gym);
 };
 
-const UpdateDetails = async ({
-  id,
-  adminId,
-  name,
-  address,
-  latitude,
-  longitude,
-  openingTime,
-  closingTime,
-  capacity,
-  photos,
-  amenities,
-}) => {
+const UpdateDetails = async (input) => {
+  const {
+    id,
+    adminId,
+    name,
+    address,
+    latitude,
+    longitude,
+    openingTime,
+    closingTime,
+    capacity,
+    photos,
+    amenities,
+  } = input;
+
   const gymId = validatePositiveId(id, "gym ID");
   const ownerId = validatePositiveId(adminId, "admin ID");
 
@@ -226,7 +228,7 @@ const UpdateDetails = async ({
     "amenities",
   ];
 
-  const suppliedFields = Object.keys(arguments[0] || {});
+  const suppliedFields = Object.keys(input || {});
   const unsupportedFields = suppliedFields.filter(
     (field) => !["id", "adminId", ...allowedFields].includes(field),
   );
