@@ -257,8 +257,6 @@ const chapaWebhookController = async (req, res) => {
 };
 
 const verifyPaymentController = async (req, res) => {
-  console.log("VERIFY ROUTE REACHED:", req.params.txRef);
-
   try {
     const { txRef } = req.params;
 
@@ -269,11 +267,7 @@ const verifyPaymentController = async (req, res) => {
       });
     }
 
-    console.log("BEFORE checkPaymentStatus");
-
     const result = await paymentService.checkPaymentStatus(txRef, req.user.id);
-
-    console.log("AFTER checkPaymentStatus");
 
     return res.status(200).json({
       success: true,
