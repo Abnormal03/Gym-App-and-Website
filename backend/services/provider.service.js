@@ -638,7 +638,7 @@ async function getPublicProviderDetails(providerId) {
       id,
       isActive: true,
       type: {
-        in: ["TRAINER", "PHYSIOTHERAPIST"],
+        in: ["TRAINER", "PHYSIOTHERAPIST", "NUTRITION_CONSULTANT"],
       },
     },
     select: PUBLIC_PROVIDER_SELECT,
