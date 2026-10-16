@@ -371,18 +371,34 @@ chatIo.use((socket, next) => {
 });
 
 chatIo.on("connection", (socket) => {
+  console.log("V2 chat connected:", socket.id);
+  console.log("V2 chat auth:", socket.data.auth);
+
   socket.on("thread:join", async (data) => {
-    const threadId = data?.threadId;
+    console.log("Received thread:join:", data);
 
     try {
+      const payload = typeof data === "string" ? JSON.parse(data) : data;
+
+      const threadId = Number(payload?.threadId);
+
+      if (!Number.isInteger(threadId) || threadId <= 0) {
+        throw new Error("Invalid thread ID");
+      }
+
       const thread = await ensureThreadMembership(socket.data.auth, threadId);
 
-      socket.join(`chat:${thread.id}`);
+      const room = `chat:${thread.id}`;
+      await socket.join(room);
+
+      console.log("V2 chat joined room:", room);
 
       socket.emit("thread:joined", {
         threadId: thread.id,
       });
     } catch (error) {
+      console.error("V2 thread:join failed:", error);
+
       socket.emit("chat:error", {
         code: error.code || "INTERNAL",
         message: error.message || "Unable to join thread",
@@ -391,7 +407,7 @@ chatIo.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    socket.data = {};
+    console.log("V2 chat disconnected:", socket.id);
   });
 });
 
@@ -408,16 +424,29 @@ async function expirePendingOrders() {
   expirationJobRunning = true;
 
   try {
+    const startedAt = Date.now();
+
+    console.log("[Order Expiration] Starting transaction");
+
     const result = await prisma.$transaction(async (tx) => expireStale(tx), {
       maxWait: 10000,
       timeout: 30000,
+    });
+
+    console.log("[Order Expiration] Completed", {
+      durationMs: Date.now() - startedAt,
+      expiredCount: result?.expiredCount ?? 0,
     });
 
     if (result?.expiredCount > 0) {
       console.log(`V2 expired pending bookings: ${result.expiredCount}`);
     }
   } catch (error) {
-    console.error("V2 order expiration error:", error);
+    console.error("[Order Expiration] Failed", {
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+    });
   } finally {
     expirationJobRunning = false;
   }

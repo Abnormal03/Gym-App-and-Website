@@ -35,7 +35,9 @@ const getDashboard = async (req, res) => {
 
 const getAllUsers = async (req, res) => {
   try {
-    const users = await getAllUsersService();
+    const adminId = req.user.id;
+
+    const users = await getAllUsersService(adminId);
 
     return res.status(200).json({
       success: true,
@@ -280,7 +282,9 @@ const getAdminGymsList = async (req, res) => {
     const adminId = Number(req.auth?.adminId ?? req.auth?.id ?? req.user?.id);
 
     if (!Number.isInteger(adminId) || adminId <= 0) {
-      return res.status(400).json({ success: false, message: "Invalid admin ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid admin ID" });
     }
 
     const gyms = await getAdminGymsService(adminId);
@@ -288,7 +292,9 @@ const getAdminGymsList = async (req, res) => {
     return res.status(200).json({ success: true, count: gyms.length, gyms });
   } catch (error) {
     console.error("Get admin gyms error:", error.message);
-    return res.status(500).json({ success: false, message: "Failed to get gyms" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to get gyms" });
   }
 };
 
@@ -297,7 +303,9 @@ const getAdminRevenueController = async (req, res) => {
     const adminId = Number(req.auth?.adminId ?? req.auth?.id ?? req.user?.id);
 
     if (!Number.isInteger(adminId) || adminId <= 0) {
-      return res.status(400).json({ success: false, message: "Invalid admin ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid admin ID" });
     }
 
     const { gymId, from, to } = req.query;
@@ -320,7 +328,9 @@ const getAdminRevenueController = async (req, res) => {
       return res.status(403).json({ success: false, message: error.message });
     }
 
-    return res.status(500).json({ success: false, message: "Failed to get revenue" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to get revenue" });
   }
 };
 

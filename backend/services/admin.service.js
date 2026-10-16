@@ -24,8 +24,26 @@ const getDashboardData = async () => {
   };
 };
 
-const getAllUsers = async () => {
+const getAllUsers = async (adminId) => {
+  const now = new Date();
+
   return prisma.user.findMany({
+    where: {
+      memberPackages: {
+        some: {
+          status: "ACTIVE",
+          startsAt: {
+            lte: now,
+          },
+          endsAt: {
+            gt: now,
+          },
+          gym: {
+            adminId: adminId,
+          },
+        },
+      },
+    },
     select: {
       id: true,
       name: true,
@@ -33,7 +51,6 @@ const getAllUsers = async () => {
       phone: true,
       createdAt: true,
     },
-
     orderBy: {
       createdAt: "desc",
     },
