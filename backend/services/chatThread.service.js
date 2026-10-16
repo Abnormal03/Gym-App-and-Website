@@ -47,7 +47,7 @@ async function ensureThreadMembership(auth, threadId) {
         where: { id: threadIdNumber },
         include: {
             user: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
-            provider: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
+            provider: { select: { id: true, name: true, photoUrl: true, type: true, fcmToken: true } },
         },
     });
 
@@ -143,7 +143,7 @@ async function listThreads(auth) {
         orderBy: { createdAt: 'desc' },
         include: {
             user: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
-            provider: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
+            provider: { select: { id: true, name: true, photoUrl: true, type: true, fcmToken: true } },
             messages: { orderBy: { createdAt: 'desc' }, take: 1 },
         },
     });
