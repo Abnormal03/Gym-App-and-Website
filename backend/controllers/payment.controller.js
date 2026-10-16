@@ -287,6 +287,19 @@ const verifyPaymentController = async (req, res) => {
   }
 };
 
+const paymentHistoryController = async (req, res) => {
+  try {
+    const payments = await paymentService.getMemberPaymentHistory(req.user.id);
+    return res.status(200).json({ success: true, payments });
+  } catch (error) {
+    console.error("Payment history error:", error.message || error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load payment history",
+    });
+  }
+};
+
 const initializeTrainerSessionPaymentController = async (req, res) => {
   try {
     const trainerSessionId = Number(req.body.trainerSessionId);
@@ -332,4 +345,5 @@ module.exports = {
   chapaCallbackController,
   chapaWebhookController,
   verifyPaymentController,
+  paymentHistoryController,
 };

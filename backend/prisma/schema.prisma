@@ -134,7 +134,7 @@ model Booking {
   purchasedPackage MemberPackage?    @relation("PurchaseBooking")
   order            Order?
   sessions         TrainingSession[]
-  checkIn          CheckIn?
+  checkIns         CheckIn[]
 
   // V2 index (capacity queries)
   @@index([gymId, slotStart, slotEnd])
@@ -150,6 +150,7 @@ model Payment {
   chapaTxRef       String?       @unique
   chapaCheckoutUrl String?
   createdAt        DateTime      @default(now())
+  updatedAt        DateTime?     @updatedAt
   booking          Booking       @relation(fields: [bookingId], references: [id])
   user             User          @relation(fields: [userId], references: [id])
 }
@@ -546,13 +547,13 @@ model MemberStats {
   user User @relation(fields: [userId], references: [id])
 }
 
-// ---------- Check-in (QR identifies the member; one row per booking) ----------
+// ---------- Check-in (QR identifies the member; one row per booking per day) ----------
 
 model CheckIn {
   id               Int      @id @default(autoincrement())
   userId           Int
   gymId            Int
-  bookingId        Int?     @unique // one check-in per booking (null for a package walk-in)
+  bookingId        Int? // null for a package walk-in
   memberPackageId  Int?
   localDate        String // ADDIS-LOCAL "YYYY-MM-DD" (streaks)
   guestCount       Int      @default(1) // people admitted (group booking headcount)
@@ -567,6 +568,7 @@ model CheckIn {
   scannedByAdmin GymAdmin?      @relation(fields: [scannedByAdminId], references: [id])
   scannedByStaff GymStaff?      @relation(fields: [scannedByStaffId], references: [id])
 
+  @@unique([bookingId, localDate])
   @@index([userId, gymId, localDate])
 }
 

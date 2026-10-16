@@ -14,10 +14,10 @@ const { getNumberSetting } = require("./platformSetting.service");
 const {
   addMinutes,
   addDays,
-  utcDayOfWeek,
+  addisDayOfWeek,
   parseUtcInstant,
-  periodOf,
-  periodOfEnd,
+  addisPeriodOf,
+  addisPeriodOfEnd,
   isWithinGymOpeningHours,
 } = require("../utils/time");
 
@@ -58,7 +58,7 @@ const validateGymOpeningHours = (gym, start, end) => {
     )
   ) {
     console.log("Start: ", start)
-    console.log("end ", start)
+    console.log("end ", end)
     console.log("gym Start ", gym?.openingTime)
     console.log("gym End ", gym?.closingTime)
     throw new Error("OUTSIDE_GYM_OPENING_HOURS");
@@ -73,13 +73,13 @@ const assertPackageRestrictions = (gymPackage, start, end) => {
   const allowedDays = gymPackage.allowedDays || [];
   const allowedPeriods = gymPackage.allowedPeriods || [];
 
-  if (allowedDays.length > 0 && !allowedDays.includes(utcDayOfWeek(start))) {
+  if (allowedDays.length > 0 && !allowedDays.includes(addisDayOfWeek(start))) {
     throw new Error("PACKAGE_RESTRICTED");
   }
 
   if (allowedPeriods.length > 0) {
-    const startPeriod = periodOf(start);
-    const endPeriod = periodOfEnd(end);
+    const startPeriod = addisPeriodOf(start);
+    const endPeriod = addisPeriodOfEnd(end);
 
     if (
       !startPeriod ||

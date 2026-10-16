@@ -1439,6 +1439,50 @@ const processTrainerSessionPayment = async (txRef) => {
   return processPaymentResult(txRef);
 };
 
+/** Read-only member payment ledger with source records for a client timeline. */
+const getMemberPaymentHistory = async (userId) => {
+  const id = validateId(userId, "user ID");
+  const payments = await prisma.payment.findMany({
+    where: { userId: id },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      bookingId: true,
+      amount: true,
+      currency: true,
+      status: true,
+      chapaTxRef: true,
+      createdAt: true,
+      updatedAt: true,
+      booking: {
+        select: {
+          id: true,
+          status: true,
+          slotStart: true,
+          slotEnd: true,
+          createdAt: true,
+          gym: { select: { id: true, name: true, address: true } },
+          package: { select: { id: true, name: true, type: true } },
+          order: {
+            select: {
+              id: true,
+              totalAmount: true,
+              needsManualRefund: true,
+              refundNote: true,
+              items: { select: { id: true, type: true, label: true, amount: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return payments.map(({ chapaTxRef, ...payment }) => ({
+    ...payment,
+    transactionReference: chapaTxRef,
+  }));
+};
+
 /* -------------------------------------------------------------------------- */
 /* Chapa refund support                                                       */
 /* -------------------------------------------------------------------------- */
@@ -1489,6 +1533,7 @@ const refundChapaTransaction = async (txRef, amount) => {
 
 module.exports = {
   initializePayment,
+  getMemberPaymentHistory,
   verifyChapaTransaction,
   checkPaymentStatus,
   processPaymentResult,

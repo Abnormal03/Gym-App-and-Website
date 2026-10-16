@@ -2,7 +2,7 @@ const prismaModule = require('../config/prisma');
 const prisma = prismaModule.prisma || prismaModule;
 const { AppError } = require('../utils/errors');
 const { toId, assertStaffInGym, assertAdminOwnsGym } = require('../utils/scope');
-const { toUtcDate, addMinutes } = require('../utils/time');
+const { toAddisDate, addMinutes } = require('../utils/time');
 const { verifyQrToken, signQrToken } = require('./qrToken.service');
 const { packageAllowsNow, isWithinGymHours } = require('../utils/checkInRules');
 const { getBoolSetting } = require('./platformSetting.service');
@@ -29,15 +29,18 @@ async function getMemberPass(auth, gymIdParam) {
             slotStart: { lte: addMinutes(now, 30) },
             slotEnd: { gte: now },
         },
-        include: { checkIn: true },
         orderBy: { slotStart: 'asc' },
     });
 
     if (booking) {
-        if (booking.status === 'checked_in') {
+        const existingCheckIn = await prisma.checkIn.findFirst({
+            where: { bookingId: booking.id, localDate: toAddisDate(now) },
+            orderBy: { checkedInAt: 'asc' },
+        });
+        if (existingCheckIn) {
             return {
                 state: 'CHECKED_IN',
-                checkedInAt: booking.checkIn?.checkedInAt || null,
+                checkedInAt: existingCheckIn.checkedInAt,
             };
         }
         const { token, expiresAt } = signQrToken(userId);
@@ -112,7 +115,7 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
     }
 
     const now = new Date();
-    const todayStr = toUtcDate(now);
+    const todayStr = toAddisDate(now);
 
     return prisma.$transaction(async (tx) => {
         await expireStale(tx, { userId: targetUserId, gymId });
@@ -132,26 +135,24 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
                 slotStart: { lte: addMinutes(now, 30) },
                 slotEnd: { gte: now },
             },
-            include: { checkIn: true },
             orderBy: { slotStart: 'asc' },
         });
 
         if (booking) {
-            if (booking.status === 'checked_in') {
+            const existingCheckIn = await tx.checkIn.findFirst({
+                where: { bookingId: booking.id, localDate: todayStr },
+                orderBy: { checkedInAt: 'asc' },
+            });
+            if (existingCheckIn) {
                 return {
                     success: true,
                     alreadyCheckedIn: true,
-                    checkedInAt: booking.checkIn?.checkedInAt || now,
+                    checkedInAt: existingCheckIn.checkedInAt,
                     memberName: user.name,
                     guestCount: booking.headcount,
                     covering: 'BOOKING',
                 };
             }
-
-            await tx.booking.update({
-                where: { id: booking.id },
-                data: { status: 'checked_in' },
-            });
 
             if (booking.memberPackageId) {
                 await tx.memberPackage.update({
@@ -287,7 +288,7 @@ async function getTodayCheckIns(auth, gymIdParam) {
     const gymId = toId(gymIdParam, 'gymId');
     await assertScannerAuth(auth, gymId);
 
-    const todayStr = toUtcDate(new Date());
+    const todayStr = toAddisDate(new Date());
     const list = await prisma.checkIn.findMany({
         where: { gymId, localDate: todayStr },
         include: {
@@ -317,7 +318,7 @@ async function searchMembers(auth, gymIdParam, query) {
     if (!q) return [];
 
     const now = new Date();
-    const todayStr = toUtcDate(now);
+    const todayStr = toAddisDate(now);
 
     const members = await prisma.user.findMany({
         where: {

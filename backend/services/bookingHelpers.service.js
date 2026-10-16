@@ -1,9 +1,9 @@
 const { getNumberSetting } = require("./platformSetting.service");
 
 const {
-  utcDayOfWeek,
-  periodOf,
-  periodOfEnd,
+  addisDayOfWeek,
+  addisPeriodOf,
+  addisPeriodOfEnd,
   addMinutes,
 } = require("../utils/time");
 
@@ -180,7 +180,7 @@ const isProviderFree = async (tx, providerId, start, end) => {
  *
  * Candidate starts are on 30-minute boundaries. A session
  * must fit inside the booking window and inside one provider
- * availability period in UTC.
+ * availability period in Addis Ababa time.
  */
 const getValidSessionStarts = async (
   tx,
@@ -221,7 +221,7 @@ const getValidSessionStarts = async (
     availability.map(({ dayOfWeek, period }) => `${dayOfWeek}:${period}`),
   );
 
-  // Candidate times are aligned to UTC 30-minute boundaries.
+  // Candidate instants use UTC storage; the +03:00 offset preserves these 30-minute boundaries.
   const firstCandidate = new Date(start);
   firstCandidate.setUTCSeconds(0, 0);
 
@@ -247,8 +247,8 @@ const getValidSessionStarts = async (
 
     if (sessionEnd > end) continue;
 
-    const day = utcDayOfWeek(candidate);
-    const period = periodOf(candidate);
+    const day = addisDayOfWeek(candidate);
+    const period = addisPeriodOf(candidate);
 
     if (!period) continue;
 
@@ -258,7 +258,7 @@ const getValidSessionStarts = async (
 
     // The end is exclusive: a session ending exactly at noon
     // belongs to the morning period.
-    if (periodOfEnd(sessionEnd) !== period) {
+    if (addisPeriodOfEnd(sessionEnd) !== period) {
       continue;
     }
 
