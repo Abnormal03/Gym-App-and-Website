@@ -21,7 +21,7 @@ async function getMemberPass(auth, gymIdParam) {
     await expireStale(prisma, { userId, gymId });
 
     // 1. Check covering booking (allow 30 minutes early)
-    const booking = await prisma.booking.findFirst({
+    const bookings = await prisma.booking.findMany({
         where: {
             userId,
             gymId,
@@ -30,25 +30,32 @@ async function getMemberPass(auth, gymIdParam) {
             slotEnd: { gte: now },
         },
         orderBy: { slotStart: 'asc' },
+        include: {
+            checkIns: {
+                where: { localDate: toAddisDate(now) },
+                orderBy: { checkedInAt: 'asc' },
+                take: 1,
+            },
+        },
     });
+    const booking = bookings.find((candidate) => candidate.checkIns.length === 0);
 
     if (booking) {
-        const existingCheckIn = await prisma.checkIn.findFirst({
-            where: { bookingId: booking.id, localDate: toAddisDate(now) },
-            orderBy: { checkedInAt: 'asc' },
-        });
-        if (existingCheckIn) {
-            return {
-                state: 'CHECKED_IN',
-                checkedInAt: existingCheckIn.checkedInAt,
-            };
-        }
         const { token, expiresAt } = signQrToken(userId);
         return {
             state: 'READY',
             qrToken: token,
             expiresAt,
         };
+    }
+
+    // If all currently covering bookings have already been used today, return
+    // the latest existing check-in instead of treating a booking as unused.
+    if (bookings.length > 0) {
+        const existingCheckIn = bookings
+            .flatMap((candidate) => candidate.checkIns)
+            .sort((a, b) => b.checkedInAt - a.checkedInAt)[0];
+        return { state: 'CHECKED_IN', checkedInAt: existingCheckIn.checkedInAt };
     }
 
     // 2. Check active MemberPackage for this gym
@@ -127,7 +134,7 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
         if (!user) throw new AppError('NOT_FOUND', 'User not found');
 
         // Look for covering booking
-        const booking = await tx.booking.findFirst({
+        const bookings = await tx.booking.findMany({
             where: {
                 userId: targetUserId,
                 gymId,
@@ -136,24 +143,17 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
                 slotEnd: { gte: now },
             },
             orderBy: { slotStart: 'asc' },
+            include: {
+                checkIns: {
+                    where: { localDate: todayStr },
+                    orderBy: { checkedInAt: 'asc' },
+                    take: 1,
+                },
+            },
         });
+        const booking = bookings.find((candidate) => candidate.checkIns.length === 0);
 
         if (booking) {
-            const existingCheckIn = await tx.checkIn.findFirst({
-                where: { bookingId: booking.id, localDate: todayStr },
-                orderBy: { checkedInAt: 'asc' },
-            });
-            if (existingCheckIn) {
-                return {
-                    success: true,
-                    alreadyCheckedIn: true,
-                    checkedInAt: existingCheckIn.checkedInAt,
-                    memberName: user.name,
-                    guestCount: booking.headcount,
-                    covering: 'BOOKING',
-                };
-            }
-
             if (booking.memberPackageId) {
                 await tx.memberPackage.update({
                     where: { id: booking.memberPackageId },
@@ -185,6 +185,22 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
                 guestCount: booking.headcount,
                 covering: 'BOOKING',
                 newBadges,
+            };
+        }
+
+        if (bookings.length > 0) {
+            const existingCheckIn = bookings
+                .flatMap((candidate) => candidate.checkIns)
+                .sort((a, b) => b.checkedInAt - a.checkedInAt)[0];
+            const checkedBooking = bookings.find((candidate) =>
+                candidate.checkIns.some((checkIn) => checkIn.id === existingCheckIn.id));
+            return {
+                success: true,
+                alreadyCheckedIn: true,
+                checkedInAt: existingCheckIn.checkedInAt,
+                memberName: user.name,
+                guestCount: checkedBooking.headcount,
+                covering: 'BOOKING',
             };
         }
 
