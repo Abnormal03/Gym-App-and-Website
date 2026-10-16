@@ -150,13 +150,7 @@ const getGymProvidersController = async (req, res, next) => {
  */
 const getMemberProviderDetailController = async (req, res, next) => {
   try {
-    const { startsAt, endsAt } = req.query;
-
-    const provider = await getPublicProviderDetails(
-      req.params.id,
-      startsAt,
-      endsAt,
-    );
+    const provider = await getPublicProviderDetails(req.params.id);
 
     return res.status(200).json({
       success: true,
