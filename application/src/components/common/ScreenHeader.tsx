@@ -5,10 +5,17 @@ import { useTheme } from "../../hooks/useTheme";
 
 type ScreenHeaderProps = {
   title: string;
+  onBackPress?: () => void;
   onAccountPress?: () => void;
+  fallbackPath?: string;
 };
 
-export function ScreenHeader({ title, onAccountPress }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  onBackPress,
+  onAccountPress,
+  fallbackPath = "/(drawer)/(tabs)",
+}: ScreenHeaderProps) {
   const router = useRouter();
   const { theme } = useTheme();
 
@@ -25,7 +32,10 @@ export function ScreenHeader({ title, onAccountPress }: ScreenHeaderProps) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Go back"
-        onPress={() => router.back()}
+        onPress={onBackPress ?? (() => {
+          if (router.canGoBack()) router.back();
+          else router.replace(fallbackPath as any);
+        })}
         style={styles.actionButton}
       >
         <MaterialIcons

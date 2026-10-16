@@ -42,8 +42,8 @@ export const useUpload = ()=>{
 
             setSuccess("Successfully uploaded.");
             return true;
-        } catch (error: any) {
-            setError(error.message || "Failed to upload image.");
+        } catch (error: unknown) {
+            setError(error instanceof Error ? error.message : "Failed to upload image.");
             return false;
         } finally {
             setUploading(false);

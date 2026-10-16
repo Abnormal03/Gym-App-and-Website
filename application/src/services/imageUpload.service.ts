@@ -1,40 +1,37 @@
 import { SelectedImage } from "../types/image.types";
 
-export const imageUploadServices= {
-    uploadImage: async (image: SelectedImage)=>{
-        try {
-            const CLOUDINARY_CLOUD_NAME = "dcanz9on6";
-            const CLOUDINARY_PRESET = "gym_app_preset";
+const CLOUDINARY_CLOUD_NAME = "dcanz9on6";
+const CLOUDINARY_UPLOAD_PRESET = "gym_app_preset";
 
-            console.log(CLOUDINARY_CLOUD_NAME, CLOUDINARY_PRESET)
-            
-            const cloudinaryData = new FormData();
-            cloudinaryData.append('file',{
-                uri: image.uri,
-                name: image.name,
-                type: image.type
-            } as any)
+type CloudinaryUploadResponse = {
+  secure_url?: string;
+  error?: { message?: string };
+};
 
-            cloudinaryData.append('upload_preset',CLOUDINARY_PRESET);
+export const imageUploadServices = {
+  uploadImage: async (image: SelectedImage): Promise<string> => {
+    const formData = new FormData();
+    formData.append(
+      "file",
+      {
+        uri: image.uri,
+        name: image.name,
+        type: image.type,
+      } as any,
+    );
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
-            const cloudResponse = await fetch(
-                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-                {
-                    method: 'POST',
-                    body: cloudinaryData
-                }
-            )
-            const cloudResult = await cloudResponse.json();
-            if (!cloudResponse.ok) {
-                throw new Error(cloudResult.error?.message || 'Cloudinary upload failed');
-            }
-
-            const imageUrl = cloudResult.secure_url;
-
-            return imageUrl;
-        } catch (error:any) {
-            console.log(error.message)
-            return false;
-        }
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+      { method: "POST", body: formData },
+    );
+    const result = (await response.json()) as CloudinaryUploadResponse;
+    if (!response.ok) {
+      throw new Error(result.error?.message || "Image upload failed.");
     }
-}
+    if (!result.secure_url) {
+      throw new Error("The image service did not return an image URL.");
+    }
+    return result.secure_url;
+  },
+};

@@ -1,5 +1,50 @@
 // src/types/booking.types.ts
 
+
+export interface CheckoutRequest {
+  gymId: number;
+  packageId: number;
+  bookingType: 'SINGLE' | 'GROUP';
+  headcount: number;
+  startsAt: string;
+  durationMinutes: number;
+  provider?: {
+    providerId: number;
+    providerPackageId: number;
+    firstSessionStartsAt: string;
+  };
+  consultation?: { consultantId: number };
+}
+
+export interface CheckoutQuoteItem {
+  type: string;
+  label: string;
+  amount: number | string;
+}
+
+export interface CheckoutQuoteResponse {
+  success: boolean;
+  data: {
+    items: CheckoutQuoteItem[];
+    total: number | string;
+  };
+}
+
+export interface CreateCheckoutResponse {
+  success: boolean;
+  data: {
+    orderId: number;
+    bookingId: number;
+    totalAmount: number | string;
+    currency: string;
+    status: string;
+    expiresAt: string;
+    items: Array<{ id: number; orderId: number; type: string; amount: number | string }>;
+    checkoutUrl: string | null;
+    requiresPayment: boolean;
+  };
+}
+
 export interface CreateBookingDTO {
   gymId: number;
   packageId: number;
@@ -61,12 +106,14 @@ export type PaymentStatus = 'pending' | 'success' | 'failed' | 'expired';
 export interface MyBooking {
   id: number;
   gymId: number;
-  packageId: number;
+  packageId: number | null;
   slotStart: string;
   slotEnd: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'checked_in';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'checked_in' | 'expired' | 'payment_failed';
   qrCode: string | null;
   createdAt: string;
+  bookingType?: 'SINGLE' | 'GROUP';
+  headcount?: number;
   gym: {
     id: number;
     name: string;
@@ -78,5 +125,39 @@ export interface MyBooking {
     name: string;
     type: string;
     price: number;
-  };
+  } | null;
+  packageName?: string | null;
+  order?: {
+    id: number;
+    totalAmount: number | string;
+    items: Array<{
+      id: number;
+      type: string;
+      label: string;
+      amount: number | string;
+      provider?: { id: number; name: string; type?: string } | null;
+      purchase?: { id: number; packageName?: string | null } | null;
+      consultation?: {
+        status: string;
+        consultant?: { id: number; name: string } | null;
+        startsAt?: string | null;
+        expiresAt?: string | null;
+      } | null;
+    }>;
+  } | null;
+  sessions?: Array<{
+    id: number;
+    providerId: number;
+    providerName: string | null;
+    startsAt: string;
+    endsAt: string;
+    status: string;
+    provider?: { id: number; name: string; type?: string } | null;
+  }>;
+  consultation?: Array<{
+    status: string;
+    consultant: { id: number; name: string } | null;
+    startsAt?: string | null;
+    expiresAt?: string | null;
+  }>;
 }

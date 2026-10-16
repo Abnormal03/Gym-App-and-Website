@@ -15,8 +15,8 @@ export const useAvailability = (gymId: number) => {
       const data = await gymService.getAvailability(gymId, slotStart, slotEnd);
       setAvailability(data);
     } catch (err: any) {
-      console.log(err.message)
-      setError(err.message|| "unable to check availability");
+      console.log("Availability Check Error: ",err?.message || err as string)
+      setError(err?.message || err as string || "unable to check availability");
     } finally {
       setLoading(false);
     }

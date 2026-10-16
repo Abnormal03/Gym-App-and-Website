@@ -13,9 +13,14 @@ export interface PendingBooking {
   gymName: string;
   packageName: string;
   packagePrice: number;
+  totalAmount?: number;
   slotStart: string;
   slotEnd: string;
   checkoutUrl: string;
+  bookingType?: 'SINGLE' | 'GROUP';
+  headcount?: number;
+  gymId?: number;
+  packageId?: number;
 }
 
 export type PendingSupportChoice =
@@ -26,12 +31,16 @@ export type PendingSupportChoice =
       packageId: number;
       packageName: string;
       price: number;
+      firstSessionStartsAt?: string;
     }
   | {
       type: 'physiotherapist';
       id: number;
       name: string;
+      packageId: number;
+      packageName: string;
       price: number | null;
+      firstSessionStartsAt?: string;
     };
 
 export interface PendingNutritionChoice {
@@ -52,6 +61,7 @@ export interface BookingState {
   packageId: number | null;
   packageName: string | null;
   packagePrice: number | null;
+  totalAmount: number | null;
   slotStart: string | null;
   slotEnd: string | null;
   bookingId: number | null;
@@ -59,6 +69,8 @@ export interface BookingState {
   checkoutUrl: string | null;
   expiresAt: string | null;
   durationHours: number | null;
+  bookingType: 'SINGLE' | 'GROUP';
+  headcount: number;
   supportChoice: PendingSupportChoice | null;
   nutritionChoice: PendingNutritionChoice | null;
   nutritionSkipped: boolean;
@@ -81,6 +93,7 @@ const initialState = {
   packageId: null,
   packageName: null,
   packagePrice: null,
+  totalAmount: null,
   slotStart: null,
   slotEnd: null,
   bookingId: null,
@@ -88,6 +101,8 @@ const initialState = {
   checkoutUrl: null,
   expiresAt: null,
   durationHours: null,
+  bookingType: 'SINGLE' as const,
+  headcount: 1,
   supportChoice: null,
   nutritionChoice: null,
   nutritionSkipped: false,
@@ -110,12 +125,14 @@ const isPendingAddons = (value: unknown): value is PendingAddons => {
       typeof support.name === 'string' &&
       (typeof support.price === 'number' || support.price === null) &&
       (support.type === 'trainer' || support.type === 'physiotherapist');
+    supportValid =
+      supportValid &&
+      typeof support.packageId === 'number' &&
+      typeof support.packageName === 'string' &&
+      (support.firstSessionStartsAt === undefined ||
+        typeof support.firstSessionStartsAt === 'string');
     if (support.type === 'trainer') {
-      supportValid =
-        supportValid &&
-        typeof support.packageId === 'number' &&
-        typeof support.packageName === 'string' &&
-        typeof support.price === 'number';
+      supportValid = supportValid && typeof support.price === 'number';
     }
   }
   const nutritionValid =
@@ -209,6 +226,7 @@ export const useBookingStore = create<BookingState>((set, get) => {
     savePendingBooking: async (data) => {
       await writeItem(PENDING_BOOKING_KEY, JSON.stringify(data));
       set({
+        gymId: data.gymId ?? get().gymId,
         bookingId: data.bookingId,
         txRef: data.txRef,
         checkoutUrl: data.checkoutUrl,
@@ -216,8 +234,12 @@ export const useBookingStore = create<BookingState>((set, get) => {
         gymName: data.gymName,
         packageName: data.packageName,
         packagePrice: data.packagePrice,
+        totalAmount: data.totalAmount ?? data.packagePrice,
         slotStart: data.slotStart,
         slotEnd: data.slotEnd,
+        bookingType: data.bookingType ?? 'SINGLE',
+        headcount: data.headcount ?? 1,
+        packageId: data.packageId ?? get().packageId,
       });
 
       return true

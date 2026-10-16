@@ -1,0 +1,570 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { MaterialIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../../hooks/useTheme";
+import { useConversations } from "../../hooks/useConversations";
+import { useConversationMessages } from "../../hooks/useConversationMessages";
+import { useAuthStore } from "../../store/auth.store";
+import { ChatMessage } from "../../types/chat.types";
+import { providerService } from "../../services/provider.service";
+
+export default function ChatScreen() {
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const conversationId = Array.isArray(id) ? id[0] : (id ?? null);
+  const router = useRouter();
+  const { theme } = useTheme();
+  const memberId = useAuthStore((state) => state.user?.id);
+  const {
+    conversations,
+    loading: inboxLoading,
+    error: inboxError,
+    refresh: refreshInbox,
+  } = useConversations();
+  const conversation = useMemo(
+    () =>
+      conversations.find(
+        (item) => String(item.id) === String(conversationId ?? ""),
+      ) ?? null,
+    [conversationId, conversations],
+  );
+  const {
+    messages,
+    loading,
+    refreshing,
+    loadingOlder,
+    sending,
+    error,
+    sendError,
+    hasOlderMessages,
+    refresh,
+    loadOlder,
+    send,
+  } = useConversationMessages(
+    conversation?.eligible ? String(conversation.id) : null,
+  );
+  const [draft, setDraft] = useState("");
+  const listRef = useRef<FlatList<ChatMessage>>(null);
+  const focusedOnce = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnce.current && conversation?.eligible) void refresh();
+      focusedOnce.current = true;
+      const timer = setInterval(() => {
+        if (conversation?.eligible) void refresh();
+      }, 60_000);
+      return () => clearInterval(timer);
+    }, [conversation?.eligible, refresh]),
+  );
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      listRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [messages.length]);
+
+  const onSend = async () => {
+    const message = draft.trim();
+    if (!message || sending || error) return;
+    const sent = await send(message);
+    if (sent) {
+      setDraft("");
+      requestAnimationFrame(() =>
+        listRef.current?.scrollToEnd({ animated: true }),
+      );
+    }
+  };
+
+  const goBack = () => {
+    // Browser history may point outside the app tab stack (often to Home), so
+    // take the user directly back to the chats tab on every platform.
+    router.replace("/(drawer)/(tabs)/chats");
+  };
+
+  const openProviderProfile = async () => {
+    if (!conversation) return;
+    let type = conversation?.contact?.type.toLocaleUpperCase();
+    if (
+      type !== "TRAINER" &&
+      type !== "PHYSIOTHERAPIST" &&
+      type !== "NUTRITION_CONSULTANT"
+    ) {
+      try {
+        const provider = await providerService.getById(
+          Number(conversation?.contact?.id),
+        );
+        type = provider.type?.toLocaleUpperCase() ?? type;
+      } catch {
+        return;
+      }
+    }
+    if (type === "TRAINER") {
+      router.push(
+        `/trainer/${encodeURIComponent(String(conversation.contact.id))}`,
+      );
+    } else if (type === "PHYSIOTHERAPIST") {
+      router.push(
+        `/physiotherapist/${encodeURIComponent(String(conversation.contact.id))}`,
+      );
+    } else if (type === "NUTRITION_CONSULTANT" || type === "NUTRITIONIST") {
+      router.push(
+        `/nutrition-consultant/${encodeURIComponent(String(conversation.contact.id))}`,
+      );
+    }
+  };
+
+  const isMemberMessage = (message: ChatMessage) =>
+    (memberId !== undefined && String(message.senderId) === String(memberId)) ||
+    message.senderType.toUpperCase() === "MEMBER";
+
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      >
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to chats"
+            onPress={goBack}
+            style={styles.backButton}
+          >
+            <MaterialIcons
+              name="arrow-back-ios"
+              size={22}
+              color={theme.foreground}
+            />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View ${conversation?.contact.name ?? "provider"} profile`}
+            disabled={!conversation}
+            onPress={() => void openProviderProfile()}
+            style={[
+              styles.avatar,
+              { backgroundColor: theme.input, borderColor: theme.border },
+            ]}
+          >
+            <Text style={[styles.avatarText, { color: theme.primary }]}>
+              {conversation?.contact.name
+                .trim()
+                .slice(0, 1)
+                .toLocaleUpperCase() || "?"}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View ${conversation?.contact.name ?? "provider"} profile`}
+            disabled={!conversation}
+            onPress={() => void openProviderProfile()}
+            style={styles.headerCopy}
+          >
+            <Text
+              numberOfLines={1}
+              style={[styles.title, { color: theme.foreground }]}
+            >
+              {conversation?.contact.name ?? "Conversation"}
+            </Text>
+            <Text style={[styles.subtitle, { color: theme.primary }]}>
+              {conversation
+                ? formatContactType(conversation.contact.type)
+                : "Provider chat"}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Refresh messages"
+            onPress={() => void refresh()}
+            disabled={!conversation?.eligible || refreshing}
+            style={styles.refreshButton}
+          >
+            {refreshing ? (
+              <ActivityIndicator color={theme.primary} />
+            ) : (
+              <MaterialIcons name="refresh" size={23} color={theme.primary} />
+            )}
+          </Pressable>
+        </View>
+
+        {!conversationId ? (
+          <View style={styles.state}>
+            <Text style={[styles.stateTitle, { color: theme.foreground }]}>
+              Conversation not specified
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={goBack}
+              style={[styles.backToInbox, { backgroundColor: theme.primary }]}
+            >
+              <Text style={styles.sendText}>Back to chats</Text>
+            </Pressable>
+          </View>
+        ) : !conversation && inboxLoading ? (
+          <View style={styles.state}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.stateText, { color: theme.muted }]}>
+              Loading conversation…
+            </Text>
+          </View>
+        ) : !conversation && inboxError ? (
+          <View style={styles.state}>
+            <Text style={[styles.stateText, { color: theme.error }]}>
+              {inboxError}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void refreshInbox()}
+              style={[styles.backToInbox, { backgroundColor: theme.primary }]}
+            >
+              <Text style={styles.sendText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : !conversation ? (
+          <View style={styles.state}>
+            <MaterialIcons
+              name="chat-bubble-outline"
+              size={38}
+              color={theme.muted}
+            />
+            <Text style={[styles.stateTitle, { color: theme.foreground }]}>
+              Conversation unavailable
+            </Text>
+            <Text style={[styles.stateText, { color: theme.muted }]}>
+              This conversation is not in your inbox. It may have been removed
+              or you may not have access.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={goBack}
+              style={[styles.backToInbox, { backgroundColor: theme.primary }]}
+            >
+              <Text style={styles.sendText}>Back to chats</Text>
+            </Pressable>
+          </View>
+        ) : !conversation.eligible ? (
+          <View style={styles.state}>
+            <MaterialIcons name="lock-outline" size={38} color={theme.error} />
+            <Text style={[styles.stateTitle, { color: theme.foreground }]}>
+              Messaging unavailable
+            </Text>
+            <Text style={[styles.stateText, { color: theme.muted }]}>
+              The backend has not marked this booking or purchase as eligible
+              for messaging.
+            </Text>
+          </View>
+        ) : loading && messages.length === 0 ? (
+          <View style={styles.state}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.stateText, { color: theme.muted }]}>
+              Loading messages…
+            </Text>
+          </View>
+        ) : error && messages.length === 0 ? (
+          <View style={styles.state}>
+            <Text style={[styles.stateText, { color: theme.error }]}>
+              {error}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void refresh()}
+              style={[styles.backToInbox, { backgroundColor: theme.primary }]}
+            >
+              <Text style={styles.sendText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {error && (
+              <Text style={[styles.inlineError, { color: theme.error }]}>
+                {error} · Saved messages are read-only until the connection is
+                restored.
+              </Text>
+            )}
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={(message) => String(message.id)}
+              contentContainerStyle={[
+                styles.messages,
+                messages.length === 0 && styles.emptyMessages,
+              ]}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={() => void refresh()}
+                  tintColor={theme.primary}
+                />
+              }
+              ListHeaderComponent={
+                hasOlderMessages ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={loadingOlder}
+                    onPress={() => void loadOlder()}
+                    style={styles.loadOlder}
+                  >
+                    {loadingOlder ? (
+                      <ActivityIndicator color={theme.primary} />
+                    ) : (
+                      <Text style={{ color: theme.primary, fontWeight: "700" }}>
+                        Load older messages
+                      </Text>
+                    )}
+                  </Pressable>
+                ) : null
+              }
+              ListEmptyComponent={
+                <Text style={[styles.stateText, { color: theme.muted }]}>
+                  No messages yet. Start the conversation below.
+                </Text>
+              }
+              renderItem={({ item }) => {
+                const fromMember = isMemberMessage(item);
+                return (
+                  <View
+                    style={[
+                      styles.messageGroup,
+                      fromMember ? styles.outgoingGroup : styles.incomingGroup,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.bubble,
+                        fromMember
+                          ? [
+                              styles.outgoingBubble,
+                              { backgroundColor: theme.primary },
+                            ]
+                          : [
+                              styles.incomingBubble,
+                              {
+                                backgroundColor: theme.card,
+                                borderColor: theme.border,
+                              },
+                            ],
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.messageText,
+                          { color: fromMember ? "#FFFFFF" : theme.foreground },
+                        ]}
+                      >
+                        {item.content}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.messageMeta,
+                        fromMember && styles.outgoingMessageMeta,
+                      ]}
+                    >
+                      <Text style={[styles.time, { color: theme.muted }]}>
+                        {formatMessageTime(item.createdAt)}
+                      </Text>
+                      {fromMember && (
+                        <MaterialIcons
+                          name={item.readAt ? "done-all" : "done"}
+                          size={15}
+                          color={item.readAt ? "#42B8FF" : theme.muted}
+                          accessibilityLabel={item.readAt ? "Read" : "Sent"}
+                        />
+                      )}
+                    </View>
+                  </View>
+                );
+              }}
+            />
+            {sendError && (
+              <Text style={[styles.inlineError, { color: theme.error }]}>
+                {sendError}
+              </Text>
+            )}
+            <View
+              style={[
+                styles.composer,
+                {
+                  borderTopColor: theme.border,
+                  backgroundColor: theme.background,
+                },
+              ]}
+            >
+              <TextInput
+                accessibilityLabel={`Message ${conversation.contact.name}`}
+                value={draft}
+                onChangeText={setDraft}
+                onSubmitEditing={() => void onSend()}
+                placeholder={`Message ${conversation.contact.name}…`}
+                placeholderTextColor={theme.muted}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.input,
+                    borderColor: theme.border,
+                    color: theme.foreground,
+                  },
+                ]}
+                multiline
+                maxLength={4000}
+                editable={!sending && !error}
+                returnKeyType="send"
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                accessibilityState={{
+                  disabled: sending || Boolean(error) || !draft.trim(),
+                }}
+                disabled={sending || Boolean(error) || !draft.trim()}
+                onPress={() => void onSend()}
+                style={[
+                  styles.sendButton,
+                  { backgroundColor: theme.primary },
+                  (sending || Boolean(error) || !draft.trim()) &&
+                    styles.disabled,
+                ]}
+              >
+                {sending ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <MaterialIcons name="send" size={20} color="#FFFFFF" />
+                )}
+              </Pressable>
+            </View>
+          </>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function formatContactType(type: string) {
+  return type
+    .toLocaleLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toLocaleUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatMessageTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  screen: { flex: 1, width: "100%", maxWidth: 640, alignSelf: "center" },
+  header: {
+    minHeight: 76,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backButton: {
+    width: 36,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontSize: 19, fontWeight: "800" },
+  headerCopy: { flex: 1, gap: 3 },
+  title: { fontSize: 16, fontWeight: "800" },
+  subtitle: { fontSize: 12, fontWeight: "600" },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  messages: { flexGrow: 1, padding: 16, gap: 15 },
+  emptyMessages: { justifyContent: "center" },
+  loadOlder: { alignSelf: "center", padding: 10 },
+  messageGroup: { maxWidth: "86%", gap: 5 },
+  incomingGroup: { alignSelf: "flex-start" },
+  outgoingGroup: { alignSelf: "flex-end" },
+  bubble: {
+    borderRadius: 17,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 13,
+  },
+  incomingBubble: { borderTopLeftRadius: 5 },
+  outgoingBubble: { borderTopRightRadius: 5 },
+  messageText: { fontSize: 15, lineHeight: 21 },
+  time: { fontSize: 10, paddingHorizontal: 4 },
+  messageMeta: { flexDirection: "row", alignItems: "center", gap: 2 },
+  outgoingMessageMeta: { justifyContent: "flex-end" },
+  composer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 9,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+  },
+  input: {
+    flex: 1,
+    minHeight: 46,
+    maxHeight: 120,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    fontSize: 15,
+  },
+  sendButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disabled: { opacity: 0.55 },
+  state: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: 28,
+  },
+  stateTitle: { fontSize: 18, fontWeight: "800" },
+  stateText: {
+    maxWidth: 360,
+    textAlign: "center",
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  backToInbox: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 11 },
+  sendText: { color: "#FFFFFF", fontWeight: "700" },
+  inlineError: { paddingHorizontal: 14, paddingBottom: 8, fontSize: 12 },
+});

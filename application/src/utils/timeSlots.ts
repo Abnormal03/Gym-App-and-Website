@@ -66,13 +66,20 @@ export const computeCheckOutTime = (
   return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
 };
 
-// Builds the slotStart ISO string.
+const formatLocalDateTime = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}T${String(date.getHours()).padStart(2, '0')}:${String(
+    date.getMinutes(),
+  ).padStart(2, '0')}:00`;
+
+// Builds a local date-time string without converting the selected time to UTC.
 // date = selected date, time = check-in time string "HH:MM"
 export const buildSlotStart = (date: Date, checkInTime: string): string => {
   const [h, m] = checkInTime.split(':').map(Number);
   const dt = new Date(date);
   dt.setHours(h, m, 0, 0);
-  return dt.toISOString().replace('.000Z',"");
+  return formatLocalDateTime(dt);
 };
 
 // Builds slotEnd for the AVAILABILITY CHECK (same day, just adds workout duration).
@@ -90,7 +97,32 @@ export const buildAvailabilitySlotEnd = (
 
   const dt = new Date(date);
   dt.setHours(outH, outM, 0, 0);
-  return dt.toISOString().replace('.000Z',"");
+  return formatLocalDateTime(dt);
+};
+
+/**
+ * Build the end of the actual workout window used for provider search.
+ * Booking timestamps without an offset are interpreted as UTC by the API.
+ */
+export const buildProviderWindowEnd = (
+  slotStart: string,
+  durationHours: number,
+): string | undefined => {
+  const startInput = /(?:Z|[+-]\d{2}:\d{2})$/i.test(slotStart)
+    ? slotStart
+    : `${slotStart}Z`;
+  const start = new Date(startInput);
+  const durationMinutes = Math.round(durationHours * 60);
+
+  if (
+    !Number.isFinite(start.getTime()) ||
+    !Number.isFinite(durationMinutes) ||
+    durationMinutes <= 0
+  ) {
+    return undefined;
+  }
+
+  return new Date(start.getTime() + durationMinutes * 60_000).toISOString();
 };
 
 // Builds slotEnd for BOOKING CREATION.
@@ -117,7 +149,7 @@ export const buildBookingSlotEnd = (
   const endDate = new Date(date);
   endDate.setDate(endDate.getDate() + packageDurationDays);
   endDate.setHours(outH, outM, 0, 0);
-  return endDate.toISOString().replace('.000Z',"");
+  return formatLocalDateTime(endDate);
 };
 
 // "1.5" → "1h 30m", "2" → "2h", "0.5" → "30m"

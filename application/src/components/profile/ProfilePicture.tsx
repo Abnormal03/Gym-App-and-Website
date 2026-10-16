@@ -6,13 +6,12 @@ import {
   TouchableOpacity,
   View,
   Image,
-  Alert,
 } from "react-native";
+import { useState } from "react";
 import { User } from "../../types/user.types";
 import { Button } from "../common/Button";
 import * as ImagePicker from "expo-image-picker";
 import { useUpload } from "../../hooks/useUpload";
-import { LoadingSpinner } from "../common/LoadingSpinner";
 
 export interface props {
   user: User | null;
@@ -29,6 +28,8 @@ const ProfilePicture = ({
 }: props) => {
   const { isDark, mode, theme } = useTheme();
   const { error, success, uploading, uploadImage } = useUpload();
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const photoUri = previewUri ?? user?.photoUrl;
 
   const pickImage = async () => {
     // const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -47,6 +48,7 @@ const ProfilePicture = ({
       const asset = result.assets[0];
 
       const fileUri = asset.uri;
+      setPreviewUri(fileUri);
       const name = asset.fileName || fileUri.split("/").pop() || "upload.jpg";
       const filetype = asset.mimeType || "image/jpeg";
 
@@ -56,7 +58,10 @@ const ProfilePicture = ({
         uri: fileUri,
       });
       if (uploaded) {
-        onUploaded();
+        await onUploaded();
+        setPreviewUri(null);
+      } else {
+        setPreviewUri(null);
       }
     }
   };
@@ -71,61 +76,65 @@ const ProfilePicture = ({
         marginTop: 400,
       }}
     >
-      {uploading || profileLoading ? (
-        <LoadingSpinner mode={mode} size={"large"} color={theme.primary} />
-      ) : (
-        <View>
-          {/* Close Button */}
-          <TouchableOpacity onPress={onClose} style={styles.modalClose}>
-            <Text style={{ fontSize: 24, color: isDark ? "#fff" : "#111" }}>
-              ✕
-            </Text>
-          </TouchableOpacity>
+      <View>
+        {/* Close Button */}
+        <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+          <Text style={{ fontSize: 24, color: isDark ? "#fff" : "#111" }}>
+            ✕
+          </Text>
+        </TouchableOpacity>
 
-          {/* Avatar */}
-          <View style={styles.avatarSection}>
-            <View style={{ marginBottom: 20 }}>
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <View style={{ marginBottom: 20 }}>
+            {photoUri ? (
               <Image
-                source={{ uri: user?.photoUrl }}
+                source={{ uri: photoUri }}
                 style={{ width: 200, height: 200, borderRadius: 50 }}
               />
-            </View>
-            <Text style={[styles.avatarName, { color: theme.foreground }]}>
-              {user?.name}
-            </Text>
-            <Text style={[styles.avatarEmail, { color: theme.muted }]}>
-              {user?.email}
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={[styles.avatarInitial, { color: theme.primary }]}>
+                  {user?.name?.charAt(0).toLocaleUpperCase() ?? "U"}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={[styles.avatarName, { color: theme.foreground }]}>
+            {user?.name}
+          </Text>
+          <Text style={[styles.avatarEmail, { color: theme.muted }]}>
+            {user?.email}
+          </Text>
+        </View>
+
+        {/* Feedback messages */}
+        {success && (
+          <View
+            style={[styles.successBanner, { backgroundColor: theme.input }]}
+          >
+            <Text style={[styles.successText, { color: theme.success }]}>
+              ✓ {success}
             </Text>
           </View>
-
-          {/* Feedback messages */}
-          {success && (
-            <View
-              style={[styles.successBanner, { backgroundColor: theme.input }]}
-            >
-              <Text style={[styles.successText, { color: theme.success }]}>
-                ✓ {success}
-              </Text>
-            </View>
-          )}
-          {error && (
-            <View
-              style={[styles.errorBanner, { backgroundColor: theme.input }]}
-            >
-              <Text style={[styles.errorText, { color: theme.error }]}>
-                {error}
-              </Text>
-            </View>
-          )}
-          <Button
-            title="Change Profile"
-            mode={mode}
-            onPress={pickImage}
-            variant="primary"
-            style={{ width: "75%", alignSelf: "center", borderRadius: 50 }}
-          />
-        </View>
-      )}
+        )}
+        {error && (
+          <View style={[styles.errorBanner, { backgroundColor: theme.input }]}>
+            <Text style={[styles.errorText, { color: theme.error }]}>
+              {error}
+            </Text>
+          </View>
+        )}
+        <Button
+          title="Change Profile"
+          mode={mode}
+          onPress={pickImage}
+          loading={uploading || profileLoading}
+          disabled={uploading || profileLoading}
+          variant="primary"
+          style={{ width: "75%", alignSelf: "center", borderRadius: 50 }}
+        />
+      </View>
     </Modal>
   );
 };
@@ -150,14 +159,17 @@ const styles = StyleSheet.create({
   avatarSection: { alignItems: "center", paddingVertical: 28 },
   avatarWrapper: { marginBottom: 12 },
   avatar: { width: 90, height: 90, borderRadius: 45 },
-  avatarPlaceholder: {
-    backgroundColor: "#333",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarInitial: { fontSize: 36, fontWeight: "700", color: "#fff" },
   avatarName: { fontSize: 20, fontWeight: "700", marginBottom: 4 },
   avatarEmail: { fontSize: 14 },
+  avatarPlaceholder: {
+    width: 200,
+    height: 200,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#33333322",
+  },
+  avatarInitial: { fontSize: 72, fontWeight: "700" },
   successBanner: {
     backgroundColor: "#e8f5e9",
     borderRadius: 10,

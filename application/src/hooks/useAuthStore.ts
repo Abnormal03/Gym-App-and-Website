@@ -20,7 +20,7 @@ export const useAuth = () => {
     try {
       const response = await authService.register(data);
       await login(response.user, response.token);
-      router.replace('/(tabs)');    // go to home on success
+      router.replace('/(drawer)/(tabs)');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -34,7 +34,7 @@ export const useAuth = () => {
     try {
       const response = await authService.login(data);
       await login(response.user, response.token);
-      router.replace('/(tabs)');
+      router.replace('/(drawer)/(tabs)');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
