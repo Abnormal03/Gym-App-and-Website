@@ -15,6 +15,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useBookingStore } from "../../../../src/store/booking.store";
 import { useProviders } from "../../../../src/hooks/useProviders";
+import { SkeletonCards } from "../../../../src/components/gym/SkeletonLoading";
 
 export default function NutritionAdvisorPage() {
   const { theme, mode } = useTheme();
@@ -105,11 +106,7 @@ export default function NutritionAdvisorPage() {
           </View>
 
           {loading ? (
-            <View style={styles.emptyState}>
-              <Text style={{ color: theme.muted }}>
-                Loading nutrition consultants…
-              </Text>
-            </View>
+            <SkeletonCards theme={theme} rows={3} variant="provider" />
           ) : error ? (
             <Pressable
               accessibilityRole="button"

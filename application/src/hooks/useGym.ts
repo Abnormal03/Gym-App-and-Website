@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gymService } from '../services/gym.service';
 import { Gym } from '../types/gym.types';
 
@@ -11,6 +12,7 @@ export const useGyms = () => {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string| null>(null)
   const requestOrder = useRef(0);
+  const hasCachedGyms = useRef(false);
 
   const getErrorMessage = (err: unknown): string => {
     if (typeof err === 'string') return err;
@@ -31,7 +33,22 @@ export const useGyms = () => {
 
   const getGyms = async () => {
     const requestId = ++requestOrder.current;
-    setLoading(true);
+    if (!hasCachedGyms.current) {
+      setLoading(true);
+      try {
+        const cached = await AsyncStorage.getItem('gyms:list');
+        if (cached) {
+          const parsed: unknown = JSON.parse(cached);
+          if (Array.isArray(parsed) && requestId === requestOrder.current) {
+            setGyms(parsed as Gym[]);
+            hasCachedGyms.current = true;
+            setLoading(false);
+          }
+        }
+      } catch {
+        // A malformed cache should not prevent the network request.
+      }
+    }
     setError(null);
     setSearching(false);
     setSearchError(null);
@@ -40,6 +57,8 @@ export const useGyms = () => {
       const response = await gymService.getAll();
       if (requestId === requestOrder.current) {
         setGyms(response);
+        hasCachedGyms.current = true;
+        void AsyncStorage.setItem('gyms:list', JSON.stringify(response)).catch(() => undefined);
       }
     } catch (err) {
       if (requestId === requestOrder.current) {

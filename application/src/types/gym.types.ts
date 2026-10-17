@@ -35,6 +35,7 @@ export interface Package {
   type: 'daily' | 'weekly' | 'monthly' | 'annual';
   price: number;
   durationDays: number;
+  maxGroupSize: number;
   benefits?: string;
   isActive: boolean;
 }
@@ -43,6 +44,7 @@ export interface Availability {
   capacity: number;
   booked: number;
   available: number;
+  withinOpeningHours?: boolean;
 }
 
 export interface GymSearchResponse {

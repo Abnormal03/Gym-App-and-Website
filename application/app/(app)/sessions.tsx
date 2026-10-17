@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
@@ -20,6 +19,7 @@ import { ScreenHeader } from "../../src/components/common/ScreenHeader";
 import { useSessions } from "../../src/hooks/useSessions";
 import { useTheme } from "../../src/hooks/useTheme";
 import { ProviderSession } from "../../src/types/session.types";
+import { SkeletonCards } from "../../src/components/gym/SkeletonLoading";
 
 export default function SessionsScreen() {
   const { theme, mode } = useTheme();
@@ -39,13 +39,14 @@ export default function SessionsScreen() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [reviewedIds, setReviewedIds] = useState<number[]>([]);
+  const [statusFilter, setStatusFilter] = useState<"SCHEDULED" | "CANCELLED">("SCHEDULED");
   const sortedSessions = useMemo(
     () =>
       [...sessions].sort(
         (a, b) =>
           new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
-      ),
-    [sessions],
+      ).filter((session) => session.status === statusFilter),
+    [sessions, statusFilter],
   );
 
   const handleSubmitReview = async () => {
@@ -64,9 +65,27 @@ export default function SessionsScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={styles.screen}>
         <ScreenHeader title="My Sessions" />
+        <View style={styles.filterRow}>
+          {(["SCHEDULED", "CANCELLED"] as const).map((status) => {
+            const selected = statusFilter === status;
+            return (
+              <TouchableOpacity
+                key={status}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => setStatusFilter(status)}
+                style={[styles.filterChip, { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary : theme.card }]}
+              >
+                <Text style={{ color: selected ? theme.foreground : theme.muted, fontWeight: "700" }}>
+                  {status === "SCHEDULED" ? "Scheduled" : "Canceled"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         {loading ? (
-          <ActivityIndicator color={theme.primary} style={styles.centered} />
-        ) : error ? (
+          <SkeletonCards theme={theme} rows={3} variant="session" />
+        ) : error && sessions.length === 0 ? (
           <View style={styles.centered}>
             <Text style={{ color: theme.error, textAlign: "center" }}>
               {error}
@@ -83,9 +102,10 @@ export default function SessionsScreen() {
             }
             ListEmptyComponent={
               <Text style={[styles.empty, { color: theme.muted }]}>
-                Provider sessions you book will appear here.
+                {statusFilter === "SCHEDULED" ? "No scheduled sessions." : "No canceled sessions."}
               </Text>
             }
+            ListHeaderComponent={error ? <Text style={{ color: theme.muted, paddingBottom: 4 }}>Showing saved sessions. Reconnect to refresh.</Text> : null}
             renderItem={({ item }) => {
               const canReview =
                 item.status === "COMPLETED" &&
@@ -214,6 +234,7 @@ export default function SessionsScreen() {
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", {
+    timeZone: "Africa/Addis_Ababa",
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -221,6 +242,7 @@ const formatDate = (iso: string) =>
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-US", {
+    timeZone: "Africa/Addis_Ababa",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -231,6 +253,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, width: "100%", maxWidth: 640, alignSelf: "center" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, padding: 24 },
   list: { padding: 16, gap: 12, flexGrow: 1 },
+  filterRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 12 },
+  filterChip: { borderWidth: 1, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10 },
   empty: { textAlign: "center", marginTop: 80, lineHeight: 22 },
   card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 8 },
   provider: { fontSize: 17, fontWeight: "700" },

@@ -116,12 +116,14 @@ export default function BookingNewScreen() {
     const d = new Date(iso);
     return (
       d.toLocaleDateString("en-US", {
+        timeZone: "Africa/Addis_Ababa",
         weekday: "short",
         month: "short",
         day: "numeric",
       }) +
       " · " +
       d.toLocaleTimeString("en-US", {
+        timeZone: "Africa/Addis_Ababa",
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
@@ -131,6 +133,7 @@ export default function BookingNewScreen() {
 
   const formatCheckOutTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -138,6 +141,7 @@ export default function BookingNewScreen() {
 
   const formatExpiryDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       month: "long",
       day: "numeric",
       year: "numeric",
@@ -145,10 +149,7 @@ export default function BookingNewScreen() {
 
   const formatDurationLabel = () => {
     if (!store.slotStart || !store.slotEnd) return "";
-    // Duration is just the workout window, not the full package period
-    // We stored durationHours separately — derive from checkout - checkin time
-    // slotEnd is package period end, so we can't use it for duration display
-    // Use packageDurationHours if stored, otherwise just show from store
+    // Show the selected Addis-time workout duration saved with the booking.
     return store.durationHours
       ? (() => {
           const h = Math.floor(store.durationHours);
@@ -260,7 +261,11 @@ export default function BookingNewScreen() {
         <Divider theme={theme} />
         <Row
           label="Booking type"
-          value={store.bookingType === "GROUP" ? `Group · ${store.headcount} people` : "Individual"}
+          value={
+            store.bookingType === "GROUP"
+              ? `Group · ${store.headcount} people`
+              : "Individual"
+          }
           theme={theme}
         />
         <Divider theme={theme} />
@@ -271,7 +276,11 @@ export default function BookingNewScreen() {
         />
         <Divider theme={theme} />
         <Row
-          label={store.bookingType === "GROUP" ? "Gym Package Base Price" : "Gym Package Price"}
+          label={
+            store.bookingType === "GROUP"
+              ? "Gym Package Base Price"
+              : "Gym Package Price"
+          }
           value={`ETB ${store.packagePrice?.toFixed(2) ?? "0.00"}`}
           theme={theme}
         />
@@ -461,11 +470,13 @@ const createStyles = (theme: ThemePalette) =>
       color: theme.foreground,
       fontSize: 16,
       fontWeight: "700",
+      paddingHorizontal: 5,
     },
     pendingAddonRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      paddingHorizontal: 10,
       gap: 10,
     },
     pendingAddonLabel: {

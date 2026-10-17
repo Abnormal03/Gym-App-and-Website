@@ -103,6 +103,38 @@ export interface VerifyPaymentResponse {
 
 export type PaymentStatus = 'pending' | 'success' | 'failed' | 'expired';
 
+export interface MemberPaymentHistoryEntry {
+  id: number;
+  bookingId: number;
+  amount: number | string;
+  currency: string;
+  status: 'pending' | 'success' | 'failed' | 'refunded';
+  transactionReference: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  booking: {
+    id: number;
+    status: MyBooking['status'];
+    slotStart: string;
+    slotEnd: string;
+    createdAt: string;
+    gym: { id: number; name: string; address: string };
+    package: { id: number; name: string; type: string } | null;
+    order: {
+      id: number;
+      totalAmount: number | string;
+      needsManualRefund: boolean;
+      refundNote: string | null;
+      items: Array<{
+        id: number;
+        type: string;
+        label: string;
+        amount: number | string;
+      }>;
+    } | null;
+  };
+}
+
 export interface MyBooking {
   id: number;
   gymId: number;

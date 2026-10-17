@@ -6,19 +6,19 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   Modal,
   Dimensions,
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import QRCode from "react-native-qrcode-svg";
 import { useMyBookings } from "../../../../src/hooks/useMyBookings";
 import { MyBooking } from "../../../../src/types/booking.types";
 import { useKeepAwake } from "expo-keep-awake";
 import { useTheme } from "../../../../src/hooks/useTheme";
 import { MaterialIcons } from "@expo/vector-icons";
+import { SkeletonCards } from "../../../../src/components/gym/SkeletonLoading";
+import { MemberPassQr } from "../../../../src/components/common/MemberPassQr";
 
 const { width } = Dimensions.get("window");
 
@@ -45,8 +45,8 @@ export default function BookingsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.bg }]}>
-        <ActivityIndicator size="large" color={colors.text} />
+      <View style={[styles.container, { backgroundColor: colors.bg }]}>
+        <SkeletonCards theme={theme} rows={3} variant="booking" />
       </View>
     );
   }
@@ -143,6 +143,7 @@ export default function BookingsScreen() {
             router.push(`/booking/details/${bookingId}`);
           }}
           isDark={isDark}
+          theme={theme}
         />
       )}
     </View>
@@ -163,6 +164,7 @@ const BookingCard = ({
 }) => {
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -170,6 +172,7 @@ const BookingCard = ({
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -185,7 +188,11 @@ const BookingCard = ({
     cancelled: { label: "Cancelled", bg: "#ffebee", text: "#c62828" },
   };
 
-  const config = statusConfig[booking.status] ?? statusConfig.cancelled;
+  const visitWindowEnded =
+    booking.status === "confirmed" && new Date(booking.slotEnd).getTime() < Date.now();
+  const config = visitWindowEnded
+    ? { label: "Visit time ended", bg: theme.input, text: theme.muted }
+    : statusConfig[booking.status] ?? statusConfig.cancelled;
 
   return (
     <View
@@ -249,7 +256,7 @@ const BookingCard = ({
       </View>
 
       {/* Show QR — only for confirmed bookings */}
-      {booking.status === "confirmed" && booking.qrCode && (
+      {booking.status === "confirmed" && !visitWindowEnded && (
         <TouchableOpacity
           onPress={onShowQR}
           style={[
@@ -262,6 +269,9 @@ const BookingCard = ({
           </Text>
         </TouchableOpacity>
       )}
+      {visitWindowEnded ? (
+        <Text style={[styles.slotTime, { color: colors.muted, paddingTop: 10 }]}>Check-in is no longer available for this time slot.</Text>
+      ) : null}
     </View>
   );
 };
@@ -272,11 +282,13 @@ const QRModal = ({
   onClose,
   onDetails,
   isDark,
+  theme,
 }: {
   booking: MyBooking | null;
   onClose: () => void;
   onDetails: () => void;
   isDark: boolean;
+  theme: ReturnType<typeof useTheme>["theme"];
 }) => {
   useKeepAwake(); // prevent screen dimming while showing QR
 
@@ -284,6 +296,7 @@ const QRModal = ({
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -311,14 +324,7 @@ const QRModal = ({
           {formatTime(booking.slotStart)} → {formatTime(booking.slotEnd)}
         </Text>
 
-        {/* QR Code */}
-        <View style={styles.qrCodeWrapper}>
-          <QRCode
-            value={booking.qrCode!}
-            size={width * 0.65}
-            backgroundColor={isDark ? "#fff" : "#fff"}
-          />
-        </View>
+        <MemberPassQr gymId={booking.gymId} slotStart={booking.slotStart} slotEnd={booking.slotEnd} theme={theme} />
 
         <Text style={[styles.qrHint, { color: isDark ? "#666" : "#aaa" }]}>
           Keep this screen bright when scanning at reception

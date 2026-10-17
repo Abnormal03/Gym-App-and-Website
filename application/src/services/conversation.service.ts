@@ -147,6 +147,8 @@ const normalizeConversation = (value: unknown): ChatConversation => {
   }
   return {
     id: requiredId(conversation.id, "conversation ID"),
+    createdAt:
+      typeof conversation.createdAt === "string" ? conversation.createdAt : "",
     contact: normalizeContact(
       conversation.contact ??
         otherParty ??

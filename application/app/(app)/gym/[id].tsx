@@ -26,15 +26,16 @@ import {
   getAvailableDurations,
   computeCheckOutTime,
   buildAvailabilitySlotEnd,
-  buildBookingSlotEnd,
   buildSlotStart,
   formatDuration,
+  formatTimeAmPm,
   getNextSevenDays,
   formatShortDay,
   formatDayNumber,
   isSameDay,
 } from "../../../src/utils/timeSlots";
 import { MaterialIcons } from "@expo/vector-icons";
+import { GymDetailSkeleton } from "../../../src/components/gym/SkeletonLoading";
 
 const { width } = Dimensions.get("window");
 
@@ -69,6 +70,18 @@ export default function GymDetailScreen() {
   const [duration, setDuration] = useState<number | null>(null); // in hours
   const [bookingType, setBookingType] = useState<"SINGLE" | "GROUP">("SINGLE");
   const [headcount, setHeadcount] = useState(1);
+
+  const handlePackageChange = (pkg: Package) => {
+    if (selectedPackage?.id === pkg.id) return;
+
+    setSelectedPackage(pkg);
+    if (pkg.maxGroupSize <= 1) {
+      setBookingType("SINGLE");
+      setHeadcount(1);
+    } else {
+      setHeadcount(2);
+    }
+  };
 
   // Derived values — only computed when dependencies are ready
   const checkOutTime =
@@ -118,11 +131,10 @@ export default function GymDetailScreen() {
       return;
 
     const slotStart = buildSlotStart(selectedDate, checkInTime);
-    const slotEnd = buildBookingSlotEnd(
+    const slotEnd = buildAvailabilitySlotEnd(
       selectedDate,
       checkInTime,
       duration,
-      selectedPackage.durationDays,
     );
     const expire = new Date();
     expire.setMinutes(expire.getMinutes() + 30);
@@ -143,7 +155,11 @@ export default function GymDetailScreen() {
         expiresAt: expire.toISOString(),
       });
 
-      router.push("/booking/customize/workout-style");
+      router.push(
+        bookingType === "GROUP"
+          ? "/booking/new"
+          : "/booking/customize/workout-style",
+      );
     } catch (error) {
       Alert.alert(
         "Unable to start booking",
@@ -159,6 +175,7 @@ export default function GymDetailScreen() {
     checkInTime !== null &&
     duration !== null &&
     availability !== null &&
+    availability.withinOpeningHours !== false &&
     availability.available >= (bookingType === "GROUP" ? headcount : 1);
 
   const bookBtnLabel = () => {
@@ -166,7 +183,12 @@ export default function GymDetailScreen() {
     if (!checkInTime) return "Select Check-in Time";
     if (!duration) return "Select Duration";
     if (availabilityError) return "Retry Availability";
-    if (availability && availability.available < (bookingType === "GROUP" ? headcount : 1))
+    if (availability?.withinOpeningHours === false)
+      return "Outside gym opening hours";
+    if (
+      availability &&
+      availability.available < (bookingType === "GROUP" ? headcount : 1)
+    )
       return "Not enough spaces available";
     return "Book Now";
   };
@@ -175,13 +197,13 @@ export default function GymDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.foreground} />
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <GymDetailSkeleton theme={theme} />
       </View>
     );
   }
 
-  if (error || !gym) {
+  if (!gym) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{error ?? "Gym not found"}</Text>
@@ -215,6 +237,11 @@ export default function GymDetailScreen() {
         />
       </Pressable>
       <ScrollView showsVerticalScrollIndicator={false}>
+        {error ? (
+          <Text style={styles.offlineNotice}>
+            Showing saved gym information. Reconnect to refresh.
+          </Text>
+        ) : null}
         {/* ── Photo Carousel ── */}
         {gym.photos.length > 0 ? (
           <FlatList
@@ -245,7 +272,7 @@ export default function GymDetailScreen() {
           <View style={styles.infoRow}>
             <View style={styles.infoChip}>
               <Text style={styles.infoChipText}>
-                🕐 {gym.openingTime} – {gym.closingTime}
+                🕐 {formatTimeAmPm(gym.openingTime)} – {formatTimeAmPm(gym.closingTime)}
               </Text>
             </View>
             <View style={styles.infoChip}>
@@ -282,7 +309,7 @@ export default function GymDetailScreen() {
                   return (
                     <TouchableOpacity
                       key={pkg.id}
-                      onPress={() => setSelectedPackage(pkg)}
+                      onPress={() => handlePackageChange(pkg)}
                       style={[
                         styles.packageCard,
                         isSelected && styles.packageCardSelected,
@@ -311,6 +338,87 @@ export default function GymDetailScreen() {
                     </TouchableOpacity>
                   );
                 })
+            )}
+          </View>
+
+          {/* ── Booking type comes after package selection ── */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Booking type</Text>
+            <View style={styles.chipRow}>
+              {(["SINGLE", "GROUP"] as const).map((type) => {
+                const selected = bookingType === type;
+                const disabled =
+                  type === "GROUP" &&
+                  selectedPackage !== null &&
+                  selectedPackage.maxGroupSize <= 1;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected, disabled }}
+                    disabled={disabled}
+                    onPress={() => {
+                      setBookingType(type);
+                      if (type === "SINGLE") setHeadcount(1);
+                      else setHeadcount((count) => Math.max(2, count));
+                    }}
+                    style={[
+                      styles.bookingTypeChip,
+                      selected && styles.bookingTypeChipSelected,
+                      disabled && styles.disabled,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.durationText,
+                        selected && styles.selectedChipText,
+                      ]}
+                    >
+                      {type === "SINGLE" ? "Individual" : "Group"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {bookingType === "GROUP" && (
+              <View style={styles.headcountRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.headcountTitle}>
+                    People in your group
+                  </Text>
+                  <Text style={styles.headcountHint}>
+                    {selectedPackage?.id
+                      ? `Maximum - ${selectedPackage.maxGroupSize} people.`
+                      : "Maximim Group size will be determined after you select a package."}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove one person"
+                  disabled={headcount === 2}
+                  onPress={() =>
+                    setHeadcount((count) => Math.max(2, count - 1))
+                  }
+                  style={styles.countButton}
+                >
+                  <Text style={styles.countButtonText}>−</Text>
+                </TouchableOpacity>
+                <Text style={styles.headcountValue}>{headcount}</Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Add one person"
+                  disabled={
+                    headcount >=
+                    (selectedPackage
+                      ? selectedPackage?.maxGroupSize
+                      : (availability?.available ?? gym.capacity))
+                  }
+                  onPress={() => setHeadcount((count) => count + 1)}
+                  style={styles.countButton}
+                >
+                  <Text style={styles.countButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
 
@@ -354,30 +462,33 @@ export default function GymDetailScreen() {
           {/* ── Check-in Time ── */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Check-in Time</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {checkInTimes.map((time) => {
-                const isSelected = checkInTime === time;
-                return (
-                  <TouchableOpacity
-                    key={time}
-                    onPress={() => handleCheckInChange(time)}
-                    style={[
-                      styles.timeChip,
-                      isSelected && styles.timeChipSelected,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.timeText,
-                        isSelected && styles.selectedChipText,
-                      ]}
-                    >
-                      {time}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {(["AM", "PM"] as const).map((period) => {
+              const periodTimes = checkInTimes.filter((time) =>
+                period === "AM" ? Number(time.slice(0, 2)) < 12 : Number(time.slice(0, 2)) >= 12,
+              );
+              if (periodTimes.length === 0) return null;
+              return (
+                <View key={period} style={styles.timePeriodGroup}>
+                  <Text style={styles.timePeriodLabel}>{period}</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {periodTimes.map((time) => {
+                      const isSelected = checkInTime === time;
+                      return (
+                        <TouchableOpacity
+                          key={time}
+                          onPress={() => handleCheckInChange(time)}
+                          style={[styles.timeChip, isSelected && styles.timeChipSelected]}
+                        >
+                          <Text style={[styles.timeText, isSelected && styles.selectedChipText]}>
+                            {formatTimeAmPm(time)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              );
+            })}
           </View>
 
           {/* ── Duration — only appears after check-in is selected ── */}
@@ -420,12 +531,12 @@ export default function GymDetailScreen() {
                 <View style={styles.timeSummary}>
                   <View style={styles.timeSummaryItem}>
                     <Text style={styles.timeSummaryLabel}>Check-in</Text>
-                    <Text style={styles.timeSummaryValue}>{checkInTime}</Text>
+                    <Text style={styles.timeSummaryValue}>{formatTimeAmPm(checkInTime)}</Text>
                   </View>
                   <Text style={styles.timeSummaryArrow}>→</Text>
                   <View style={styles.timeSummaryItem}>
                     <Text style={styles.timeSummaryLabel}>Checkout</Text>
-                    <Text style={styles.timeSummaryValue}>{checkOutTime}</Text>
+                    <Text style={styles.timeSummaryValue}>{formatTimeAmPm(checkOutTime)}</Text>
                   </View>
                   <View style={styles.timeSummaryItem}>
                     <Text style={styles.timeSummaryLabel}>Duration</Text>
@@ -434,70 +545,6 @@ export default function GymDetailScreen() {
                     </Text>
                   </View>
                 </View>
-              )}
-            </View>
-          )}
-
-          {checkInTime && duration && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Booking type</Text>
-              <View style={styles.chipRow}>
-                {(["SINGLE", "GROUP"] as const).map((type) => {
-                  const selected = bookingType === type;
-                  return (
-                    <TouchableOpacity
-                      key={type}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        setBookingType(type);
-                        if (type === "SINGLE") setHeadcount(1);
-                        else setHeadcount((count) => Math.max(2, count));
-                      }}
-                      style={[styles.bookingTypeChip, selected && styles.bookingTypeChipSelected]}
-                    >
-                      <Text style={[styles.durationText, selected && styles.selectedChipText]}>
-                        {type === "SINGLE" ? "Individual" : "Group"}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {bookingType === "GROUP" && (
-                <>
-                  <View style={styles.headcountRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.headcountTitle}>People in your group</Text>
-                      <Text style={styles.headcountHint}>
-                        {availability
-                          ? `${availability.available} spaces currently available`
-                          : "Availability will be checked for this time slot"}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Remove one person"
-                      disabled={headcount <= 2}
-                      onPress={() => setHeadcount((count) => Math.max(2, count - 1))}
-                      style={styles.countButton}
-                    >
-                      <Text style={styles.countButtonText}>−</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.headcountValue}>{headcount}</Text>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Add one person"
-                      disabled={headcount >= (availability?.available ?? gym.capacity)}
-                      onPress={() => setHeadcount((count) => count + 1)}
-                      style={styles.countButton}
-                    >
-                      <Text style={styles.countButtonText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.headcountHint}>
-                    The final group price is calculated at checkout.
-                  </Text>
-                </>
               )}
             </View>
           )}
@@ -532,8 +579,10 @@ export default function GymDetailScreen() {
                   ]}
                 >
                   <Text style={styles.availabilityText}>
-                    {availability.available === 0
-                      ? "❌  This slot is fully booked — pick a different time or date"
+                    {availability.withinOpeningHours === false
+                      ? "❌  This time is outside the gym's opening hours"
+                      : availability.available === 0
+                        ? "❌  This slot is fully booked — pick a different time or date"
                       : `✅  ${availability.available} of ${availability.capacity} spots available`}
                   </Text>
                 </View>
@@ -551,7 +600,7 @@ export default function GymDetailScreen() {
         {/* Summary line — shows when enough is selected */}
         {selectedPackage && checkInTime && checkOutTime && (
           <Text style={styles.footerSummary}>
-            {selectedPackage.name} · {checkInTime} → {checkOutTime}
+            {selectedPackage.name} · {formatTimeAmPm(checkInTime)} → {formatTimeAmPm(checkOutTime)}
             {bookingType === "GROUP"
               ? ` · ${headcount} people · Price at checkout`
               : ` · ETB ${selectedPackage.price.toFixed(2)}`}
@@ -576,6 +625,12 @@ export default function GymDetailScreen() {
 const createStyles = (theme: ThemePalette) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
+    offlineNotice: {
+      color: theme.muted,
+      textAlign: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+    },
 
     centered: {
       flex: 1,
@@ -670,6 +725,7 @@ const createStyles = (theme: ThemePalette) =>
       backgroundColor: theme.primary,
       borderColor: theme.primary,
     },
+    disabled: { opacity: 0.5 },
     headcountRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -679,11 +735,34 @@ const createStyles = (theme: ThemePalette) =>
       padding: 14,
       backgroundColor: theme.input,
     },
-    headcountTitle: { color: theme.foreground, fontSize: 14, fontWeight: "600" },
+    headcountTitle: {
+      color: theme.foreground,
+      fontSize: 14,
+      fontWeight: "600",
+    },
     headcountHint: { color: theme.muted, fontSize: 12, marginTop: 3 },
-    headcountValue: { color: theme.foreground, fontSize: 16, fontWeight: "700", minWidth: 20, textAlign: "center" },
-    countButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.border },
-    countButtonText: { color: theme.foreground, fontSize: 20, fontWeight: "700" },
+    headcountValue: {
+      color: theme.foreground,
+      fontSize: 16,
+      fontWeight: "700",
+      minWidth: 20,
+      textAlign: "center",
+    },
+    countButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: theme.card,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    countButtonText: {
+      color: theme.foreground,
+      fontSize: 20,
+      fontWeight: "700",
+    },
 
     // Amenities
     amenityTag: {
@@ -743,6 +822,8 @@ const createStyles = (theme: ThemePalette) =>
     selectedChipText: { color: theme.card },
 
     // Check-in time chips
+    timePeriodGroup: { marginBottom: 12, gap: 7 },
+    timePeriodLabel: { color: theme.muted, fontSize: 12, fontWeight: "700", letterSpacing: 0.5 },
     timeChip: {
       paddingHorizontal: 16,
       paddingVertical: 10,
@@ -801,7 +882,7 @@ const createStyles = (theme: ThemePalette) =>
       borderRadius: 10,
       padding: 14,
     },
-    availabilityFull: { backgroundColor: "#ffebee" },
+    availabilityFull: { backgroundColor: theme.background },
     availabilityText: {
       fontSize: 14,
       fontWeight: "500",

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,9 +8,9 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import QRCode from "react-native-qrcode-svg";
-import { useKeepAwake } from "expo-keep-awake";
 import { ScreenHeader } from "../../../../src/components/common/ScreenHeader";
+import { MemberPassQr } from "../../../../src/components/common/MemberPassQr";
+import { BookingDetailSkeleton } from "../../../../src/components/gym/SkeletonLoading";
 import { useTheme } from "../../../../src/hooks/useTheme";
 import { bookingService } from "../../../../src/services/booking.service";
 import type { MyBooking } from "../../../../src/types/booking.types";
@@ -85,12 +84,7 @@ export default function BookingDetailsScreen() {
           }}
         />
         {loading ? (
-          <ActivityIndicator
-            accessibilityLabel="Loading booking details"
-            color={theme.primary}
-            size="large"
-            style={styles.loading}
-          />
+          <BookingDetailSkeleton theme={theme} />
         ) : error ? (
           <View style={styles.state}>
             <Text style={[styles.message, { color: theme.error }]}>
@@ -243,8 +237,13 @@ export default function BookingDetailsScreen() {
               ) : null}
             </View>
 
-            {booking.status === "confirmed" && booking.qrCode ? (
-              <BookingQr value={booking.qrCode} theme={theme} />
+            {booking.status === "confirmed" ? (
+              <MemberPassQr
+                gymId={booking.gymId}
+                slotStart={booking.slotStart}
+                slotEnd={booking.slotEnd}
+                theme={theme}
+              />
             ) : (
               <View
                 style={[
@@ -258,7 +257,7 @@ export default function BookingDetailsScreen() {
                   Check-in QR code
                 </Text>
                 <Text style={[styles.muted, { color: theme.muted }]}>
-                  {booking.status === "confirmed"
+                  {booking.status === "expired"
                     ? "A check-in QR code is not available for this booking."
                     : booking.status === "pending"
                       ? "Your QR code will appear after payment is confirmed."
@@ -270,29 +269,6 @@ export default function BookingDetailsScreen() {
         ) : null}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function BookingQr({ value, theme }: { value: string; theme: ThemePalette }) {
-  useKeepAwake();
-
-  return (
-    <View
-      style={[
-        styles.qrCard,
-        { backgroundColor: theme.card, borderColor: theme.border },
-      ]}
-    >
-      <Text style={[styles.sectionTitle, { color: theme.foreground }]}>
-        Check-in QR code
-      </Text>
-      <View style={styles.qr}>
-        <QRCode value={value} size={220} backgroundColor="#FFFFFF" />
-      </View>
-      <Text style={[styles.muted, { color: theme.muted, textAlign: "center" }]}>
-        Keep your screen bright when showing this code at reception.
-      </Text>
-    </View>
   );
 }
 
@@ -315,6 +291,7 @@ function DetailRow({
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en", {
+    timeZone: "Africa/Addis_Ababa",
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -323,6 +300,7 @@ const formatDate = (value: string) =>
 
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString("en", {
+    timeZone: "Africa/Addis_Ababa",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

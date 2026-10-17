@@ -23,6 +23,7 @@ export default function BookingPaymentScreen() {
 
   const formatSlotTime = (iso: string) => {
     return new Date(iso).toLocaleTimeString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -50,10 +51,15 @@ export default function BookingPaymentScreen() {
     router.replace(`/booking/confirmation?tx_ref=${store.txRef}`);
   };
 
-  const handleCancel = () => {
-    if (Platform.OS === "windows") {
-      store.clearPendingBooking();
-      router.replace("/(drawer)/(tabs)");
+  const handleCancel = async () => {
+    if (Platform.OS === "web") {
+      const response = await window.confirm(
+        "Do you want to cancel this bookings?",
+      );
+      if (response) {
+        store.clearPendingBooking();
+        router.replace("/(drawer)/(tabs)");
+      }
     }
     Alert.alert(
       "Cancel Booking?",
@@ -131,7 +137,9 @@ export default function BookingPaymentScreen() {
             </Text>
           )}
           <Text style={styles.summarySlot}>
-            {store.bookingType === "GROUP" ? `Group booking · ${store.headcount} people` : "Individual booking"}
+            {store.bookingType === "GROUP"
+              ? `Group booking · ${store.headcount} people`
+              : "Individual booking"}
           </Text>
           <Text style={styles.summaryPrice}>
             ETB {(store.totalAmount ?? store.packagePrice)?.toFixed(2)}

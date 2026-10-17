@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useRef } from "react";
-import QRCode from "react-native-qrcode-svg";
 import { bookingService } from "../../../src/services/booking.service";
 import { BookingState, useBookingStore } from "../../../src/store/booking.store";
 import { useCountdown } from "../../../src/hooks/useCountdown";
@@ -24,6 +23,7 @@ import type { ThemePalette } from "../../../src/constants/colors";
 import { useAuthStore } from "../../../src/store/auth.store";
 import { saveOfflineConfirmedBooking } from "../../../src/services/bookingCache.service";
 import type { MyBooking } from "../../../src/types/booking.types";
+import { MemberPassQr } from "../../../src/components/common/MemberPassQr";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -69,7 +69,7 @@ export default function ConfirmationScreen() {
           const confirmedStore = { ...store };
           setConfirmedBooking(confirmedStore);
         }
-        if (resolved === "success" && raw.qrCode && memberId && store.bookingId) {
+        if (resolved === "success" && memberId && store.bookingId) {
           const offlineBooking: MyBooking = {
             id: store.bookingId,
             gymId: store.gymId ?? 0,
@@ -77,7 +77,8 @@ export default function ConfirmationScreen() {
             slotStart: store.slotStart ?? new Date().toISOString(),
             slotEnd: store.slotEnd ?? new Date().toISOString(),
             status: "confirmed",
-            qrCode: raw.qrCode,
+            // The booking UUID is deprecated for scanning; the app requests a rotating member pass.
+            qrCode: null,
             createdAt: new Date().toISOString(),
             bookingType: store.bookingType,
             headcount: store.headcount,
@@ -148,7 +149,6 @@ export default function ConfirmationScreen() {
   if (status === "success") {
     return (
       <SuccessState
-        qrCode={result?.qrCode ?? null}
         store={confirmedBooking ?? store}
         router={router}
         styles={styles}
@@ -227,13 +227,11 @@ const PendingState = ({
 
 // ─── Success ──────────────────────────────────────────────────────────────────
 const SuccessState = ({
-  qrCode,
   store,
   router,
   styles,
   theme,
 }: {
-  qrCode: string | null;
   store: BookingState;
   router: ReturnType<typeof useRouter>;
   styles: ConfirmationStyles;
@@ -241,12 +239,14 @@ const SuccessState = ({
 }) => {
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
     });
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-US", {
+      timeZone: "Africa/Addis_Ababa",
       weekday: "long",
       month: "short",
       day: "numeric",
@@ -262,23 +262,13 @@ const SuccessState = ({
           <Text style={styles.successTitle}>Booking Confirmed!</Text>
         </View>
         <Text style={styles.successMessage}>
-          Show this QR code at the gym reception to check in.
+          Your secure check-in QR becomes available 30 minutes before your booking and refreshes automatically.
         </Text>
       </View>
 
-      {/* QR Code */}
-      <View style={styles.qrContainer}>
-        {qrCode ? (
-          <>
-            <QRCode value={qrCode} size={220} />
-            <Text style={styles.qrHint}>Keep screen bright when scanning</Text>
-          </>
-        ) : (
-          <Text style={styles.qrFallback}>
-            QR code will appear shortly — check My Bookings
-          </Text>
-        )}
-      </View>
+      {store.gymId && store.slotStart && store.slotEnd ? (
+        <MemberPassQr gymId={store.gymId} slotStart={store.slotStart} slotEnd={store.slotEnd} theme={theme} />
+      ) : null}
 
       {/* Booking details from store */}
       <View style={styles.detailsCard}>

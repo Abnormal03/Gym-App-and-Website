@@ -16,6 +16,7 @@ import { useProviderDetails } from "../../hooks/useProviderDetails";
 import { useProviderReviews } from "../../hooks/useProviderReviews";
 import { useTheme } from "../../hooks/useTheme";
 import { ProviderType } from "../../types/gym.types";
+import { ProviderDetailSkeleton } from "../gym/SkeletonLoading";
 
 type ProviderProfileScreenProps = {
   providerId: number | null;
@@ -59,10 +60,7 @@ export function ProviderProfileScreen({
       <View style={styles.screen}>
         <ScreenHeader title={title} />
         {loading ? (
-          <View style={styles.state}>
-            <ActivityIndicator size="large" color={theme.primary} />
-            <Text style={styles.stateText}>Loading provider profile…</Text>
-          </View>
+          <ProviderDetailSkeleton theme={theme} />
         ) : error || !provider ? (
           <View style={styles.state}>
             <Text style={styles.errorText}>

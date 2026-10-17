@@ -21,6 +21,8 @@ export interface ChatMessagePreview {
 
 export interface ChatConversation {
   id: number | string;
+  /** Thread creation time; used as the activity fallback before its first message. */
+  createdAt?: string;
   contact: ChatContact;
   eligible: boolean;
   bookingId: number | string | null;

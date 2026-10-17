@@ -7,7 +7,8 @@ import {
   CreateBookingResponse,
   InitializePaymentResponse,
   VerifyPaymentResponse,
-  MyBooking
+  MyBooking,
+  MemberPaymentHistoryEntry,
 } from '../types/booking.types';
 
 
@@ -31,6 +32,11 @@ export const bookingService = {
       timeout: 40_000,
     }),
 
+  getPaymentHistory: (): Promise<{
+    success: boolean;
+    payments: MemberPaymentHistoryEntry[];
+  }> => api.get('/payments/history'),
+
   getMyBookings: (): Promise<{ success: boolean; bookings: MyBooking[] }> =>
     api.get('/bookings/my-bookings'),
 
@@ -39,5 +45,5 @@ export const bookingService = {
     api.get('/bookings'),
 
   cancel: (id: number) =>
-    api.put(`/bookings/${id}/cancel`),
+    api.post(`/bookings/${id}/cancel`),
 };

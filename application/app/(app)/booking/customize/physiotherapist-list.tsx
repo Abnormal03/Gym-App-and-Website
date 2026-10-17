@@ -19,6 +19,7 @@ import { providerService } from "../../../../src/services/provider.service";
 import type { ProviderPackage } from "../../../../src/types/gym.types";
 import { useBookingStore } from "../../../../src/store/booking.store";
 import { buildProviderWindowEnd } from "../../../../src/utils/timeSlots";
+import { SkeletonCards } from "../../../../src/components/gym/SkeletonLoading";
 
 export default function PhysiotherapistList() {
   const { theme, mode } = useTheme();
@@ -153,9 +154,7 @@ export default function PhysiotherapistList() {
             />
           </ScrollView>
           {loading ? (
-            <Text style={{ color: theme.muted, paddingHorizontal: 20 }}>
-              Loading physiotherapists…
-            </Text>
+            <SkeletonCards theme={theme} rows={3} variant="provider" />
           ) : error ? (
             <Text style={{ color: theme.error, paddingHorizontal: 20 }}>
               {error}

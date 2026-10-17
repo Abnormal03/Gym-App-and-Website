@@ -111,6 +111,14 @@ function DrawerContent({ navigation }: DrawerContentProps) {
           onPress={() => navigate("/sessions")}
           theme={theme}
         />
+        <DrawerItem
+          icon="receipt-long"
+          path="payment-history"
+          currentPath={pathName}
+          label="Payment History"
+          onPress={() => navigate("/payment-history")}
+          theme={theme}
+        />
       </View>
 
       <View style={[styles.divider, { backgroundColor: theme.border }]} />

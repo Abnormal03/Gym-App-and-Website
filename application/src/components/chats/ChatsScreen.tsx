@@ -50,7 +50,10 @@ export default function ChatsScreen() {
             .toLocaleLowerCase()
             .includes(normalizedQuery);
         return matchesFilter && matchesSearch;
-      }),
+      }).sort(
+        (left, right) =>
+          getConversationActivityTime(right) - getConversationActivityTime(left),
+      ),
     [conversations, filter, normalizedQuery],
   );
 
@@ -307,7 +310,9 @@ export default function ChatsScreen() {
             <Text style={[styles.time, { color: theme.muted }]}>
               {conversation.lastMessage
                 ? formatRelativeTime(conversation.lastMessage.createdAt)
-                : ""}
+                : conversation.createdAt
+                  ? formatRelativeTime(conversation.createdAt)
+                  : ""}
             </Text>
           </View>
           <View style={styles.rowTitle}>
@@ -430,6 +435,13 @@ function formatRelativeTime(value: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+function getConversationActivityTime(conversation: ChatConversation) {
+  const value = conversation.lastMessage?.createdAt ?? conversation.createdAt;
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 const styles = StyleSheet.create({

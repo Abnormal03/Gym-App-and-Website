@@ -66,20 +66,48 @@ export const computeCheckOutTime = (
   return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
 };
 
-const formatLocalDateTime = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate(),
-  ).padStart(2, '0')}T${String(date.getHours()).padStart(2, '0')}:${String(
-    date.getMinutes(),
-  ).padStart(2, '0')}:00`;
+// Display a gym's Addis Ababa wall time without changing the value used in
+// booking requests (which remains in 24-hour HH:mm form).
+export const formatTimeAmPm = (time: string): string => {
+  const [hour, minute] = time.split(':').map(Number);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return time;
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`;
+};
 
-// Builds a local date-time string without converting the selected time to UTC.
-// date = selected date, time = check-in time string "HH:MM"
+const ADDIS_TIME_ZONE = 'Africa/Addis_Ababa';
+const ADDIS_OFFSET_MINUTES = 3 * 60;
+
+const getAddisDateParts = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ADDIS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+  };
+};
+
+// Gym schedules are entered and displayed as Addis Ababa wall time. Convert
+// that wall time to a UTC instant explicitly so device timezone settings do not
+// change the requested booking slot.
+const buildAddisInstant = (date: Date, time: string): Date => {
+  const { year, month, day } = getAddisDateParts(date);
+  const [hour, minute] = time.split(':').map(Number);
+  return new Date(
+    Date.UTC(year, month - 1, day, hour, minute) -
+      ADDIS_OFFSET_MINUTES * 60_000,
+  );
+};
+
 export const buildSlotStart = (date: Date, checkInTime: string): string => {
-  const [h, m] = checkInTime.split(':').map(Number);
-  const dt = new Date(date);
-  dt.setHours(h, m, 0, 0);
-  return formatLocalDateTime(dt);
+  return buildAddisInstant(date, checkInTime).toISOString();
 };
 
 // Builds slotEnd for the AVAILABILITY CHECK (same day, just adds workout duration).
@@ -90,14 +118,8 @@ export const buildAvailabilitySlotEnd = (
   checkInTime: string,
   durationHours: number
 ): string => {
-  const [h, m] = checkInTime.split(':').map(Number);
-  const totalMinutes = h * 60 + m + durationHours * 60;
-  const outH = Math.floor(totalMinutes / 60);
-  const outM = totalMinutes % 60;
-
-  const dt = new Date(date);
-  dt.setHours(outH, outM, 0, 0);
-  return formatLocalDateTime(dt);
+  const start = buildAddisInstant(date, checkInTime);
+  return new Date(start.getTime() + durationHours * 60 * 60_000).toISOString();
 };
 
 /**
@@ -140,16 +162,11 @@ export const buildBookingSlotEnd = (
   durationHours: number,
   packageDurationDays: number
 ): string => {
-  const [h, m] = checkInTime.split(':').map(Number);
-  const totalMinutes = h * 60 + m + durationHours * 60;
-  const outH = Math.floor(totalMinutes / 60);
-  const outM = totalMinutes % 60;
-
-  // End date = start date + package duration
-  const endDate = new Date(date);
-  endDate.setDate(endDate.getDate() + packageDurationDays);
-  endDate.setHours(outH, outM, 0, 0);
-  return formatLocalDateTime(endDate);
+  const start = buildAddisInstant(date, checkInTime);
+  const end = new Date(
+    start.getTime() + packageDurationDays * 24 * 60 * 60_000,
+  );
+  return new Date(end.getTime() + durationHours * 60 * 60_000).toISOString();
 };
 
 // "1.5" → "1h 30m", "2" → "2h", "0.5" → "30m"
@@ -163,17 +180,27 @@ export const formatDuration = (hours: number): string => {
 
 // Next 7 days starting today
 export const getNextSevenDays = (): Date[] =>
-  Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  (() => {
+    const { year, month, day } = getAddisDateParts(new Date());
+    return Array.from(
+      { length: 7 },
+      (_, i) => new Date(Date.UTC(year, month - 1, day + i, 12)),
+    );
+  })();
 
 export const formatShortDay = (date: Date): string =>
-  date.toLocaleDateString('en-US', { weekday: 'short' });
+  date.toLocaleDateString('en-US', {
+    timeZone: ADDIS_TIME_ZONE,
+    weekday: 'short',
+  });
 
 export const formatDayNumber = (date: Date): string =>
-  date.getDate().toString();
+  String(getAddisDateParts(date).day);
 
 export const isSameDay = (a: Date, b: Date): boolean =>
-  a.toDateString() === b.toDateString();
+  formatAddisDateKey(a) === formatAddisDateKey(b);
+
+const formatAddisDateKey = (date: Date): string => {
+  const { year, month, day } = getAddisDateParts(date);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};

@@ -4,6 +4,7 @@ export type ThemePalette = {
   card: string;
   input: string;
   border: string;
+  skeleton: string;
   muted: string;
   subtle: string;
   primary: string;
@@ -19,6 +20,7 @@ export const colors: Record<string, ThemePalette> = {
     card: '#FFFFFF',
     input: '#F3F1FC',
     border: '#C9C9DA',
+    skeleton: '#E6E8EF',
     muted: '#64677F',
     subtle: '#A9AABA',
     primary: '#2E68F4',
@@ -32,6 +34,7 @@ export const colors: Record<string, ThemePalette> = {
     card: '#171C23',
     input: '#030508',
     border: '#303744',
+    skeleton: '#262C36',
     muted: '#A1A4B5',
     subtle: '#626778',
     primary: '#2E68F4',

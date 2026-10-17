@@ -72,12 +72,20 @@ export const useMyBookings = () => {
     };
   }, [cacheKey, fetchBookings]);
 
+  const now = Date.now();
   const upcoming = bookings.filter(
-    (b) => b.status === 'confirmed' || b.status === 'pending'
+    (booking) =>
+      booking.status === 'pending' ||
+      (booking.status === 'confirmed' &&
+        new Date(booking.slotEnd).getTime() >= now),
   );
 
   const past = bookings.filter(
-    (b) => b.status === 'cancelled' || b.status === 'checked_in'
+    (booking) =>
+      booking.status === 'cancelled' ||
+      booking.status === 'checked_in' ||
+      (booking.status === 'confirmed' &&
+        new Date(booking.slotEnd).getTime() < now),
   );
 
   return {

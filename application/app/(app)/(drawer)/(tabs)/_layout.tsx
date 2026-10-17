@@ -6,10 +6,12 @@ import {
   View,
   Pressable,
   StyleSheet,
+  ColorValue,
 } from "react-native";
 import { DrawerToggleButton } from "expo-router/drawer";
 import { useTheme } from "../../../../src/hooks/useTheme";
 import { MaterialIcons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 
 export default function TabsLayout() {
   const { theme } = useTheme();
@@ -35,8 +37,8 @@ export default function TabsLayout() {
             borderRadius: 22,
             marginHorizontal: 12,
             marginBottom: 8,
-            height: 68,
-            paddingTop: 6,
+            height: 76,
+            paddingTop: 2,
             paddingBottom: 8,
             elevation: 12,
             shadowColor: theme.primary,
@@ -44,8 +46,12 @@ export default function TabsLayout() {
             shadowOpacity: 0.16,
             shadowRadius: 12,
           },
-          tabBarItemStyle: { borderRadius: 16, marginHorizontal: 4 },
-          tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+          tabBarItemStyle: {
+            borderRadius: 16,
+            marginHorizontal: 4,
+            paddingTop: 5,
+          },
+          tabBarLabelStyle: { fontSize: 13, fontWeight: "600" },
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.foreground,
           headerShadowVisible: false,
@@ -56,8 +62,8 @@ export default function TabsLayout() {
           options={{
             title: "Home",
             tabBarLabel: "Home",
-            tabBarIcon: ({ color }) => (
-              <MaterialIcons name="home" size={24} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="home" color={color} focused={focused} />
             ),
             headerLeft: () => (
               <DrawerToggleButton tintColor={theme.foreground} />
@@ -84,8 +90,8 @@ export default function TabsLayout() {
           options={{
             title: "My Bookings",
             tabBarLabel: "Bookings",
-            tabBarIcon: ({ color }) => (
-              <MaterialIcons name="book" color={color} size={24} />
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="book" color={color} focused={focused} />
             ),
           }}
         />
@@ -94,8 +100,8 @@ export default function TabsLayout() {
           options={{
             title: "Chats",
             tabBarLabel: "Chats",
-            tabBarIcon: ({ color }) => (
-              <MaterialIcons name="chat" color={color} size={24} />
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="chat" color={color} focused={focused} />
             ),
           }}
         />
@@ -104,8 +110,8 @@ export default function TabsLayout() {
           name="profile"
           options={{
             title: "Profile",
-            tabBarIcon: ({ color }) => (
-              <MaterialIcons name="account-circle" size={24} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name="account-circle" color={color} focused={focused} />
             ),
           }}
         />
@@ -125,12 +131,42 @@ export default function TabsLayout() {
   );
 }
 
+function TabIcon({
+  name,
+  color,
+  focused,
+}: {
+  name: ComponentProps<typeof MaterialIcons>["name"];
+  color: ColorValue;
+  focused: boolean;
+}) {
+  const { theme } = useTheme();
+  return (
+    <View
+      style={[
+        styles.tabIcon,
+        focused && {
+          backgroundColor: theme.primary,
+          shadowColor: theme.primary,
+          elevation: 8,
+        },
+      ]}
+    >
+      <MaterialIcons
+        name={name}
+        size={focused ? 27 : 24}
+        color={focused ? theme.foreground : color}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   chatbotButton: {
     position: "absolute",
     right: 18,
-    bottom: 74,
+    bottom: 90,
     minHeight: 48,
     borderRadius: 24,
     paddingHorizontal: 16,
@@ -145,4 +181,13 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   chatbotButtonText: { color: "#FFFFFF", fontWeight: "700" },
+  tabIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -14,
+    marginBottom: -2,
+  },
 });
