@@ -37,17 +37,32 @@ const getAllUsers = async (req, res) => {
   try {
     // adminOnly populates req.auth from the verified GymAdmin token.
     const adminId = Number(req.auth?.adminId ?? req.auth?.id ?? req.user?.id);
-    const gymId = Number(req.query.gymId);
+    let gymId;
 
-    if (
-      req.query.gymId === undefined ||
-      req.query.gymId === "" ||
-      !Number.isSafeInteger(gymId) ||
-      gymId <= 0
-    ) {
+    if (req.query.gymId === undefined || req.query.gymId === "") {
+      // Preserve compatibility with the current admin page when this admin
+      // owns a single gym. Never combine members across multiple gyms.
+      const gyms = await getAdminGymsService(adminId);
+      if (gyms.length === 1) {
+        gymId = gyms[0].id;
+      } else if (gyms.length > 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Select a gym to view its members",
+          code: "GYM_SELECTION_REQUIRED",
+          gyms: gyms.map(({ id, name }) => ({ id, name })),
+        });
+      } else {
+        return res.status(200).json({ success: true, users: [] });
+      }
+    } else {
+      gymId = Number(req.query.gymId);
+    }
+
+    if (!Number.isSafeInteger(gymId) || gymId <= 0) {
       return res.status(400).json({
         success: false,
-        message: "A valid gymId is required to list members for a gym",
+        message: "Invalid gymId",
       });
     }
 
