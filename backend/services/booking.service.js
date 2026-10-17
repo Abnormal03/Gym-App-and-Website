@@ -414,14 +414,19 @@ const cancelMemberBooking = async (id, userId) => {
   id = validatePositiveId(id, "booking ID");
   userId = validatePositiveId(userId, "user ID");
 
-  return prisma.$transaction(
+  // Read settings before opening the transaction.
+  const cancelHours = await getNumberSetting("SESSION_CANCEL_HOURS");
+
+  // Phase 1: cancel the booking in the database.
+  // Do not call Chapa inside the database transaction.
+  const cancelledBooking = await prisma.$transaction(
     async (tx) => {
       const locked = await tx.$queryRaw`
-      SELECT "id"
-      FROM "Booking"
-      WHERE "id" = ${id}
-      FOR UPDATE
-    `;
+        SELECT "id"
+        FROM "Booking"
+        WHERE "id" = ${id}
+        FOR UPDATE
+      `;
 
       if (locked.length === 0) {
         throw new Error("Booking not found");
@@ -431,6 +436,8 @@ const cancelMemberBooking = async (id, userId) => {
         where: { id },
         include: {
           sessions: true,
+          payment: true,
+          order: true,
         },
       });
 
@@ -450,7 +457,6 @@ const cancelMemberBooking = async (id, userId) => {
         throw new Error("Booking cannot be cancelled after its start time");
       }
 
-      const cancelHours = await getNumberSetting("SESSION_CANCEL_HOURS");
       const now = new Date();
 
       for (const session of booking.sessions) {
@@ -462,12 +468,13 @@ const cancelMemberBooking = async (id, userId) => {
           (new Date(session.startsAt).getTime() - now.getTime()) /
           (1000 * 60 * 60);
 
-        // A late cancellation consumes a session credit.
-        // An early cancellation releases the reserved credit.
+        // Preserve the original session-credit policy.
         if (hoursUntilSession < cancelHours) {
           await tx.providerPackagePurchase.update({
             where: { id: session.purchaseId },
-            data: { sessionsUsed: { increment: 1 } },
+            data: {
+              sessionsUsed: { increment: 1 },
+            },
           });
         }
 
@@ -480,27 +487,138 @@ const cancelMemberBooking = async (id, userId) => {
         });
       }
 
-      const updatedBooking = await tx.booking.update({
+      return tx.booking.update({
         where: { id },
         data: { status: "cancelled" },
         include: {
           gym: true,
           package: true,
           payment: true,
+          order: true,
           sessions: {
             include: { provider: true },
             orderBy: { startsAt: "asc" },
           },
         },
       });
-
-      return updatedBooking;
     },
     {
       maxWait: 10000,
       timeout: 30000,
     },
   );
+
+  // Phase 2: determine whether a refund is required.
+  const payment = cancelledBooking.payment;
+
+  if (!payment || payment.status !== "success") {
+    return {
+      ...cancelledBooking,
+      refundStatus: "not_required",
+      refundMessage:
+        "Booking cancelled. No successful payment was found to refund.",
+    };
+  }
+
+  // Record manual review if the refund cannot be confirmed.
+  const markManualReview = async (note) => {
+    if (cancelledBooking.order?.id) {
+      await prisma.order.update({
+        where: { id: cancelledBooking.order.id },
+        data: {
+          needsManualRefund: true,
+          refundNote: note,
+        },
+      });
+    }
+
+    return {
+      ...cancelledBooking,
+      refundStatus: "manual_review",
+      refundMessage: note,
+    };
+  };
+
+  if (!payment.chapaTxRef) {
+    return markManualReview(
+      "Booking cancelled, but the successful payment has no Chapa transaction reference. Verify the payment and arrange a refund manually.",
+    );
+  }
+
+  try {
+    const { refundChapaTransaction } = require("./payment.service");
+
+    const refundResponse = await refundChapaTransaction(
+      payment.chapaTxRef,
+      payment.amount,
+    );
+
+    // Do not assume a refund succeeded without an explicit confirmation.
+
+    const providerStatus = String(
+      refundResponse?.data?.status ?? refundResponse?.status ?? "",
+    ).toLowerCase();
+
+    if (providerStatus !== "refunded") {
+      return markManualReview(
+        `Booking cancelled, but refund completion is unconfirmed. Chapa status: ${
+          providerStatus || "unknown"
+        }. Verify the refund before attempting another.`,
+      );
+    }
+
+    // Update our records only after Chapa confirms the refund.
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: "refunded" },
+      });
+
+      if (cancelledBooking.order?.id) {
+        await tx.order.update({
+          where: { id: cancelledBooking.order.id },
+          data: {
+            needsManualRefund: false,
+            refundNote: null,
+          },
+        });
+      }
+    });
+
+    return {
+      ...cancelledBooking,
+      payment: {
+        ...payment,
+        status: "refunded",
+      },
+      refundStatus: "refunded",
+      refundMessage: "Booking cancelled and refund confirmed by Chapa.",
+    };
+  } catch (error) {
+    console.error("Booking cancellation refund requires review:", {
+      bookingId: id,
+      paymentId: payment.id,
+      message: error.message,
+    });
+
+    try {
+      return await markManualReview(
+        "Booking cancelled, but the refund outcome could not be confirmed. Check the Chapa transaction before attempting another refund.",
+      );
+    } catch (reviewError) {
+      console.error("Failed to save manual refund review:", {
+        bookingId: id,
+        message: reviewError.message,
+      });
+
+      return {
+        ...cancelledBooking,
+        refundStatus: "manual_review",
+        refundMessage:
+          "Booking cancelled, but refund confirmation and review recording failed. An administrator must reconcile the Chapa transaction.",
+      };
+    }
+  }
 };
 
 /* =========================================================
