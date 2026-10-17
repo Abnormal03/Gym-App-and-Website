@@ -49,9 +49,7 @@ const getPaymentErrorMessage = (error) => {
 const getChapaData = (verification) => verification?.data ?? {};
 
 const getChapaStatus = (verification) =>
-  String(
-    verification?.status ?? getChapaData(verification).status ?? "",
-  ).toLowerCase();
+  String(getChapaData(verification).status ?? "").toLowerCase();
 
 const getPaymentOutcome = (status) => {
   if (status === "success") return "success";
@@ -744,14 +742,14 @@ const canHonorLatePayment = async (tx, booking) => {
 
   const providerItems = booking.order
     ? await tx.orderItem.findMany({
-      where: {
-        orderId: booking.order.id,
-        type: "PROVIDER_PACKAGE",
-      },
-      include: {
-        providerPackage: true,
-      },
-    })
+        where: {
+          orderId: booking.order.id,
+          type: "PROVIDER_PACKAGE",
+        },
+        include: {
+          providerPackage: true,
+        },
+      })
     : [];
 
   for (const item of providerItems) {
@@ -1250,13 +1248,16 @@ const checkPaymentStatus = async (txRef, userId) => {
 
   // A successful payment has already been verified.
   // Return its existing state without contacting Chapa again.
+  // Report the locally stored status without inventing a Chapa result.
   if (payment.status === "success") {
     return {
       localStatus: "success",
-      chapaStatus: "success",
+      chapaStatus: null,
       bookingStatus: payment.booking?.status ?? null,
       qrCode: payment.booking?.qrCode ?? null,
       expired: payment.booking?.status === "expired",
+      verificationNote:
+        "Local payment is marked successful; current Chapa status was not checked.",
     };
   }
 
@@ -1330,13 +1331,16 @@ const checkPaymentStatus = async (txRef, userId) => {
   }
 
   // Expiry handling may have changed the payment status.
+  // Report the locally stored status without inventing a Chapa result.
   if (payment.status === "success") {
     return {
       localStatus: "success",
-      chapaStatus: "success",
+      chapaStatus: null,
       bookingStatus: payment.booking?.status ?? null,
       qrCode: payment.booking?.qrCode ?? null,
       expired: payment.booking?.status === "expired",
+      verificationNote:
+        "Local payment is marked successful; current Chapa status was not checked.",
     };
   }
 
@@ -1427,7 +1431,7 @@ const initializeTrainerSessionPayment = async (trainerSessionId, userId) => {
 
   throw new Error(
     "Individual trainer-session payments are not supported in V2. " +
-    "Pay for the associated provider-package order instead.",
+      "Pay for the associated provider-package order instead.",
   );
 };
 
@@ -1510,7 +1514,7 @@ const refundChapaTransaction = async (txRef, amount) => {
 
   try {
     const response = await axios.post(
-      `${CHAPA_BASE_URL}/transaction/refund/${encodeURIComponent(txRef)}`,
+      `${CHAPA_BASE_URL}/refund/${encodeURIComponent(txRef)}`,
       body,
       {
         headers: {
@@ -1540,4 +1544,5 @@ module.exports = {
   handleChapaWebhook,
   activateMemberPackage,
   confirmFreeCheckout,
+  refundChapaTransaction,
 };
