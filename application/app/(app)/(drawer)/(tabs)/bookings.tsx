@@ -9,9 +9,10 @@ import {
   RefreshControl,
   Modal,
   Dimensions,
+  Pressable,
 } from "react-native";
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { router, useRouter } from "expo-router";
 import { useMyBookings } from "../../../../src/hooks/useMyBookings";
 import { MyBooking } from "../../../../src/types/booking.types";
 import { useKeepAwake } from "expo-keep-awake";
@@ -19,8 +20,6 @@ import { useTheme } from "../../../../src/hooks/useTheme";
 import { MaterialIcons } from "@expo/vector-icons";
 import { SkeletonCards } from "../../../../src/components/gym/SkeletonLoading";
 import { MemberPassQr } from "../../../../src/components/common/MemberPassQr";
-
-const { width } = Dimensions.get("window");
 
 export default function BookingsScreen() {
   const { theme, mode } = useTheme();
@@ -101,7 +100,12 @@ export default function BookingsScreen() {
       </View>
 
       {error ? (
-        <Text style={[styles.offlineNote, { color: theme.muted }]}>
+        <Text
+          style={[
+            styles.offlineNote,
+            { color: theme.muted, textAlign: "center", paddingVertical: 10 },
+          ]}
+        >
           Could not refresh — showing saved booking information. Status and QR
           validity may have changed since the last update.
         </Text>
@@ -189,90 +193,104 @@ const BookingCard = ({
   };
 
   const visitWindowEnded =
-    booking.status === "confirmed" && new Date(booking.slotEnd).getTime() < Date.now();
+    booking.status === "confirmed" &&
+    new Date(booking.slotEnd).getTime() < Date.now();
   const config = visitWindowEnded
     ? { label: "Visit time ended", bg: theme.input, text: theme.muted }
-    : statusConfig[booking.status] ?? statusConfig.cancelled;
+    : (statusConfig[booking.status] ?? statusConfig.cancelled);
 
   return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border },
-      ]}
+    <Pressable
+      onPress={() => {
+        router.push(`/booking/details/${booking.id}`);
+      }}
     >
-      {/* Gym Photo + Info */}
-      <View style={styles.cardTop}>
-        {booking.gym.photos?.[0] ? (
-          <Image
-            source={{ uri: booking.gym.photos[0] }}
-            style={styles.gymPhoto}
-          />
-        ) : (
-          <View
-            style={[
-              styles.gymPhoto,
-              styles.gymPhotoPlaceholder,
-              { backgroundColor: theme.input },
-            ]}
-          >
-            <Text style={{ fontSize: 20 }}>
-              <MaterialIcons
-                name="fitness-center"
-                size={45}
-                color={theme.primary}
-              />
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        {/* Gym Photo + Info */}
+        <View style={styles.cardTop}>
+          {booking.gym.photos?.[0] ? (
+            <Image
+              source={{ uri: booking.gym.photos[0] }}
+              style={styles.gymPhoto}
+            />
+          ) : (
+            <View
+              style={[
+                styles.gymPhoto,
+                styles.gymPhotoPlaceholder,
+                { backgroundColor: theme.input },
+              ]}
+            >
+              <Text style={{ fontSize: 20 }}>
+                <MaterialIcons
+                  name="fitness-center"
+                  size={45}
+                  color={theme.primary}
+                />
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.cardInfo}>
+            <Text
+              style={[styles.gymName, { color: colors.text }]}
+              numberOfLines={1}
+            >
+              {booking.gym.name}
+            </Text>
+            <Text
+              style={[styles.packageName, { color: colors.muted }]}
+              numberOfLines={1}
+            >
+              {booking.package?.name}
+            </Text>
+            <Text style={[styles.slotTime, { color: colors.muted }]}>
+              {formatDate(booking.slotStart)}
+            </Text>
+            <Text style={[styles.slotTime, { color: colors.muted }]}>
+              {formatTime(booking.slotStart)} → {formatTime(booking.slotEnd)}
             </Text>
           </View>
+
+          {/* Status Badge */}
+          <View style={[styles.statusBadge, { backgroundColor: config.bg }]}>
+            <Text style={[styles.statusText, { color: config.text }]}>
+              {config.label}
+            </Text>
+          </View>
+        </View>
+
+        {/* Show QR — only for confirmed bookings */}
+        {booking.status === "confirmed" && !visitWindowEnded && (
+          <TouchableOpacity
+            onPress={onShowQR}
+            style={[
+              styles.qrBtn,
+              { backgroundColor: theme.primary, borderTopColor: theme.border },
+            ]}
+          >
+            <Text style={[styles.qrBtnText, { color: theme.foreground }]}>
+              Show QR Code for Check-In
+            </Text>
+          </TouchableOpacity>
         )}
-
-        <View style={styles.cardInfo}>
+        {visitWindowEnded ? (
           <Text
-            style={[styles.gymName, { color: colors.text }]}
-            numberOfLines={1}
+            style={[
+              styles.slotTime,
+              { color: colors.muted, paddingVertical: 10, textAlign: "center" },
+            ]}
           >
-            {booking.gym.name}
+            Check-in is no longer available for this time slot.
           </Text>
-          <Text
-            style={[styles.packageName, { color: colors.muted }]}
-            numberOfLines={1}
-          >
-            {booking.package?.name}
-          </Text>
-          <Text style={[styles.slotTime, { color: colors.muted }]}>
-            {formatDate(booking.slotStart)}
-          </Text>
-          <Text style={[styles.slotTime, { color: colors.muted }]}>
-            {formatTime(booking.slotStart)} → {formatTime(booking.slotEnd)}
-          </Text>
-        </View>
-
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: config.bg }]}>
-          <Text style={[styles.statusText, { color: config.text }]}>
-            {config.label}
-          </Text>
-        </View>
+        ) : null}
       </View>
-
-      {/* Show QR — only for confirmed bookings */}
-      {booking.status === "confirmed" && !visitWindowEnded && (
-        <TouchableOpacity
-          onPress={onShowQR}
-          style={[
-            styles.qrBtn,
-            { backgroundColor: theme.primary, borderTopColor: theme.border },
-          ]}
-        >
-          <Text style={[styles.qrBtnText, { color: theme.foreground }]}>
-            Show QR Code for Check-In
-          </Text>
-        </TouchableOpacity>
-      )}
-      {visitWindowEnded ? (
-        <Text style={[styles.slotTime, { color: colors.muted, paddingTop: 10 }]}>Check-in is no longer available for this time slot.</Text>
-      ) : null}
-    </View>
+    </Pressable>
   );
 };
 
@@ -324,7 +342,12 @@ const QRModal = ({
           {formatTime(booking.slotStart)} → {formatTime(booking.slotEnd)}
         </Text>
 
-        <MemberPassQr gymId={booking.gymId} slotStart={booking.slotStart} slotEnd={booking.slotEnd} theme={theme} />
+        <MemberPassQr
+          gymId={booking.gymId}
+          slotStart={booking.slotStart}
+          slotEnd={booking.slotEnd}
+          theme={theme}
+        />
 
         <Text style={[styles.qrHint, { color: isDark ? "#666" : "#aaa" }]}>
           Keep this screen bright when scanning at reception

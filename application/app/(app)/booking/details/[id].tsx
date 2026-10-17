@@ -347,7 +347,13 @@ const styles = StyleSheet.create({
     gap: 16,
     marginHorizontal: 20,
   },
-  qrState: { borderWidth: 1, borderRadius: 16, padding: 18, gap: 10 },
+  qrState: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 18,
+    gap: 10,
+    marginHorizontal: 20,
+  },
   qr: { backgroundColor: "#FFFFFF", borderRadius: 12, padding: 16 },
   action: {
     minWidth: 120,

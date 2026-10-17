@@ -71,6 +71,8 @@ const statusLabel = (status: MemberPaymentHistoryEntry["status"]) => {
       return "Failed";
     case "refunded":
       return "Refunded";
+    case "expired":
+      return "Expired";
   }
 };
 
@@ -122,7 +124,7 @@ export default function PaymentHistoryScreen() {
       case "cancelled":
         return payment.booking.status === "cancelled";
       case "expired":
-        return payment.booking.status === "expired";
+        return payment.booking.status === "expired" || payment.status === "expired";
     }
   });
 
@@ -310,11 +312,11 @@ function PaymentCard({
           </Text>
           <Text style={styles.bookingMeta}>Booking #{payment.bookingId}</Text>
         </View>
-        <View style={[styles.statusBadge, statusStyle(payment.status, theme)]}>
+        <View style={[styles.statusBadge, statusStyle(payment.booking.status === "expired" || payment.status === "expired" ? "expired" : payment.status, theme)]}>
           <Text
-            style={[styles.statusText, statusTextStyle(payment.status, theme)]}
+            style={[styles.statusText, statusTextStyle(payment.booking.status === "expired" || payment.status === "expired" ? "expired" : payment.status, theme)]}
           >
-            {statusLabel(payment.status)}
+            {payment.booking.status === "expired" || payment.status === "expired" ? "Expired" : statusLabel(payment.status)}
           </Text>
         </View>
       </View>
@@ -344,7 +346,7 @@ function PaymentCard({
       <View style={styles.timelineHeader}>
         <Text style={styles.timelineTitle}>Timeline</Text>
         <Text style={styles.timelineStatus}>
-          Current status: {statusLabel(payment.status)}
+          Current status: {payment.booking.status === "expired" || payment.status === "expired" ? "Expired" : statusLabel(payment.status)}
         </Text>
       </View>
       <View style={styles.timeline}>
@@ -390,7 +392,7 @@ const statusStyle = (
   backgroundColor:
     status === "success" || status === "refunded"
       ? theme.success + "1A"
-      : status === "pending"
+      : status === "pending" || status === "expired"
         ? theme.primary + "1A"
         : theme.error + "1A",
 });
@@ -402,7 +404,7 @@ const statusTextStyle = (
   color:
     status === "success" || status === "refunded"
       ? theme.success
-      : status === "pending"
+      : status === "pending" || status === "expired"
         ? theme.primary
         : theme.error,
 });

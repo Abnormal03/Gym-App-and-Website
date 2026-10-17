@@ -40,45 +40,53 @@ export default function ChatsScreen() {
 
   const visibleConversations = useMemo(
     () =>
-      conversations.filter((conversation) => {
-        const matchesFilter = filter === "all" || conversation.unreadCount > 0;
-        const matchesSearch =
-          !normalizedQuery ||
-          `${conversation.contact.name} ${conversation.contact.type} ${
-            conversation.lastMessage?.content ?? ""
-          }`
-            .toLocaleLowerCase()
-            .includes(normalizedQuery);
-        return matchesFilter && matchesSearch;
-      }).sort(
-        (left, right) =>
-          getConversationActivityTime(right) - getConversationActivityTime(left),
-      ),
+      conversations
+        .filter((conversation) => {
+          const matchesFilter =
+            filter === "all" || conversation.unreadCount > 0;
+          const matchesSearch =
+            !normalizedQuery ||
+            `${conversation.contact.name} ${conversation.contact.type} ${
+              conversation.lastMessage?.content ?? ""
+            }`
+              .toLocaleLowerCase()
+              .includes(normalizedQuery);
+          return matchesFilter && matchesSearch;
+        })
+        .sort(
+          (left, right) =>
+            getConversationActivityTime(right) -
+            getConversationActivityTime(left),
+        ),
     [conversations, filter, normalizedQuery],
   );
 
   const startableContacts = useMemo(
-    () =>
-      (filter === "unread" ? [] : eligibleContacts).filter(
-        (contact) =>
-          contact.eligible &&
-          !conversations.some(
-            (conversation) =>
-              (contact.bookingId !== null &&
-                String(conversation.bookingId) === String(contact.bookingId)) ||
-              (contact.purchaseId !== null &&
-                String(conversation.purchaseId) === String(contact.purchaseId)),
-          ) &&
-          (!normalizedQuery ||
-            `${contact.name} ${contact.type}`
-              .toLocaleLowerCase()
-              .includes(normalizedQuery)),
-      ),
+    () => {
+      if (filter === "unread") return [];
+      const existingProviders = new Set(
+        conversations.map((conversation) => String(conversation.contact.id)),
+      );
+      const seenProviders = new Set<string>();
+
+      return eligibleContacts.filter((contact) => {
+        const providerId = String(contact.id);
+        if (
+          !contact.eligible ||
+          existingProviders.has(providerId) ||
+          seenProviders.has(providerId)
+        ) return false;
+        seenProviders.add(providerId);
+        return !normalizedQuery ||
+          `${contact.name} ${contact.type}`
+            .toLocaleLowerCase()
+            .includes(normalizedQuery);
+      });
+    },
     [conversations, eligibleContacts, filter, normalizedQuery],
   );
 
   const navigateToConversation = (conversation: ChatConversation) => {
-    if (!conversation.eligible) return;
     router.push(`/chats/${encodeURIComponent(String(conversation.id))}`);
   };
 
@@ -178,7 +186,8 @@ export default function ChatsScreen() {
         )}
         {error && conversations.length > 0 ? (
           <Text style={[styles.offlineNote, { color: theme.muted }]}>
-            Offline — showing saved conversations. Pull to refresh when you’re back online.
+            Offline — showing saved conversations. Pull to refresh when you’re
+            back online.
           </Text>
         ) : null}
         {loading && conversations.length === 0 ? (
@@ -290,13 +299,8 @@ export default function ChatsScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${conversation.contact.name}, ${conversation.unreadCount} unread messages`}
-        disabled={!conversation.eligible}
         onPress={onPress}
-        style={[
-          styles.conversationRow,
-          { borderBottomColor: theme.border },
-          !conversation.eligible && styles.disabledRow,
-        ]}
+        style={[styles.conversationRow, { borderBottomColor: theme.border }]}
       >
         <Avatar contact={conversation.contact} />
         <View style={styles.rowCopy}>
@@ -319,6 +323,11 @@ export default function ChatsScreen() {
             <Text style={[styles.contactType, { color: theme.primary }]}>
               {formatContactType(conversation.contact.type)}
             </Text>
+            {!conversation.eligible ? (
+              <Text style={[styles.readOnlyBadge, { color: theme.muted }]}>
+                Read only
+              </Text>
+            ) : null}
             {conversation.unreadCount > 0 && (
               <View
                 style={[styles.countBadge, { backgroundColor: theme.primary }]}
@@ -344,7 +353,7 @@ export default function ChatsScreen() {
           )}
           {!conversation.eligible && (
             <Text style={[styles.ineligibleText, { color: theme.error }]}>
-              Messaging is not currently eligible for this service.
+              <MaterialIcons name="lock" /> Read Only!
             </Text>
           )}
         </View>
@@ -523,7 +532,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  disabledRow: { opacity: 0.55 },
   avatar: { width: 50, height: 50, borderRadius: 25 },
   avatarFallback: {
     borderWidth: 1,
@@ -535,6 +543,7 @@ const styles = StyleSheet.create({
   rowTitle: { flexDirection: "row", alignItems: "center", gap: 8 },
   contactName: { flex: 1, fontSize: 15, fontWeight: "700" },
   contactType: { fontSize: 12, fontWeight: "700" },
+  readOnlyBadge: { fontSize: 10, fontWeight: "700" },
   time: { fontSize: 11 },
   preview: { fontSize: 12, lineHeight: 17 },
   serviceContext: { fontSize: 10, lineHeight: 14 },
@@ -550,7 +559,12 @@ const styles = StyleSheet.create({
   retryButton: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20 },
   retryText: { color: "#FFFFFF", fontWeight: "700" },
   errorText: { paddingHorizontal: 16, paddingVertical: 8, fontSize: 13 },
-  offlineNote: { paddingHorizontal: 16, paddingBottom: 8, fontSize: 12, lineHeight: 17 },
+  offlineNote: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   empty: {
     flex: 1,
     alignItems: "center",

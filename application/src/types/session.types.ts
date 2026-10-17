@@ -23,4 +23,5 @@ export interface ProviderSession {
   };
   provider?: { id: number; name: string };
   purchase?: { id: number; sessionsRemaining: number };
+  review?: { id: number; rating: number; comment: string | null; createdAt: string } | null;
 }

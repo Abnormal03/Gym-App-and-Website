@@ -83,6 +83,8 @@ export const useMyBookings = () => {
   const past = bookings.filter(
     (booking) =>
       booking.status === 'cancelled' ||
+      booking.status === 'expired' ||
+      booking.status === 'payment_failed' ||
       booking.status === 'checked_in' ||
       (booking.status === 'confirmed' &&
         new Date(booking.slotEnd).getTime() < now),

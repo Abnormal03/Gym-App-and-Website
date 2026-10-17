@@ -3,6 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { conversationService } from "../services/conversation.service";
 import { ChatMessage } from "../types/chat.types";
 import { useAuthStore } from "../store/auth.store";
+import { io } from "socket.io-client";
+import { BASE_URL } from "../services/localBaseUrl";
 
 const PAGE_SIZE = 30;
 
@@ -26,6 +28,7 @@ const mergeMessages = (existing: ChatMessage[], incoming: ChatMessage[]) => {
 
 export const useConversationMessages = (conversationId: string | null) => {
   const memberId = useAuthStore((state) => state.user?.id);
+  const token = useAuthStore((state) => state.token);
   const cacheKey =
     memberId && conversationId
       ? `chatMessages:${memberId}:${conversationId}`
@@ -120,6 +123,68 @@ export const useConversationMessages = (conversationId: string | null) => {
     };
   }, [cacheKey, conversationId, loadPage]);
 
+  useEffect(() => {
+    if (!conversationId || !token) return;
+    const threadId = Number(conversationId);
+    if (!Number.isSafeInteger(threadId) || threadId <= 0) return;
+
+    const socket = io(`${BASE_URL.replace(/\/api\/?$/, "")}/chat`, {
+      auth: { token },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10_000,
+    });
+    socket.on("connect", () => {
+      socket.emit("thread:join", { threadId });
+      void conversationService.markRead(conversationId).catch(() => undefined);
+      // Reconcile anything missed while the app was offline or reconnecting.
+      void loadPage(true);
+    });
+    socket.on("message:new", (event: unknown) => {
+      if (!event || typeof event !== "object") return;
+      const payload = event as { threadId?: number | string; message?: unknown };
+      if (String(payload.threadId) !== String(conversationId) || !payload.message) return;
+      try {
+        const incoming = conversationService.normalizeRealtimeMessage(payload.message, conversationId);
+        applyMessages(mergeMessages(messagesRef.current, [incoming]));
+        if (incoming.senderType.toUpperCase() !== "MEMBER") {
+          void conversationService.markRead(conversationId).catch(() => undefined);
+        }
+      } catch {
+        // Ignore malformed socket payloads; REST refresh remains authoritative.
+      }
+    });
+    socket.on("message:updated", (event: unknown) => {
+      if (!event || typeof event !== "object") return;
+      const payload = event as { threadId?: number | string; message?: unknown };
+      if (String(payload.threadId) !== String(conversationId) || !payload.message) return;
+      try {
+        const updated = conversationService.normalizeRealtimeMessage(payload.message, conversationId);
+        applyMessages(mergeMessages(messagesRef.current, [updated]));
+      } catch {
+        // Ignore malformed socket payloads; REST refresh remains authoritative.
+      }
+    });
+    socket.on("message:read", (event: unknown) => {
+      if (!event || typeof event !== "object") return;
+      const receipt = event as { threadId?: number | string; readAt?: string; readBy?: string };
+      if (
+        String(receipt.threadId) !== String(conversationId) ||
+        receipt.readBy?.toUpperCase() === "MEMBER" ||
+        !receipt.readAt
+      ) return;
+      applyMessages(messagesRef.current.map((message) =>
+        message.senderType.toUpperCase() === "MEMBER" && !message.readAt
+          ? { ...message, readAt: receipt.readAt }
+          : message,
+      ));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [applyMessages, conversationId, loadPage, token]);
+
   const loadOlder = async () => {
     if (!conversationId || !nextCursor || loadingOlder) return;
     const requestVersion = conversationVersion.current;
@@ -163,6 +228,38 @@ export const useConversationMessages = (conversationId: string | null) => {
     }
   };
 
+  const edit = async (messageId: number | string, content: string) => {
+    if (!conversationId || !content.trim() || sending) return false;
+    setSending(true);
+    setSendError(null);
+    try {
+      const updated = await conversationService.editMessage(conversationId, messageId, content);
+      applyMessages(mergeMessages(messagesRef.current, [updated]));
+      return true;
+    } catch (failure) {
+      setSendError(getErrorMessage(failure, "Unable to edit this message."));
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const remove = async (messageId: number | string) => {
+    if (!conversationId || sending) return false;
+    setSending(true);
+    setSendError(null);
+    try {
+      const updated = await conversationService.deleteMessage(conversationId, messageId);
+      applyMessages(mergeMessages(messagesRef.current, [updated]));
+      return true;
+    } catch (failure) {
+      setSendError(getErrorMessage(failure, "Unable to delete this message."));
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
   const refresh = useCallback(() => loadPage(true), [loadPage]);
 
   return {
@@ -177,5 +274,7 @@ export const useConversationMessages = (conversationId: string | null) => {
     refresh,
     loadOlder,
     send,
+    edit,
+    remove,
   };
 };

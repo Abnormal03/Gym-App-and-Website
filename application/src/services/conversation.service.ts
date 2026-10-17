@@ -221,20 +221,15 @@ const normalizeMessage = (
 ): ChatMessage => {
   const message = asRecord(value);
   const sender = asRecord(message?.sender);
-  const senderType =
-    message?.senderType ??
-    message?.senderRole ??
-    sender?.type ??
-    (message?.senderUserId != null
-      ? "MEMBER"
-      : message?.senderProviderId != null
-        ? "PROVIDER"
-        : undefined);
+  // The chat API stores member and provider senders in separate nullable
+  // columns. Prefer those columns over generic roles/IDs, which can overlap.
+  const senderType = message?.senderUserId != null
+    ? "MEMBER"
+    : message?.senderProviderId != null
+      ? "PROVIDER"
+      : message?.senderType ?? message?.senderRole ?? sender?.type;
   const senderId =
-    message?.senderId ??
-    sender?.id ??
-    message?.senderUserId ??
-    message?.senderProviderId;
+    message?.senderUserId ?? message?.senderProviderId ?? message?.senderId ?? sender?.id;
   const conversationId = message?.conversationId ?? message?.threadId ?? fallbackConversationId;
   if (
     !message ||
@@ -256,6 +251,8 @@ const normalizeMessage = (
     content: (message.content ?? message.body) as string,
     createdAt: (message.createdAt ?? message.sentAt ?? message.timestamp) as string,
     readAt: typeof message.readAt === "string" ? message.readAt : null,
+    isDeleted: message.deletedAt != null || message.isDeleted === true,
+    editedAt: typeof message.editedAt === "string" ? message.editedAt : null,
   };
 };
 
@@ -381,9 +378,36 @@ export const conversationService = {
     return normalizeMessage(response?.message ?? response, conversationId);
   },
 
+  editMessage: async (
+    conversationId: number | string,
+    messageId: number | string,
+    body: string,
+  ): Promise<ChatMessage> => {
+    const normalizedBody = body.trim();
+    if (!normalizedBody) throw new Error("Enter a message before saving.");
+    const response = asRecord(unwrapResponse(await api.patch<unknown>(
+      `/chats/${encodeURIComponent(String(conversationId))}/messages/${encodeURIComponent(String(messageId))}`,
+      { body: normalizedBody },
+    )));
+    return normalizeMessage(response?.message ?? response, conversationId);
+  },
+
+  deleteMessage: async (
+    conversationId: number | string,
+    messageId: number | string,
+  ): Promise<ChatMessage> => {
+    const response = asRecord(unwrapResponse(await api.delete<unknown>(
+      `/chats/${encodeURIComponent(String(conversationId))}/messages/${encodeURIComponent(String(messageId))}`,
+    )));
+    return normalizeMessage(response?.message ?? response, conversationId);
+  },
+
   markRead: async (conversationId: number | string): Promise<void> => {
     await api.post<unknown>(
       `/chats/${encodeURIComponent(String(conversationId))}/read`,
     );
   },
+
+  normalizeRealtimeMessage: (value: unknown, conversationId: number | string) =>
+    normalizeMessage(value, conversationId),
 };

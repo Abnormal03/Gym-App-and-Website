@@ -11,7 +11,10 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useRef } from "react";
 import { bookingService } from "../../../src/services/booking.service";
-import { BookingState, useBookingStore } from "../../../src/store/booking.store";
+import {
+  BookingState,
+  useBookingStore,
+} from "../../../src/store/booking.store";
 import { useCountdown } from "../../../src/hooks/useCountdown";
 import { resolvePaymentStatus } from "../../../src/utils/resolvePaymentStatus";
 import {
@@ -38,7 +41,9 @@ export default function ConfirmationScreen() {
 
   const [status, setStatus] = useState<PaymentStatus>("pending");
   const [result, setResult] = useState<VerifyPaymentResult | null>(null);
-  const [confirmedBooking, setConfirmedBooking] = useState<BookingState | null>(null);
+  const [confirmedBooking, setConfirmedBooking] = useState<BookingState | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const verifyInFlightRef = useRef(false);
@@ -262,12 +267,18 @@ const SuccessState = ({
           <Text style={styles.successTitle}>Booking Confirmed!</Text>
         </View>
         <Text style={styles.successMessage}>
-          Your secure check-in QR becomes available 30 minutes before your booking and refreshes automatically.
+          Your secure check-in QR becomes available 30 minutes before your
+          booking and refreshes automatically.
         </Text>
       </View>
 
       {store.gymId && store.slotStart && store.slotEnd ? (
-        <MemberPassQr gymId={store.gymId} slotStart={store.slotStart} slotEnd={store.slotEnd} theme={theme} />
+        <MemberPassQr
+          gymId={store.gymId}
+          slotStart={store.slotStart}
+          slotEnd={store.slotEnd}
+          theme={theme}
+        />
       ) : null}
 
       {/* Booking details from store */}
@@ -301,7 +312,11 @@ const SuccessState = ({
         )}
         <DetailRow
           label="Booking type"
-          value={store.bookingType === "GROUP" ? `Group · ${store.headcount} people` : "Individual"}
+          value={
+            store.bookingType === "GROUP"
+              ? `Group · ${store.headcount} people`
+              : "Individual"
+          }
           theme={theme}
         />
         <DetailRow
@@ -495,7 +510,7 @@ const createStyles = (theme: ThemePalette) =>
       borderColor: theme.border,
       borderRadius: 12,
       padding: 16,
-      marginBottom: 28,
+      marginVertical: 28,
     },
 
     failedIcon: { fontSize: 52, color: theme.error, marginBottom: 16 },

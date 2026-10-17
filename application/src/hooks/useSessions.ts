@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sessionService } from '../services/session.service';
 import { ProviderSession } from '../types/session.types';
 import { useAuthStore } from '../store/auth.store';
+import { useFocusEffect } from 'expo-router';
 
 export const useSessions = () => {
   const memberId = useAuthStore((state) => state.user?.id);
@@ -51,9 +52,12 @@ export const useSessions = () => {
         }
       }).catch(() => undefined);
     }
-    void loadSessions();
     return () => { active = false; };
   }, [cacheKey, loadSessions]);
+
+  useFocusEffect(useCallback(() => {
+    void loadSessions();
+  }, [loadSessions]));
 
   const submitReview = async (
     sessionId: number,

@@ -39,7 +39,7 @@ export default function SessionsScreen() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [reviewedIds, setReviewedIds] = useState<number[]>([]);
-  const [statusFilter, setStatusFilter] = useState<"SCHEDULED" | "CANCELLED">("SCHEDULED");
+  const [statusFilter, setStatusFilter] = useState<"SCHEDULED" | "COMPLETED" | "CANCELLED">("SCHEDULED");
   const sortedSessions = useMemo(
     () =>
       [...sessions].sort(
@@ -66,7 +66,7 @@ export default function SessionsScreen() {
       <View style={styles.screen}>
         <ScreenHeader title="My Sessions" />
         <View style={styles.filterRow}>
-          {(["SCHEDULED", "CANCELLED"] as const).map((status) => {
+        {(["SCHEDULED", "COMPLETED", "CANCELLED"] as const).map((status) => {
             const selected = statusFilter === status;
             return (
               <TouchableOpacity
@@ -77,7 +77,7 @@ export default function SessionsScreen() {
                 style={[styles.filterChip, { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary : theme.card }]}
               >
                 <Text style={{ color: selected ? theme.foreground : theme.muted, fontWeight: "700" }}>
-                  {status === "SCHEDULED" ? "Scheduled" : "Canceled"}
+                  {status === "SCHEDULED" ? "Scheduled" : status === "COMPLETED" ? "Completed" : "Canceled"}
                 </Text>
               </TouchableOpacity>
             );
@@ -102,14 +102,14 @@ export default function SessionsScreen() {
             }
             ListEmptyComponent={
               <Text style={[styles.empty, { color: theme.muted }]}>
-                {statusFilter === "SCHEDULED" ? "No scheduled sessions." : "No canceled sessions."}
+                {statusFilter === "SCHEDULED" ? "No scheduled sessions." : statusFilter === "COMPLETED" ? "No completed sessions yet." : "No canceled sessions."}
               </Text>
             }
             ListHeaderComponent={error ? <Text style={{ color: theme.muted, paddingBottom: 4 }}>Showing saved sessions. Reconnect to refresh.</Text> : null}
             renderItem={({ item }) => {
               const canReview =
                 item.status === "COMPLETED" &&
-                !reviewedIds.includes(item.id);
+                !item.review && !reviewedIds.includes(item.id);
               return (
                 <View
                   style={[
@@ -131,13 +131,15 @@ export default function SessionsScreen() {
                     {formatTime(item.endsAt)}
                   </Text>
                   <Text style={{ color: theme.primary }}>{item.status}</Text>
-                  {canReview && (
+                  {canReview ? (
                     <Button
                       mode={mode}
-                      title="Review session"
+                      title="Leave a rating"
                       onPress={() => setReviewSession(item)}
                     />
-                  )}
+                  ) : item.review ? (
+                    <Text style={{ color: theme.success, fontWeight: "700" }}>Reviewed · {item.review.rating} / 5</Text>
+                  ) : null}
                 </View>
               );
             }}

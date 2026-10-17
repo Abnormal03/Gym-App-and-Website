@@ -101,14 +101,14 @@ export interface VerifyPaymentResponse {
   result: VerifyPaymentResult;
 }
 
-export type PaymentStatus = 'pending' | 'success' | 'failed' | 'expired';
+export type PaymentStatus = 'pending' | 'success' | 'failed' | 'refunded' | 'expired';
 
 export interface MemberPaymentHistoryEntry {
   id: number;
   bookingId: number;
   amount: number | string;
   currency: string;
-  status: 'pending' | 'success' | 'failed' | 'refunded';
+  status: 'pending' | 'success' | 'failed' | 'refunded' | 'expired';
   transactionReference: string | null;
   createdAt: string;
   updatedAt: string | null;

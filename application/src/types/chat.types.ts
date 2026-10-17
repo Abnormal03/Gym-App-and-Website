@@ -45,6 +45,8 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   readAt?: string | null;
+  isDeleted?: boolean;
+  editedAt?: string | null;
 }
 
 export interface ChatMessagePage {
