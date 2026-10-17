@@ -2,7 +2,7 @@ const prismaModule = require('../config/prisma');
 const prisma = prismaModule.prisma || prismaModule;
 const { AppError } = require('../utils/errors');
 const { toId, assertStaffInGym, assertAdminOwnsGym } = require('../utils/scope');
-const { toUtcDate, addMinutes } = require('../utils/time');
+const { toAddisDate, addMinutes } = require('../utils/time');
 const { verifyQrToken, signQrToken } = require('./qrToken.service');
 const { packageAllowsNow, isWithinGymHours } = require('../utils/checkInRules');
 const { getBoolSetting } = require('./platformSetting.service');
@@ -21,7 +21,7 @@ async function getMemberPass(auth, gymIdParam) {
     await expireStale(prisma, { userId, gymId });
 
     // 1. Check covering booking (allow 30 minutes early)
-    const booking = await prisma.booking.findFirst({
+    const bookings = await prisma.booking.findMany({
         where: {
             userId,
             gymId,
@@ -29,23 +29,33 @@ async function getMemberPass(auth, gymIdParam) {
             slotStart: { lte: addMinutes(now, 30) },
             slotEnd: { gte: now },
         },
-        include: { checkIn: true },
         orderBy: { slotStart: 'asc' },
+        include: {
+            checkIns: {
+                where: { localDate: toAddisDate(now) },
+                orderBy: { checkedInAt: 'asc' },
+                take: 1,
+            },
+        },
     });
+    const booking = bookings.find((candidate) => candidate.checkIns.length === 0);
 
     if (booking) {
-        if (booking.status === 'checked_in') {
-            return {
-                state: 'CHECKED_IN',
-                checkedInAt: booking.checkIn?.checkedInAt || null,
-            };
-        }
         const { token, expiresAt } = signQrToken(userId);
         return {
             state: 'READY',
             qrToken: token,
             expiresAt,
         };
+    }
+
+    // If all currently covering bookings have already been used today, return
+    // the latest existing check-in instead of treating a booking as unused.
+    if (bookings.length > 0) {
+        const existingCheckIn = bookings
+            .flatMap((candidate) => candidate.checkIns)
+            .sort((a, b) => b.checkedInAt - a.checkedInAt)[0];
+        return { state: 'CHECKED_IN', checkedInAt: existingCheckIn.checkedInAt };
     }
 
     // 2. Check active MemberPackage for this gym
@@ -112,7 +122,7 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
     }
 
     const now = new Date();
-    const todayStr = toUtcDate(now);
+    const todayStr = toAddisDate(now);
 
     return prisma.$transaction(async (tx) => {
         await expireStale(tx, { userId: targetUserId, gymId });
@@ -124,7 +134,7 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
         if (!user) throw new AppError('NOT_FOUND', 'User not found');
 
         // Look for covering booking
-        const booking = await tx.booking.findFirst({
+        const bookings = await tx.booking.findMany({
             where: {
                 userId: targetUserId,
                 gymId,
@@ -132,27 +142,18 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
                 slotStart: { lte: addMinutes(now, 30) },
                 slotEnd: { gte: now },
             },
-            include: { checkIn: true },
             orderBy: { slotStart: 'asc' },
+            include: {
+                checkIns: {
+                    where: { localDate: todayStr },
+                    orderBy: { checkedInAt: 'asc' },
+                    take: 1,
+                },
+            },
         });
+        const booking = bookings.find((candidate) => candidate.checkIns.length === 0);
 
         if (booking) {
-            if (booking.status === 'checked_in') {
-                return {
-                    success: true,
-                    alreadyCheckedIn: true,
-                    checkedInAt: booking.checkIn?.checkedInAt || now,
-                    memberName: user.name,
-                    guestCount: booking.headcount,
-                    covering: 'BOOKING',
-                };
-            }
-
-            await tx.booking.update({
-                where: { id: booking.id },
-                data: { status: 'checked_in' },
-            });
-
             if (booking.memberPackageId) {
                 await tx.memberPackage.update({
                     where: { id: booking.memberPackageId },
@@ -184,6 +185,22 @@ async function recordCheckIn(auth, { token, userId, gymId: gymIdParam }) {
                 guestCount: booking.headcount,
                 covering: 'BOOKING',
                 newBadges,
+            };
+        }
+
+        if (bookings.length > 0) {
+            const existingCheckIn = bookings
+                .flatMap((candidate) => candidate.checkIns)
+                .sort((a, b) => b.checkedInAt - a.checkedInAt)[0];
+            const checkedBooking = bookings.find((candidate) =>
+                candidate.checkIns.some((checkIn) => checkIn.id === existingCheckIn.id));
+            return {
+                success: true,
+                alreadyCheckedIn: true,
+                checkedInAt: existingCheckIn.checkedInAt,
+                memberName: user.name,
+                guestCount: checkedBooking.headcount,
+                covering: 'BOOKING',
             };
         }
 
@@ -287,7 +304,7 @@ async function getTodayCheckIns(auth, gymIdParam) {
     const gymId = toId(gymIdParam, 'gymId');
     await assertScannerAuth(auth, gymId);
 
-    const todayStr = toUtcDate(new Date());
+    const todayStr = toAddisDate(new Date());
     const list = await prisma.checkIn.findMany({
         where: { gymId, localDate: todayStr },
         include: {
@@ -317,7 +334,7 @@ async function searchMembers(auth, gymIdParam, query) {
     if (!q) return [];
 
     const now = new Date();
-    const todayStr = toUtcDate(now);
+    const todayStr = toAddisDate(now);
 
     const members = await prisma.user.findMany({
         where: {

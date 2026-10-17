@@ -9,7 +9,9 @@ const {
 } = require("./bookingHelpers.service");
 
 const { getNumberSetting } = require("./platformSetting.service");
-const { parseUtcInstant } = require("../utils/time");
+const { parseUtcInstant, toUtcDate } = require("../utils/time");
+const { recordWorkout } = require("./memberStats.service");
+const { awardBadges } = require("./badge.service");
 
 const isAdmin = (role) => role === "gym_admin" || role === "platform_admin";
 
@@ -253,7 +255,44 @@ const checkInBooking = async (id, role) => {
     throw new Error("Admin access required");
   }
 
-  return changeBookingStatus(id, "checked_in");
+  const bookingId = validatePositiveId(id, "booking ID");
+  const today = toUtcDate(new Date());
+
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new Error("Booking not found");
+    if (booking.status !== "confirmed" && booking.status !== "checked_in") {
+      throw new Error("Only a confirmed booking can be checked in");
+    }
+
+    const existing = await tx.checkIn.findFirst({
+      where: { bookingId, localDate: today },
+    });
+    if (!existing) {
+      await tx.checkIn.create({
+        data: {
+          userId: booking.userId,
+          gymId: booking.gymId,
+          bookingId,
+          memberPackageId: booking.memberPackageId,
+          localDate: today,
+          guestCount: booking.headcount,
+        },
+      });
+
+      if (booking.memberPackageId) {
+        await tx.memberPackage.update({
+          where: { id: booking.memberPackageId },
+          data: { visitsUsed: { increment: 1 } },
+        });
+      }
+
+      await recordWorkout(tx, booking.userId, today);
+      await awardBadges(tx, { userId: booking.userId }, "CHECK_IN");
+    }
+
+    return tx.booking.findUnique({ where: { id: bookingId } });
+  });
 };
 
 const getGymBookings = async (gymId) => {
@@ -850,6 +889,9 @@ const getSessionsForUser = async (userId, role, status) => {
         },
       },
       purchase: true,
+      review: {
+        select: { id: true, rating: true, comment: true, createdAt: true },
+      },
       user: {
         select: {
           id: true,

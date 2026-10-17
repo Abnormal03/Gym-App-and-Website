@@ -12,6 +12,7 @@ const {
 
 const {
   createSessionReviewController,
+  getMemberSessionReviewsController,
 } = require("../controllers/review.controller");
 
 const memberAndProviderRoles = requireRole(
@@ -26,6 +27,7 @@ const cancelRoles = requireRole("MEMBER", "TRAINER", "PHYSIOTHERAPIST");
 
 // Member, trainer, or physiotherapist lists sessions.
 router.get("/", ...memberAndProviderRoles, getSessionsController);
+router.get("/reviews/mine", protect, requireRole("MEMBER"), getMemberSessionReviewsController);
 
 // Review route remains unchanged for now; we'll check its authentication separately.
 router.post("/:id/review", protect, createSessionReviewController);

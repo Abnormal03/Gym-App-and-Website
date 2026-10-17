@@ -6,6 +6,7 @@ const {
   chapaCallbackController,
   chapaWebhookController,
   verifyPaymentController,
+  paymentHistoryController,
 } = require("../controllers/payment.controller");
 
 const { protect } = require("../middleware/auth.middleware");
@@ -25,5 +26,6 @@ router.get("/callback", chapaCallbackController);
 router.post("/webhook", chapaWebhookController);
 
 router.get("/verify/:txRef", protect, verifyPaymentController);
+router.get("/history", protect, paymentHistoryController);
 
 module.exports = router;

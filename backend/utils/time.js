@@ -2,14 +2,15 @@
  * Time helpers. RULES:
  *  - Every Date in the database and in memory is a UTC instant.
  *  - Timezone-free ISO date-times from the frontend are interpreted as UTC.
- *  - Calendar and schedule helpers operate directly on UTC values.
+ *  - Booking timestamps are UTC instants; gym/provider schedules are evaluated as Addis Ababa wall time.
  */
 
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
+const ADDIS_OFFSET_MINUTES = 3 * 60; // Africa/Addis_Ababa is UTC+03:00 year-round.
 
-/** Period boundaries in UTC hours, [start, end). Same values as the Prisma `Period` enum. */
+/** Schedule period boundaries in Addis Ababa clock hours, [start, end). */
 const PERIOD_HOURS = {
     MORNING: { start: 6, end: 12 },
     AFTERNOON: { start: 12, end: 17 },
@@ -52,6 +53,11 @@ function toUtcDate(d) {
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
+/** Addis Ababa calendar date / clock helpers for schedules stored as local time. */
+const toAddisDate = (d) => toUtcDate(addMinutes(d, ADDIS_OFFSET_MINUTES));
+const addisDayOfWeek = (d) => addMinutes(d, ADDIS_OFFSET_MINUTES).getUTCDay();
+const addisMinutesOfDay = (d) => utcMinutesOfDay(addMinutes(d, ADDIS_OFFSET_MINUTES));
+
 /** 0 = Sunday ... 6 = Saturday in UTC. */
 function utcDayOfWeek(d) {
     return d.getUTCDay();
@@ -67,6 +73,10 @@ function periodOf(d) {
     return periodForHour(d.getUTCHours());
 }
 
+function addisPeriodOf(d) {
+    return periodForHour(addMinutes(d, ADDIS_OFFSET_MINUTES).getUTCHours());
+}
+
 function periodForHour(h) {
     for (const p of Object.keys(PERIOD_HOURS)) {
         const { start, end } = PERIOD_HOURS[p];
@@ -78,6 +88,10 @@ function periodForHour(h) {
 /** Period of the END of a window. The end is exclusive, so 12:00 belongs to MORNING and 22:00 to EVENING. */
 function periodOfEnd(end) {
     return periodOf(new Date(end.getTime() - 1));
+}
+
+function addisPeriodOfEnd(end) {
+    return addisPeriodOf(new Date(end.getTime() - 1));
 }
 
 // ---------- Building UTC instants ----------
@@ -116,14 +130,16 @@ function isWithinGymOpeningHours(start, end, opening, closing) {
 
     const openingMs = parseHHmm(opening) * MS_PER_MINUTE;
     const closingMs = parseHHmm(closing) * MS_PER_MINUTE;
-    const clockMilliseconds = (date) =>
-        ((date.getUTCHours() * 60 + date.getUTCMinutes()) * 60 +
-            date.getUTCSeconds()) *
+    const clockMilliseconds = (date) => {
+        const addisDate = addMinutes(date, ADDIS_OFFSET_MINUTES);
+        return ((addisDate.getUTCHours() * 60 + addisDate.getUTCMinutes()) * 60 +
+            addisDate.getUTCSeconds()) *
             1000 +
-        date.getUTCMilliseconds();
+        addisDate.getUTCMilliseconds();
+    };
 
     return (
-        toUtcDate(start) === toUtcDate(end) &&
+        toAddisDate(start) === toAddisDate(end) &&
         clockMilliseconds(start) >= openingMs &&
         clockMilliseconds(end) <= closingMs
     );
@@ -175,10 +191,15 @@ module.exports = {
     parseUtcInstant,
     parseUtcSlotRange,
     toUtcDate,
+    toAddisDate,
+    addisDayOfWeek,
+    addisMinutesOfDay,
     utcDayOfWeek,
     utcMinutesOfDay,
     periodOf,
     periodOfEnd,
+    addisPeriodOf,
+    addisPeriodOfEnd,
     addMinutes,
     addHours,
     addDays,

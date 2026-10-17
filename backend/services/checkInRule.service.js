@@ -1,29 +1,29 @@
 /**
  * Pure rules for check-in (no database). Easy to unit test: see scripts/check-a4-core.js.
- * Dates, weekdays, periods, and clock values are evaluated in UTC.
+ * Booking timestamps are UTC instants; gym and package schedules use Addis Ababa local time.
  */
-const { utcDayOfWeek, periodOf, utcMinutesOfDay, parseHHmm, previousUtcDate } = require('../utils/time');
+const { addisDayOfWeek, addisPeriodOf, addisMinutesOfDay, parseHHmm, previousUtcDate } = require('../utils/time');
 
 /** Does the package's weekday / period restriction allow `now`? (empty list = no restriction) */
 function packageAllowsNow(pkg, now) {
-    if (pkg.allowedDays.length > 0 && !pkg.allowedDays.includes(utcDayOfWeek(now))) {
+    if (pkg.allowedDays.length > 0 && !pkg.allowedDays.includes(addisDayOfWeek(now))) {
         return { ok: false, reason: 'WRONG_DAY' };
     }
-    const period = periodOf(now);
+    const period = addisPeriodOf(now);
     if (pkg.allowedPeriods.length > 0 && (!period || !pkg.allowedPeriods.includes(period))) {
         return { ok: false, reason: 'WRONG_PERIOD' };
     }
     return { ok: true };
 }
 
-/** Gym.openingTime / closingTime are 'HH:mm' UTC clock values. Open from opening (inclusive) to closing (exclusive). */
+/** Gym.openingTime / closingTime are 'HH:mm' Addis Ababa clock values. */
 function isWithinGymHours(gym, now) {
-    const minutes = utcMinutesOfDay(now);
+    const minutes = addisMinutesOfDay(now);
     return minutes >= parseHHmm(gym.openingTime) && minutes < parseHHmm(gym.closingTime);
 }
 
 /**
- * New streak numbers after a workout on `today` ('YYYY-MM-DD', UTC).
+ * New streak numbers after a workout on `today` ('YYYY-MM-DD', Addis Ababa local date).
  *  - same day as the last workout  -> streak unchanged (it is still the same day of the streak)
  *  - the day after the last one    -> streak + 1
  *  - any other gap (or first ever) -> streak restarts at 1

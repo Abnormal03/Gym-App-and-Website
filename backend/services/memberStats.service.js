@@ -2,7 +2,7 @@
 const prismaModule = require('../config/prisma');
 const prisma = prismaModule.prisma || prismaModule;
 const { computeStreak, effectiveStreak } = require('../utils/checkInRules');
-const { toUtcDate } = require('../utils/time');
+const { toAddisDate } = require('../utils/time');
 
 /** Called inside the check-in transaction. Returns the new stats row. */
 async function recordWorkout(tx, userId, localDate) {
@@ -18,7 +18,7 @@ async function recordWorkout(tx, userId, localDate) {
 }
 
 async function getMyStats(userId) {
-    const today = toUtcDate(new Date());
+    const today = toAddisDate(new Date());
     const stats = await prisma.memberStats.findUnique({ where: { userId } });
     return {
         totalWorkouts: stats ? stats.totalWorkouts : 0,

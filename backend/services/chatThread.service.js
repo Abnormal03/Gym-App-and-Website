@@ -47,7 +47,7 @@ async function ensureThreadMembership(auth, threadId) {
         where: { id: threadIdNumber },
         include: {
             user: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
-            provider: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
+            provider: { select: { id: true, name: true, photoUrl: true, type: true, fcmToken: true } },
         },
     });
 
@@ -74,12 +74,27 @@ async function ensureThreadMembership(auth, threadId) {
 }
 
 async function isChatWritableForPair(userId, providerId, now = new Date()) {
+    // A provider package remains writable only while there is an upcoming,
+    // scheduled session attached to a booking that is still valid. Checking
+    // the purchase alone allowed canceled and past bookings to keep chats open.
     const activePackage = await prisma.providerPackagePurchase.findFirst({
         where: {
             userId,
             providerId,
             status: 'ACTIVE',
             expiresAt: { gt: now },
+            sessions: {
+                some: {
+                    status: 'SCHEDULED',
+                    endsAt: { gt: now },
+                    booking: {
+                        is: {
+                            status: 'confirmed',
+                            slotEnd: { gt: now },
+                        },
+                    },
+                },
+            },
         },
     });
 
@@ -91,6 +106,20 @@ async function isChatWritableForPair(userId, providerId, now = new Date()) {
             consultantId: providerId,
             status: 'ACTIVE',
             expiresAt: { gt: now },
+            orderItem: {
+                is: {
+                    order: {
+                        is: {
+                            booking: {
+                                is: {
+                                    status: 'confirmed',
+                                    slotEnd: { gt: now },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         },
     });
 
@@ -143,7 +172,7 @@ async function listThreads(auth) {
         orderBy: { createdAt: 'desc' },
         include: {
             user: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
-            provider: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
+            provider: { select: { id: true, name: true, photoUrl: true, type: true, fcmToken: true } },
             messages: { orderBy: { createdAt: 'desc' }, take: 1 },
         },
     });

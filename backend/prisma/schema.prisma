@@ -122,6 +122,8 @@ model Booking {
   payment          Payment?
   sessions         TrainingSession[]
 
+  checkIns         CheckIn[]
+
   @@index([gymId, slotStart, slotEnd])
 }
 
@@ -135,10 +137,100 @@ model Payment {
   chapaTxRef       String?       @unique
   chapaCheckoutUrl String?
   createdAt        DateTime      @default(now())
+
   updatedAt        DateTime?
+
+  updatedAt        DateTime?     @updatedAt
+
   booking          Booking       @relation(fields: [bookingId], references: [id])
   user             User          @relation(fields: [userId], references: [id])
 }
+
+
+enum PackageType {
+  daily
+  weekly
+  monthly
+  annual
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  payment_failed
+  cancelled // a real cancellation (member or admin)
+  checked_in // attended
+  expired // V2: unpaid booking timed out (ORDER_EXPIRY_MINUTES)
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  refunded
+  expired
+}
+
+enum ProviderType {
+  TRAINER
+  PHYSIOTHERAPIST
+  NUTRITION_CONSULTANT
+}
+
+enum Period {
+  MORNING // 06:00-12:00 UTC
+  AFTERNOON // 12:00-17:00 UTC
+  EVENING // 17:00-22:00 UTC
+}
+
+enum BookingType {
+  SINGLE
+  GROUP
+}
+
+enum OrderItemType {
+  GYM_BOOKING
+  PROVIDER_PACKAGE
+  CONSULTATION
+}
+
+enum SessionStatus {
+  HELD // reserved while the order is unpaid
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AccessStatus {
+  PENDING // created at checkout, not paid yet
+  ACTIVE
+  EXPIRED
+}
+
+enum EarningStatus {
+  AVAILABLE
+  REQUESTED
+  PAID
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  REJECTED
+}
+
+enum PayoutMethod {
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum BadgeAudience {
+  MEMBER
+  PROVIDER
+}
+
 
 model Provider {
   id                 Int                       @id @default(autoincrement())
@@ -411,23 +503,38 @@ model MemberStats {
   user                 User    @relation(fields: [userId], references: [id])
 }
 
+
 model CheckIn {
   id               Int            @id @default(autoincrement())
   userId           Int
   gymId            Int
+
   bookingId        Int?
+
+  bookingId        Int? // null for a package walk-in
+
   memberPackageId  Int?
   localDate        String
   guestCount       Int            @default(1)
   checkedInAt      DateTime       @default(now())
   scannedByAdminId Int?
   scannedByStaffId Int?
+
   booking          Booking?       @relation(fields: [bookingId], references: [id])
   gym              Gym            @relation(fields: [gymId], references: [id])
   memberPackage    MemberPackage? @relation(fields: [memberPackageId], references: [id])
   scannedByAdmin   GymAdmin?      @relation(fields: [scannedByAdminId], references: [id])
   scannedByStaff   GymStaff?      @relation(fields: [scannedByStaffId], references: [id])
   user             User           @relation(fields: [userId], references: [id])
+
+
+  user           User           @relation(fields: [userId], references: [id])
+  gym            Gym            @relation(fields: [gymId], references: [id])
+  booking        Booking?       @relation(fields: [bookingId], references: [id])
+  memberPackage  MemberPackage? @relation(fields: [memberPackageId], references: [id])
+  scannedByAdmin GymAdmin?      @relation(fields: [scannedByAdminId], references: [id])
+  scannedByStaff GymStaff?      @relation(fields: [scannedByStaffId], references: [id])
+
 
   @@unique([bookingId, localDate])
   @@index([userId, gymId, localDate])

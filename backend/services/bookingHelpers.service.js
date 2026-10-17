@@ -1,9 +1,9 @@
 const { getNumberSetting } = require("./platformSetting.service");
 
 const {
-  utcDayOfWeek,
-  periodOf,
-  periodOfEnd,
+  addisDayOfWeek,
+  addisPeriodOf,
+  addisPeriodOfEnd,
   addMinutes,
 } = require("../utils/time");
 
@@ -58,9 +58,26 @@ const expireStale = async (tx, opts = {}) => {
     return { expiredCount: 0 };
   }
 
-  await tx.booking.updateMany({
+  const expiredBookings = await tx.booking.updateManyAndReturn({
     where: {
       id: { in: bookingIds },
+      status: "pending",
+    },
+    data: { status: "expired" },
+    select: { id: true },
+  });
+
+  const expiredBookingIds = expiredBookings.map((booking) => booking.id);
+
+  if (expiredBookingIds.length === 0) {
+    return { expiredCount: 0 };
+  }
+
+  // Keep the payment ledger in sync while retaining a distinct expired state.
+  // Late Chapa callbacks can still be verified and handled by payment.service.
+  await tx.payment.updateMany({
+    where: {
+      bookingId: { in: expiredBookingIds },
       status: "pending",
     },
     data: { status: "expired" },
@@ -68,7 +85,7 @@ const expireStale = async (tx, opts = {}) => {
 
   await tx.trainingSession.updateMany({
     where: {
-      bookingId: { in: bookingIds },
+      bookingId: { in: expiredBookingIds },
       status: "HELD",
     },
     data: {
@@ -82,7 +99,7 @@ const expireStale = async (tx, opts = {}) => {
       status: "PENDING",
       orderItem: {
         order: {
-          bookingId: { in: bookingIds },
+          bookingId: { in: expiredBookingIds },
         },
       },
     },
@@ -94,7 +111,7 @@ const expireStale = async (tx, opts = {}) => {
       status: "PENDING",
       orderItem: {
         order: {
-          bookingId: { in: bookingIds },
+          bookingId: { in: expiredBookingIds },
         },
       },
     },
@@ -104,12 +121,12 @@ const expireStale = async (tx, opts = {}) => {
   await tx.memberPackage.updateMany({
     where: {
       status: "PENDING",
-      purchaseBookingId: { in: bookingIds },
+      purchaseBookingId: { in: expiredBookingIds },
     },
     data: { status: "EXPIRED" },
   });
 
-  return { expiredCount: bookingIds.length };
+  return { expiredCount: expiredBookingIds.length };
 };
 
 const getUsedCapacity = async (tx, gymId, start, end) => {
@@ -180,7 +197,7 @@ const isProviderFree = async (tx, providerId, start, end) => {
  *
  * Candidate starts are on 30-minute boundaries. A session
  * must fit inside the booking window and inside one provider
- * availability period in UTC.
+ * availability period in Addis Ababa time.
  */
 const getValidSessionStarts = async (
   tx,
@@ -221,7 +238,7 @@ const getValidSessionStarts = async (
     availability.map(({ dayOfWeek, period }) => `${dayOfWeek}:${period}`),
   );
 
-  // Candidate times are aligned to UTC 30-minute boundaries.
+  // Candidate instants use UTC storage; the +03:00 offset preserves these 30-minute boundaries.
   const firstCandidate = new Date(start);
   firstCandidate.setUTCSeconds(0, 0);
 
@@ -247,8 +264,8 @@ const getValidSessionStarts = async (
 
     if (sessionEnd > end) continue;
 
-    const day = utcDayOfWeek(candidate);
-    const period = periodOf(candidate);
+    const day = addisDayOfWeek(candidate);
+    const period = addisPeriodOf(candidate);
 
     if (!period) continue;
 
@@ -258,7 +275,7 @@ const getValidSessionStarts = async (
 
     // The end is exclusive: a session ending exactly at noon
     // belongs to the morning period.
-    if (periodOfEnd(sessionEnd) !== period) {
+    if (addisPeriodOfEnd(sessionEnd) !== period) {
       continue;
     }
 
