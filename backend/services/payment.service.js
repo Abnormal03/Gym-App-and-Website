@@ -600,6 +600,7 @@ const selectConsultant = async (tx, requestedConsultantId) => {
     },
     select: {
       id: true,
+      chatDays: true,
     },
   });
 
@@ -658,7 +659,7 @@ const activateConsultations = async (tx, order, paidAt) => {
     where: { id: order.bookingId },
     select: { package: { select: { durationDays: true } } },
   });
-  const chatDays =
+  const defaultChatDays =
     gymBooking?.package?.durationDays ?? (await getConsultationChatDays());
 
   for (const item of items) {
@@ -685,6 +686,7 @@ const activateConsultations = async (tx, order, paidAt) => {
     }
 
     const consultant = await selectConsultant(tx, item.providerId ?? null);
+    const chatDays = consultant.chatDays ?? defaultChatDays;
 
     const data = {
       consultantId: consultant.id,

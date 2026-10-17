@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const prisma = require("../config/prisma");
 
 const { initializePayment, confirmFreeCheckout } = require("./payment.service");
@@ -43,6 +44,99 @@ const money = (value) => {
 
 const isValidDate = (value) =>
   value instanceof Date && Number.isFinite(value.getTime());
+
+const consultationContext = (input) =>
+  crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        userId: input.userId,
+        gymId: input.gymId,
+        packageId: input.packageId,
+        bookingType: input.bookingType,
+        headcount: input.headcount,
+        durationMinutes: input.durationMinutes,
+        startsAt: input.start.toISOString(),
+        provider: input.provider
+          ? {
+              providerId: input.provider.providerId,
+              providerPackageId: input.provider.providerPackageId,
+              firstSessionStartsAt: input.provider.sessionStart.toISOString(),
+            }
+          : null,
+      }),
+    )
+    .digest("hex");
+
+const signConsultationAssignment = (input, consultant, price) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is required to create a consultation quote");
+  }
+
+  const payload = Buffer.from(
+    JSON.stringify({
+      userId: input.userId,
+      consultantId: consultant.id,
+      consultationPrice: Number(price),
+      context: consultationContext(input),
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    }),
+  ).toString("base64url");
+  const signature = crypto
+    .createHmac("sha256", process.env.JWT_SECRET)
+    .update(payload)
+    .digest("base64url");
+
+  return `${payload}.${signature}`;
+};
+
+const verifyConsultationAssignment = (input, token) => {
+  if (!process.env.JWT_SECRET || typeof token !== "string") {
+    throw new Error("A valid consultation quote is required");
+  }
+
+  const [payload, signature, extra] = token.split(".");
+  if (!payload || !signature || extra) {
+    throw new Error("A valid consultation quote is required");
+  }
+
+  const expected = crypto
+    .createHmac("sha256", process.env.JWT_SECRET)
+    .update(payload)
+    .digest();
+  let received;
+  try {
+    received = Buffer.from(signature, "base64url");
+  } catch {
+    throw new Error("A valid consultation quote is required");
+  }
+
+  if (
+    received.length !== expected.length ||
+    !crypto.timingSafeEqual(received, expected)
+  ) {
+    throw new Error("A valid consultation quote is required");
+  }
+
+  let claims;
+  try {
+    claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    throw new Error("A valid consultation quote is required");
+  }
+
+  if (
+    claims.userId !== input.userId ||
+    claims.context !== consultationContext(input) ||
+    !Number.isInteger(claims.consultantId) ||
+    !Number.isFinite(claims.consultationPrice) ||
+    claims.expiresAt <= Date.now()
+  ) {
+    throw new Error("Consultation quote expired or does not match this booking");
+  }
+
+  return claims;
+};
 
 // --------------------------------------------------
 // GYM OPENING HOURS
@@ -201,11 +295,15 @@ const validateInput = (request) => {
       throw new Error("Invalid consultation selection");
     }
 
-    if (input.consultation.consultantId != null) {
-      input.consultation.consultantId = validateId(
-        input.consultation.consultantId,
-        "consultant ID",
-      );
+    if ("consultantId" in input.consultation || "consultationPrice" in input.consultation) {
+      throw new Error("The consultant is assigned automatically; use the consultation quote token");
+    }
+
+    if (
+      input.consultation.assignmentToken != null &&
+      typeof input.consultation.assignmentToken !== "string"
+    ) {
+      throw new Error("Invalid consultation assignment token");
     }
   }
 
@@ -381,6 +479,41 @@ const validateProvider = async (tx, input) => {
   };
 };
 
+const selectConsultantForCheckout = async (tx, assignedConsultantId = null) => {
+  const where = {
+    type: "NUTRITION_CONSULTANT",
+    isActive: true,
+    ...(assignedConsultantId ? { id: assignedConsultantId } : {}),
+  };
+  const consultants = await tx.provider.findMany({
+    where,
+    select: { id: true, name: true, consultationPrice: true },
+  });
+
+  if (!consultants.length) throw new Error("NO_CONSULTANT_AVAILABLE");
+  if (assignedConsultantId) return consultants[0];
+
+  const counts = await tx.consultationAccess.groupBy({
+    by: ["consultantId"],
+    where: {
+      consultantId: { in: consultants.map((consultant) => consultant.id) },
+      status: "ACTIVE",
+    },
+    _count: { _all: true },
+  });
+  const activeCounts = new Map(
+    counts.map((entry) => [entry.consultantId, entry._count._all]),
+  );
+  const minimum = Math.min(
+    ...consultants.map((consultant) => activeCounts.get(consultant.id) ?? 0),
+  );
+  const leastBusy = consultants.filter(
+    (consultant) => (activeCounts.get(consultant.id) ?? 0) === minimum,
+  );
+
+  return leastBusy[Math.floor(Math.random() * leastBusy.length)];
+};
+
 // --------------------------------------------------
 // BUILD CHECKOUT QUOTE
 // --------------------------------------------------
@@ -424,26 +557,18 @@ const buildQuote = async (tx, input) => {
   const providerData = await validateProvider(tx, input);
 
   let consultationPrice = 0;
+  let consultationProvider = null;
 
   if (input.consultation !== null) {
-    const consultantWhere = {
-      isActive: true,
-      type: "NUTRITION_CONSULTANT",
-    };
-
-    if (input.consultation.consultantId != null) {
-      consultantWhere.id = input.consultation.consultantId;
-    }
-
-    const consultantCount = await tx.provider.count({
-      where: consultantWhere,
-    });
-
-    if (!consultantCount) {
-      throw new Error("NO_CONSULTANT_AVAILABLE");
-    }
-
-    consultationPrice = await getNumberSetting("CONSULTATION_PRICE");
+    consultationProvider = await selectConsultantForCheckout(
+      tx,
+      input.consultation.consultantId ?? null,
+    );
+    const platformPrice = await getNumberSetting("CONSULTATION_PRICE");
+    consultationPrice = input.consultation.quotedPrice ??
+      (consultationProvider.consultationPrice === null
+        ? platformPrice
+        : Number(consultationProvider.consultationPrice));
 
     if (!Number.isFinite(consultationPrice) || consultationPrice < 0) {
       throw new Error("Invalid consultation price");
@@ -471,9 +596,9 @@ const buildQuote = async (tx, input) => {
   if (input.consultation !== null) {
     items.push({
       type: "CONSULTATION",
-      label: "Consultation",
+      label: `Consultation - ${consultationProvider.name}`,
       amount: consultationPrice,
-      providerId: input.consultation.consultantId ?? null,
+      providerId: consultationProvider.id,
     });
   }
 
@@ -493,6 +618,7 @@ const buildQuote = async (tx, input) => {
     gymPackage,
     membership,
     providerData,
+    consultationProvider,
     items,
     total,
   };
@@ -516,6 +642,15 @@ const quoteCheckout = async (request) => {
           amount: Number(money(item.amount)),
         })),
         total: Number(money(quote.total)),
+        ...(quote.consultationProvider
+          ? {
+              consultationAssignmentToken: signConsultationAssignment(
+                input,
+                quote.consultationProvider,
+                quote.items.find((item) => item.type === "CONSULTATION").amount,
+              ),
+            }
+          : {}),
       };
     },
     {
@@ -531,6 +666,15 @@ const quoteCheckout = async (request) => {
 
 const createCheckout = async (request) => {
   const input = validateInput(request);
+
+  if (input.consultation !== null) {
+    const assignment = verifyConsultationAssignment(
+      input,
+      input.consultation.assignmentToken,
+    );
+    input.consultation.consultantId = assignment.consultantId;
+    input.consultation.quotedPrice = assignment.consultationPrice;
+  }
 
   const result = await prisma.$transaction(
     async (tx) => {
@@ -684,9 +828,9 @@ const createCheckout = async (request) => {
               userId: input.userId,
               orderItemId: item.id,
 
-              // Your payment/consultation activation flow can assign
-              // the consultant after successful payment.
-              consultantId: null,
+              // The quote selected this consultant and locked their price;
+              // payment activation will activate this assigned access.
+              consultantId: item.providerId,
               status: "PENDING",
             },
           });

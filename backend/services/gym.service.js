@@ -1,9 +1,6 @@
 const prisma = require("../config/prisma");
 const { AppError } = require("../utils/errors");
-const {
-  parseUtcSlotRange,
-  isWithinGymOpeningHours,
-} = require("../utils/time");
+const { parseUtcSlotRange, isWithinGymOpeningHours } = require("../utils/time");
 const { getUsedCapacity, expireStale } = require("./bookingHelpers.service");
 
 const validatePositiveId = (value, fieldName = "ID") => {
@@ -200,6 +197,7 @@ const UpdateDetails = async (input) => {
     capacity,
     photos,
     amenities,
+    isActive,
   } = input;
 
   const gymId = validatePositiveId(id, "gym ID");
@@ -536,13 +534,13 @@ const getGymStreakLeaderboardService = async (gymId, callerUserId) => {
     caller:
       callerRank >= 0
         ? {
-          userId,
-          rank: callerRank + 1,
-          currentStreak: rows[callerRank].currentStreak,
-          totalWorkouts: rows[callerRank].totalWorkouts,
-          name: rows[callerRank].name,
-          photoUrl: rows[callerRank].photoUrl,
-        }
+            userId,
+            rank: callerRank + 1,
+            currentStreak: rows[callerRank].currentStreak,
+            totalWorkouts: rows[callerRank].totalWorkouts,
+            name: rows[callerRank].name,
+            photoUrl: rows[callerRank].photoUrl,
+          }
         : null,
   };
 };
