@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +33,7 @@ export default function BookingDetailsScreen() {
   const [booking, setBooking] = useState<MyBooking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const bookingId = Number(id);
 
   const loadBooking = useCallback(async () => {
@@ -70,6 +73,55 @@ export default function BookingDetailsScreen() {
 
   const addOnItems =
     booking?.order?.items.filter((item) => item.type !== "GYM_BOOKING") ?? [];
+
+  const canCancelBooking =
+    booking &&
+    (booking.status === "pending" || booking.status === "confirmed") &&
+    (booking.checkInCount ?? 0) === 0 &&
+    new Date(booking.slotStart).getTime() > Date.now();
+
+  const cancelBooking = () => {
+    if (!booking || cancelling) return;
+
+    const performCancel = async () => {
+      setCancelling(true);
+      try {
+        await bookingService.cancel(booking.id);
+        showNotice(
+          "Booking cancelled",
+          "Your booking was cancelled. If it was paid, the refund will be reviewed manually.",
+        );
+        await loadBooking();
+      } catch (err) {
+        showNotice(
+          "Unable to cancel booking",
+          err instanceof Error ? err.message : String(err),
+        );
+      } finally {
+        setCancelling(false);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to cancel this booking?")) {
+        void performCancel();
+      }
+      return;
+    }
+
+    Alert.alert(
+      "Cancel booking?",
+      "Are you sure you want to cancel this booking?",
+      [
+        { text: "Keep booking", style: "cancel" },
+        {
+          text: "Cancel booking",
+          style: "destructive",
+          onPress: () => void performCancel(),
+        },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -237,6 +289,28 @@ export default function BookingDetailsScreen() {
               ) : null}
             </View>
 
+            {canCancelBooking ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                disabled={cancelling}
+                onPress={cancelBooking}
+                style={[
+                  styles.action,
+                  {
+                    alignSelf: "center",
+                    backgroundColor: theme.card,
+                    borderColor: theme.error,
+                    borderWidth: 1,
+                    opacity: cancelling ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.cancelActionText, { color: theme.error }]}>
+                  {cancelling ? "Cancelling..." : "Cancel booking"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
             {booking.status === "confirmed" ? (
               <MemberPassQr
                 gymId={booking.gymId}
@@ -265,11 +339,20 @@ export default function BookingDetailsScreen() {
                 </Text>
               </View>
             )}
+
           </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function showNotice(title: string, message: string) {
+  if (Platform.OS === "web") {
+    window.alert(title + "\n\n" + message);
+  } else {
+    Alert.alert(title, message);
+  }
 }
 
 function DetailRow({
@@ -362,4 +445,5 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   actionText: { color: "#FFFFFF", fontWeight: "700" },
+  cancelActionText: { fontWeight: "700" },
 });

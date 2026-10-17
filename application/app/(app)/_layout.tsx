@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Alert } from "react-native";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "../../src/store/auth.store";
 import { useBookingStore } from "../../src/store/booking.store";
 import { useThemeStore } from "../../src/store/theme.store";
@@ -64,5 +64,7 @@ export default function AppLayout() {
 
   if (isLoading || !themeHydrated) return null;
 
-  return <Slot />;
+  return (
+    <Stack screenOptions={{ headerShown: false, animation: "fade_from_bottom", animationDuration: 220 }} />
+  );
 }

@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Pressable,
   Platform,
+  Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -124,6 +125,28 @@ export default function GymDetailScreen() {
       duration,
     );
     checkSlot(slotStart, slotEnd);
+  };
+
+  const openGymLocation = async () => {
+    if (!gym) return;
+
+    const hasCoordinates =
+      typeof gym.latitude === "number" &&
+      Number.isFinite(gym.latitude) &&
+      typeof gym.longitude === "number" &&
+      Number.isFinite(gym.longitude);
+    if (!hasCoordinates) {
+      Alert.alert("Location unavailable", "This gym does not have map coordinates yet.");
+      return;
+    }
+    const query = String(gym.latitude) + "," + String(gym.longitude);
+    const mapsUrl = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query);
+
+    try {
+      await Linking.openURL(mapsUrl);
+    } catch {
+      Alert.alert("Unable to open map", "Please try again later.");
+    }
   };
 
   const handleBookNow = async () => {
@@ -268,6 +291,23 @@ export default function GymDetailScreen() {
           {/* ── Gym Info ── */}
           <Text style={styles.gymName}>{gym.name}</Text>
           <Text style={styles.address}>{gym.address}</Text>
+          {typeof gym.latitude === "number" &&
+          Number.isFinite(gym.latitude) &&
+          typeof gym.longitude === "number" &&
+          Number.isFinite(gym.longitude) ? (
+            <TouchableOpacity
+              accessibilityRole="link"
+              accessibilityLabel={"Open " + gym.name + " in Google Maps"}
+              onPress={() => void openGymLocation()}
+              style={styles.locationButton}
+            >
+              <MaterialIcons name="location-on" size={19} color={theme.primary} />
+              <Text style={styles.locationButtonText}>Open exact location in Google Maps</Text>
+              <MaterialIcons name="open-in-new" size={17} color={theme.primary} />
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.locationUnavailable}>Map coordinates are not available for this gym yet.</Text>
+          )}
 
           <View style={styles.infoRow}>
             <View style={styles.infoChip}>
@@ -686,6 +726,28 @@ const createStyles = (theme: ThemePalette) =>
       marginBottom: 6,
     },
     address: { fontSize: 14, color: theme.muted, marginBottom: 12 },
+    locationButton: {
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: theme.primary,
+      borderRadius: 10,
+    },
+    locationButtonText: {
+      color: theme.primary,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    locationUnavailable: {
+      color: theme.muted,
+      fontSize: 13,
+      marginBottom: 14,
+    },
     infoRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
     infoChip: {
       backgroundColor: theme.input,

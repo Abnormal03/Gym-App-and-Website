@@ -146,6 +146,7 @@ export interface MyBooking {
   createdAt: string;
   bookingType?: 'SINGLE' | 'GROUP';
   headcount?: number;
+  checkInCount?: number;
   gym: {
     id: number;
     name: string;
