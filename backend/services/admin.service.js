@@ -24,24 +24,21 @@ const getDashboardData = async () => {
   };
 };
 
-const getAllUsers = async (adminId) => {
+const getAllUsers = async (adminId, gymId) => {
   const now = new Date();
+  const activeMembership = {
+    status: "ACTIVE",
+    startsAt: { lte: now },
+    endsAt: { gt: now },
+    gym: { id: gymId, adminId },
+  };
 
+  // Scope the member list to one owned gym. Querying users rather than package
+  // rows ensures multiple active packages still produce one member record.
   return prisma.user.findMany({
     where: {
       memberPackages: {
-        some: {
-          status: "ACTIVE",
-          startsAt: {
-            lte: now,
-          },
-          endsAt: {
-            gt: now,
-          },
-          gym: {
-            adminId: adminId,
-          },
-        },
+        some: activeMembership,
       },
     },
     select: {

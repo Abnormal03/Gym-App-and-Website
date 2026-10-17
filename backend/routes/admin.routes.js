@@ -41,6 +41,10 @@ router.get("/profile", protect, adminOnly, getAdminProfile);
 const staff = require('../controllers/adminStaff.controller');
 const prov = require('../controllers/adminProvider.controller');
 const pkg = require('../controllers/adminGymPackage.controller');
+const { confirmManualRefund } = require('../controllers/adminRefund.controller');
+
+// Called only after the administrator has completed the refund manually.
+router.post('/orders/:orderId/refund-confirmed', protect, adminOnly, confirmManualRefund);
 
 router.post('/staff', protect, adminOnly, staff.create);
 router.get('/staff', protect, adminOnly, staff.list);              // ?gymId=&isActive=&page=&limit=

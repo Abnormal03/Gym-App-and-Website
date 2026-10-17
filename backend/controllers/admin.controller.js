@@ -35,9 +35,23 @@ const getDashboard = async (req, res) => {
 
 const getAllUsers = async (req, res) => {
   try {
-    const adminId = req.user.id;
+    // adminOnly populates req.auth from the verified GymAdmin token.
+    const adminId = Number(req.auth?.adminId ?? req.auth?.id ?? req.user?.id);
+    const gymId = Number(req.query.gymId);
 
-    const users = await getAllUsersService(adminId);
+    if (
+      req.query.gymId === undefined ||
+      req.query.gymId === "" ||
+      !Number.isSafeInteger(gymId) ||
+      gymId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid gymId is required to list members for a gym",
+      });
+    }
+
+    const users = await getAllUsersService(adminId, gymId);
 
     return res.status(200).json({
       success: true,

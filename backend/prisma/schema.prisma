@@ -49,6 +49,7 @@ model GymAdmin {
   scans           CheckIn[]
   gyms            Gym[]
   payoutDecisions PayoutRequest[]
+  refunds         Payment[]       @relation("PaymentRefundedBy")
 }
 
 model Gym {
@@ -139,9 +140,13 @@ model Payment {
   createdAt        DateTime      @default(now())
 
   updatedAt        DateTime?     @updatedAt
+  refundedAt       DateTime?
+  refundedByAdminId Int?
+  refundReference  String?
 
   booking          Booking       @relation(fields: [bookingId], references: [id])
   user             User          @relation(fields: [userId], references: [id])
+  refundedByAdmin  GymAdmin?     @relation("PaymentRefundedBy", fields: [refundedByAdminId], references: [id])
 }
 
 model Provider {

@@ -229,6 +229,7 @@ const cancelBooking = async (id, userId, role) => {
 
   const booking = await prisma.booking.findUnique({
     where: { id },
+    include: { payment: true },
   });
 
   if (!booking) {
@@ -239,7 +240,71 @@ const cancelBooking = async (id, userId, role) => {
     throw new Error("Access denied");
   }
 
-  return changeBookingStatus(id, "cancelled");
+  // Members must use the modern cancellation rules, including
+  // the existing time limit and session-credit policy.
+  if (!isAdmin(role)) {
+    return cancelMemberBooking(id, userId);
+  }
+
+  // Admin cancellations retain the existing transition rules.
+  // If paid, flag the associated order for manual review.
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.booking.findUnique({
+      where: { id },
+      include: { payment: true, order: true },
+    });
+
+    if (!current) {
+      throw new Error("Booking not found");
+    }
+
+    const allowed = allowedTransitions[current.status];
+
+    if (!allowed || !allowed.includes("cancelled")) {
+      throw new Error(
+        `Cannot change booking from ${current.status} to cancelled`,
+      );
+    }
+
+    const cancelledBooking = await tx.booking.update({
+      where: { id },
+      data: { status: "cancelled" },
+      include: {
+        gym: true,
+        package: true,
+        payment: true,
+      },
+    });
+
+    if (current.payment?.status === "success") {
+      const note =
+        "Booking cancelled by an administrator after successful payment. Automatic refund was not attempted. Verify the payment and order items before deciding on a refund.";
+
+      if (current.order?.id) {
+        await tx.order.update({
+          where: { id: current.order.id },
+          data: {
+            needsManualRefund: true,
+            refundNote: note,
+          },
+        });
+      }
+
+      return {
+        ...cancelledBooking,
+        refundStatus: "manual_review",
+        refundMessage: current.order?.id
+          ? note
+          : "Booking cancelled, but no associated order was found. Manually investigate the payment before deciding on a refund.",
+      };
+    }
+
+    return {
+      ...cancelledBooking,
+      refundStatus: "not_required",
+      refundMessage: "No successful payment was found to refund.",
+    };
+  });
 };
 
 const confirmBooking = async (id, role) => {
@@ -312,6 +377,22 @@ const getGymBookings = async (gymId) => {
       user: true,
       package: true,
       payment: true,
+      order: {
+        select: {
+          id: true,
+          totalAmount: true,
+          needsManualRefund: true,
+          refundNote: true,
+          items: {
+            select: {
+              id: true,
+              type: true,
+              label: true,
+              amount: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -526,7 +607,7 @@ const cancelMemberBooking = async (id, userId) => {
         });
       }
 
-      return tx.booking.update({
+      const cancelledBooking = await tx.booking.update({
         where: { id },
         data: { status: "cancelled" },
         include: {
@@ -540,6 +621,26 @@ const cancelMemberBooking = async (id, userId) => {
           },
         },
       });
+
+      // Save the refund review flag with the cancellation. This is a mixed
+      // service order, so an admin must review every item before refunding.
+      if (booking.payment?.status === "success" && booking.order?.id) {
+        await tx.order.update({
+          where: { id: booking.order.id },
+          data: {
+            needsManualRefund: true,
+            refundNote:
+              "Member cancelled after successful payment. Review the complete order and its gym, provider, and consultation items before arranging a manual refund. No automatic refund was attempted.",
+          },
+        });
+
+        cancelledBooking.order = await tx.order.findUnique({
+          where: { id: booking.order.id },
+          include: { items: true },
+        });
+      }
+
+      return cancelledBooking;
     },
     {
       maxWait: 10000,
@@ -547,8 +648,8 @@ const cancelMemberBooking = async (id, userId) => {
     },
   );
 
-  // Phase 2: determine whether a refund is required.
   const payment = cancelledBooking.payment;
+  const order = cancelledBooking.order;
 
   if (!payment || payment.status !== "success") {
     return {
@@ -559,105 +660,15 @@ const cancelMemberBooking = async (id, userId) => {
     };
   }
 
-  // Record manual review if the refund cannot be confirmed.
-  const markManualReview = async (note) => {
-    if (cancelledBooking.order?.id) {
-      await prisma.order.update({
-        where: { id: cancelledBooking.order.id },
-        data: {
-          needsManualRefund: true,
-          refundNote: note,
-        },
-      });
-    }
+  const note = order?.refundNote ||
+    "Booking cancelled after successful payment. Review the complete order before arranging a manual refund.";
 
-    return {
-      ...cancelledBooking,
-      refundStatus: "manual_review",
-      refundMessage: note,
-    };
+  return {
+    ...cancelledBooking,
+    refundStatus: "manual_review",
+    needsManualRefund: true,
+    refundMessage: note,
   };
-
-  if (!payment.chapaTxRef) {
-    return markManualReview(
-      "Booking cancelled, but the successful payment has no Chapa transaction reference. Verify the payment and arrange a refund manually.",
-    );
-  }
-
-  try {
-    const { refundChapaTransaction } = require("./payment.service");
-
-    const refundResponse = await refundChapaTransaction(
-      payment.chapaTxRef,
-      payment.amount,
-    );
-
-    // Do not assume a refund succeeded without an explicit confirmation.
-
-    const providerStatus = String(
-      refundResponse?.data?.status ?? refundResponse?.status ?? "",
-    ).toLowerCase();
-
-    if (providerStatus !== "refunded") {
-      return markManualReview(
-        `Booking cancelled, but refund completion is unconfirmed. Chapa status: ${
-          providerStatus || "unknown"
-        }. Verify the refund before attempting another.`,
-      );
-    }
-
-    // Update our records only after Chapa confirms the refund.
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: { status: "refunded" },
-      });
-
-      if (cancelledBooking.order?.id) {
-        await tx.order.update({
-          where: { id: cancelledBooking.order.id },
-          data: {
-            needsManualRefund: false,
-            refundNote: null,
-          },
-        });
-      }
-    });
-
-    return {
-      ...cancelledBooking,
-      payment: {
-        ...payment,
-        status: "refunded",
-      },
-      refundStatus: "refunded",
-      refundMessage: "Booking cancelled and refund confirmed by Chapa.",
-    };
-  } catch (error) {
-    console.error("Booking cancellation refund requires review:", {
-      bookingId: id,
-      paymentId: payment.id,
-      message: error.message,
-    });
-
-    try {
-      return await markManualReview(
-        "Booking cancelled, but the refund outcome could not be confirmed. Check the Chapa transaction before attempting another refund.",
-      );
-    } catch (reviewError) {
-      console.error("Failed to save manual refund review:", {
-        bookingId: id,
-        message: reviewError.message,
-      });
-
-      return {
-        ...cancelledBooking,
-        refundStatus: "manual_review",
-        refundMessage:
-          "Booking cancelled, but refund confirmation and review recording failed. An administrator must reconcile the Chapa transaction.",
-      };
-    }
-  }
 };
 
 /* =========================================================
