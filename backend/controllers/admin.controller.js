@@ -66,6 +66,14 @@ const getAllUsers = async (req, res) => {
       });
     }
 
+    const ownedGyms = await getAdminGymsService(adminId);
+    if (!ownedGyms.some((gym) => gym.id === gymId)) {
+      return res.status(404).json({
+        success: false,
+        message: "Gym not found or not owned by this admin",
+      });
+    }
+
     const users = await getAllUsersService(adminId, gymId);
 
     return res.status(200).json({
