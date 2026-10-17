@@ -249,6 +249,18 @@ const cancelBooking = async (id, userId, role) => {
   // Admin cancellations retain the existing transition rules.
   // If paid, flag the associated order for manual review.
   return prisma.$transaction(async (tx) => {
+    // Use the same row lock as check-in/member cancellation. This prevents an
+    // admin cancellation from racing with a check-in for a confirmed booking.
+    const locks = await tx.$queryRaw`
+      SELECT "id"
+      FROM "Booking"
+      WHERE "id" = ${id}
+      FOR UPDATE
+    `;
+    if (locks.length === 0) {
+      throw new Error("Booking not found");
+    }
+
     const current = await tx.booking.findUnique({
       where: { id },
       include: { payment: true, order: true },
@@ -256,6 +268,14 @@ const cancelBooking = async (id, userId, role) => {
 
     if (!current) {
       throw new Error("Booking not found");
+    }
+
+    const priorCheckIn = await tx.checkIn.findFirst({
+      where: { bookingId: id },
+      select: { id: true },
+    });
+    if (priorCheckIn) {
+      throw new Error("Bookings with a check-in cannot be cancelled");
     }
 
     const allowed = allowedTransitions[current.status];
@@ -324,6 +344,15 @@ const checkInBooking = async (id, role) => {
   const today = toUtcDate(new Date());
 
   return prisma.$transaction(async (tx) => {
+    // Serialize check-in with member cancellation so they cannot race.
+    const locks = await tx.$queryRaw`
+      SELECT "id"
+      FROM "Booking"
+      WHERE "id" = ${bookingId}
+      FOR UPDATE
+    `;
+    if (locks.length === 0) throw new Error("Booking not found");
+
     const booking = await tx.booking.findUnique({ where: { id: bookingId } });
     if (!booking) throw new Error("Booking not found");
     if (booking.status !== "confirmed" && booking.status !== "checked_in") {
@@ -460,6 +489,7 @@ const getMemberBookings = async (userId, status) => {
   const bookings = await prisma.booking.findMany({
     where,
     include: {
+      _count: { select: { checkIns: true } },
       gym: true,
       package: true,
       payment: true,
@@ -510,8 +540,10 @@ const getMemberBookings = async (userId, status) => {
           expiresAt: item.consultation.expiresAt,
         }));
 
+      const { _count, ...bookingData } = booking;
       return {
-        ...booking,
+        ...bookingData,
+        checkInCount: _count.checkIns,
         bookingType: booking.bookingType,
         headcount: booking.headcount,
         packageName: booking.package?.name ?? null,
@@ -567,6 +599,14 @@ const cancelMemberBooking = async (id, userId) => {
 
       if (booking.userId !== userId) {
         throw new Error("Access denied");
+      }
+
+      const priorCheckIn = await tx.checkIn.findFirst({
+        where: { bookingId: id },
+        select: { id: true },
+      });
+      if (priorCheckIn) {
+        throw new Error("Bookings with a check-in cannot be cancelled");
       }
 
       if (!["pending", "confirmed"].includes(booking.status)) {

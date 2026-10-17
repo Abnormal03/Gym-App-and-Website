@@ -628,7 +628,12 @@ const activateConsultations = async (tx, order, paidAt) => {
 
   if (!items.length) return;
 
-  const chatDays = await getConsultationChatDays();
+  const gymBooking = await tx.booking.findUnique({
+    where: { id: order.bookingId },
+    select: { package: { select: { durationDays: true } } },
+  });
+  const chatDays =
+    gymBooking?.package?.durationDays ?? (await getConsultationChatDays());
 
   for (const item of items) {
     let access = item.consultation;
