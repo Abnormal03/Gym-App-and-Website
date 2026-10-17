@@ -362,6 +362,10 @@ model Message {
   body             String
   createdAt        DateTime   @default(now())
   readAt           DateTime?
+  editedAt         DateTime?
+  deletedAt        DateTime?
+  // Keep prior message bodies for future privileged inspection without a new table.
+  editHistory      Json      @default("[]")
   senderProvider   Provider?  @relation(fields: [senderProviderId], references: [id])
   senderUser       User?      @relation(fields: [senderUserId], references: [id])
   thread           ChatThread @relation(fields: [threadId], references: [id])

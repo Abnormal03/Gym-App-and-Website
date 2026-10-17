@@ -13,6 +13,20 @@ try {
 const PROVIDER_ROLES = ['TRAINER', 'PHYSIOTHERAPIST', 'NUTRITION_CONSULTANT'];
 const CHAT_MESSAGE_BODY = z.string().trim().min(1).max(2000);
 
+function toPublicMessage(message, bodyOverride) {
+    return {
+        id: message.id,
+        threadId: message.threadId,
+        body: bodyOverride ?? (message.deletedAt ? 'This message was deleted' : message.body),
+        senderUserId: message.senderUserId,
+        senderProviderId: message.senderProviderId,
+        createdAt: message.createdAt,
+        readAt: message.readAt,
+        editedAt: message.editedAt,
+        deletedAt: message.deletedAt,
+    };
+}
+
 /**
  * One chat thread per (member, provider). Whether the member can WRITE is not stored here:
  * it is computed from active access (an ACTIVE package purchase or consultation for the pair), see task A6.
@@ -200,10 +214,12 @@ async function listThreads(auth) {
                 : { id: thread.user.id, name: thread.user.name, photoUrl: thread.user.photoUrl },
             lastMessage: lastMessage ? {
                 id: lastMessage.id,
-                body: lastMessage.body,
+                body: lastMessage.deletedAt ? 'This message was deleted' : lastMessage.body,
                 createdAt: lastMessage.createdAt,
                 senderUserId: lastMessage.senderUserId,
                 senderProviderId: lastMessage.senderProviderId,
+                editedAt: lastMessage.editedAt,
+                deletedAt: lastMessage.deletedAt,
             } : null,
             unreadCount,
             writable,
@@ -235,11 +251,13 @@ async function getThreadMessages(auth, threadId, before, limit = 50) {
         messages: [...messages].reverse().map((message) => ({
             id: message.id,
             threadId: message.threadId,
-            body: message.body,
+            body: message.deletedAt ? 'This message was deleted' : message.body,
             senderUserId: message.senderUserId,
             senderProviderId: message.senderProviderId,
             createdAt: message.createdAt,
             readAt: message.readAt,
+            editedAt: message.editedAt,
+            deletedAt: message.deletedAt,
         })),
     };
 }
@@ -304,6 +322,69 @@ async function sendMessage(auth, threadId, rawBody, io = null) {
     return payload;
 }
 
+async function updateOwnMessage(auth, threadId, messageId, rawBody, io = null) {
+    const body = CHAT_MESSAGE_BODY.parse(rawBody);
+    const thread = await ensureThreadMembership(auth, threadId);
+    const id = Number(messageId);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new AppError('VALIDATION', 'Message id is invalid');
+    const userId = getMemberIdFromAuth(auth);
+    const providerId = getProviderIdFromAuth(auth);
+    if (!await isChatWritableForPair(thread.userId, thread.providerId)) {
+        throw new AppError('NOT_WRITABLE', 'This chat is no longer writable');
+    }
+    const message = await prisma.message.findFirst({
+        where: {
+            id,
+            threadId: thread.id,
+            ...(userId ? { senderUserId: userId } : { senderProviderId: providerId }),
+        },
+    });
+    if (!message) throw new AppError('NOT_FOUND', 'Message not found');
+    if (message.deletedAt) throw new AppError('CONFLICT', 'Deleted messages cannot be edited');
+    if (message.body === body) return toPublicMessage(message);
+
+    const history = Array.isArray(message.editHistory) ? message.editHistory : [];
+    const updated = await prisma.message.update({
+        where: { id: message.id },
+        data: {
+            body,
+            editedAt: new Date(),
+            editHistory: [...history, { body: message.body, editedAt: new Date().toISOString() }],
+        },
+    });
+    const publicMessage = toPublicMessage(updated);
+    if (io) io.to(`chat:${thread.id}`).emit('message:updated', { threadId: thread.id, message: publicMessage });
+    return publicMessage;
+}
+
+async function softDeleteOwnMessage(auth, threadId, messageId, io = null) {
+    const thread = await ensureThreadMembership(auth, threadId);
+    const id = Number(messageId);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new AppError('VALIDATION', 'Message id is invalid');
+    const userId = getMemberIdFromAuth(auth);
+    const providerId = getProviderIdFromAuth(auth);
+    if (!await isChatWritableForPair(thread.userId, thread.providerId)) {
+        throw new AppError('NOT_WRITABLE', 'This chat is no longer writable');
+    }
+    const message = await prisma.message.findFirst({
+        where: {
+            id,
+            threadId: thread.id,
+            ...(userId ? { senderUserId: userId } : { senderProviderId: providerId }),
+        },
+    });
+    if (!message) throw new AppError('NOT_FOUND', 'Message not found');
+    if (message.deletedAt) return toPublicMessage(message);
+
+    const updated = await prisma.message.update({
+        where: { id: message.id },
+        data: { deletedAt: new Date() },
+    });
+    const publicMessage = toPublicMessage(updated, 'This message was deleted');
+    if (io) io.to(`chat:${thread.id}`).emit('message:updated', { threadId: thread.id, message: publicMessage });
+    return publicMessage;
+}
+
 async function markThreadRead(auth, threadId, io = null) {
     const thread = await ensureThreadMembership(auth, threadId);
     const now = new Date();
@@ -340,6 +421,8 @@ module.exports = {
     listThreads,
     getThreadMessages,
     sendMessage,
+    updateOwnMessage,
+    softDeleteOwnMessage,
     markThreadRead,
     sendPushNotification,
 };

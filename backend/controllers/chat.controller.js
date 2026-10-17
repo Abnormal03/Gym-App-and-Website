@@ -24,6 +24,34 @@ exports.sendMessage = asyncHandler(async (req, res) => {
     return ok(res, { message });
 });
 
+exports.editMessage = asyncHandler(async (req, res) => {
+    const payload = sendMessageBody.parse(req.body);
+    const message = await chatService.updateOwnMessage(
+        req.auth,
+        req.params.threadId,
+        req.params.messageId,
+        payload.body,
+        req.app.locals.io,
+    );
+    return ok(res, { message: { ...message, senderType: req.auth.role } });
+});
+
+exports.deleteMessage = asyncHandler(async (req, res) => {
+    const message = await chatService.softDeleteOwnMessage(
+        req.auth,
+        req.params.threadId,
+        req.params.messageId,
+        req.app.locals.io,
+    );
+    return ok(res, {
+        message: {
+            ...message,
+            body: 'This message was deleted',
+            senderType: req.auth.role,
+        },
+    });
+});
+
 exports.markRead = asyncHandler(async (req, res) => {
     const result = await chatService.markThreadRead(req.auth, req.params.threadId, req.app.locals.io);
     return ok(res, result);

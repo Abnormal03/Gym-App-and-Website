@@ -14,7 +14,7 @@ const getMemberSessionReviewsController = async (req, res, next) => {
 
 const createSessionReviewController = async (req, res, next) => {
   try {
-    if (req.user.role !== "MEMBER") {
+    if (String(req.user.role || "").toUpperCase() !== "MEMBER") {
       return res.status(403).json({
         success: false,
         message: "Only members can review sessions",
