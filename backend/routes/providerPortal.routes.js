@@ -25,9 +25,8 @@ router.delete('/me/packages/:id', ...requireRole(...bookableProviderRoles), pack
 
 router.get('/me/clients', ...requireRole(...providerRoles), clients.list);
 
-// Issue 6: Nutrition consultant sets their own price and chat days.
-// GET returns the effective values (custom or platform default).
-// PUT { consultationPrice?: number|null, chatDays?: number|null } — null resets to platform default.
+// Nutrition consultants set their price and chat days; null resets either to platform defaults.
+// PUT { consultationPrice?: number|null, chatDays?: number|null }.
 router.get('/me/consultation-plan', ...requireRole(...consultantRoles), consultationPlan.get);
 router.put('/me/consultation-plan', ...requireRole(...consultantRoles), consultationPlan.update);
 

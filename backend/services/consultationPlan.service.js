@@ -1,10 +1,8 @@
 /**
  * Consultation plan service – NUTRITION_CONSULTANT only.
  *
- * A consultant can override the platform-wide CONSULTATION_PRICE and
- * CONSULTATION_CHAT_DAYS settings with their own values. When a field is
- * null/undefined the platform default is used (read from PlatformSetting or
- * the hardcoded DEFAULT_SETTINGS fallback in platformSetting.service.js).
+ * A consultant can override the platform-wide consultation price and chat-day
+ * defaults. Checkout must use the price of the consultant assigned to the order.
  */
 const prismaModule = require('../config/prisma');
 const prisma = prismaModule.prisma || prismaModule;
@@ -14,7 +12,7 @@ const { getNumberSetting } = require('./platformSetting.service');
 /**
  * Returns the effective consultation plan for a consultant:
  *   {
- *     consultationPrice: number,   // their override or the platform default
+ *     consultationPrice: number,   // consultant override or platform default
  *     chatDays:          number,   // their override or the platform default
  *     priceIsCustom:     boolean,  // true = consultant set their own price
  *     chatDaysIsCustom:  boolean,
@@ -51,8 +49,8 @@ async function getConsultationPlan(providerId) {
 }
 
 /**
- * Update the consultant's own price and/or chatDays.
- * Pass null explicitly to reset a field back to the platform default.
+ * Update the consultant's price and/or chatDays. Pass null to reset a field
+ * to its platform default.
  *
  * @param {number} providerId
  * @param {{ consultationPrice?: number|null, chatDays?: number|null }} input
@@ -72,7 +70,7 @@ async function updateConsultationPlan(providerId, input) {
 
     if ('consultationPrice' in input) {
         if (input.consultationPrice === null) {
-            data.consultationPrice = null; // reset to platform default
+            data.consultationPrice = null;
         } else {
             const price = Number(input.consultationPrice);
             if (!Number.isFinite(price) || price < 0) {

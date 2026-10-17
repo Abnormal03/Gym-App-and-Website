@@ -10,77 +10,103 @@ const { parsePagination, paginated } = require('../utils/pagination');
 
 const USER = { select: { id: true, name: true, photoUrl: true } };
 
+// The provider Clients page is a member list, so pagination and totals must
+// operate on unique members rather than individual purchases/access records.
+function paginateMembers(items, pg) {
+    const ordered = items.sort((a, b) => new Date(a.expiresAt) - new Date(b.expiresAt));
+    return paginated(ordered.slice(pg.skip, pg.skip + pg.take), ordered.length, pg);
+}
+
 async function listPackageClients(providerId, pg) {
     const now = new Date();
     // Status is flipped to EXPIRED lazily, so the date check is what really matters here.
     const where = { providerId, status: 'ACTIVE', expiresAt: { gt: now } };
 
-    const [rows, total] = await Promise.all([
-        prisma.providerPackagePurchase.findMany({
+    const rows = await prisma.providerPackagePurchase.findMany({
             where,
             include: {
                 user: USER,
                 sessions: { where: { status: { in: ['HELD', 'SCHEDULED'] } }, select: { status: true, startsAt: true } },
             },
-            orderBy: { expiresAt: 'asc' }, // expiring soonest first
-            skip: pg.skip,
-            take: pg.take,
-        }),
-        prisma.providerPackagePurchase.count({ where }),
-    ]);
+            orderBy: { expiresAt: 'desc' },
+        });
 
-    const items = rows.map((r) => {
-        const reserved = r.sessions.length; // booked but not done yet
-        const upcoming = r.sessions
+    const byMember = new Map();
+    for (const row of rows) {
+        if (!byMember.has(row.userId)) byMember.set(row.userId, []);
+        byMember.get(row.userId).push(row);
+    }
+
+    const items = [...byMember.values()].map((purchases) => {
+        const latest = purchases[0]; // ordered by expiry descending
+        const packageNames = [...new Set(purchases.map((r) => r.packageName))];
+        const upcoming = purchases.flatMap((r) => r.sessions
             .filter((s) => s.status === 'SCHEDULED' && s.startsAt > now)
-            .map((s) => s.startsAt.getTime());
+            .map((s) => s.startsAt.getTime()));
         return {
             kind: 'PACKAGE',
-            userId: r.user.id,
-            name: r.user.name,
-            photoUrl: r.user.photoUrl,
-            purchaseId: r.id,
-            packageName: r.packageName,
-            sessionsTotal: r.sessionsTotal,
-            sessionsUsed: r.sessionsUsed,
-            sessionsLeft: Math.max(0, r.sessionsTotal - r.sessionsUsed - reserved), // not yet booked
+            userId: latest.user.id,
+            name: latest.user.name,
+            photoUrl: latest.user.photoUrl,
+            purchaseId: latest.id,
+            purchaseIds: purchases.map((r) => r.id),
+            activePackageCount: purchases.length,
+            packageName: packageNames.join(', '),
+            packageNames,
+            sessionsTotal: purchases.reduce((sum, r) => sum + r.sessionsTotal, 0),
+            sessionsUsed: purchases.reduce((sum, r) => sum + r.sessionsUsed, 0),
+            sessionsLeft: purchases.reduce((sum, r) => {
+                const reserved = r.sessions.length; // booked but not done yet
+                return sum + Math.max(0, r.sessionsTotal - r.sessionsUsed - reserved);
+            }, 0),
             nextSessionAt: upcoming.length ? new Date(Math.min(...upcoming)) : null,
-            expiresAt: r.expiresAt,
+            expiresAt: latest.expiresAt,
         };
     });
-    return paginated(items, total, pg);
+    return paginateMembers(items, pg);
 }
 
 async function listConsultationClients(providerId, pg) {
     const now = new Date();
     const where = { consultantId: providerId, status: 'ACTIVE', expiresAt: { gt: now } };
 
-    const [rows, total] = await Promise.all([
-        prisma.consultationAccess.findMany({
+    const rows = await prisma.consultationAccess.findMany({
             where,
             include: {
                 user: USER,
                 orderItem: { select: { order: { select: { gymId: true, gym: { select: { name: true } } } } } },
             },
-            orderBy: { expiresAt: 'asc' },
-            skip: pg.skip,
-            take: pg.take,
-        }),
-        prisma.consultationAccess.count({ where }),
-    ]);
+            orderBy: { expiresAt: 'desc' },
+        });
 
-    const items = rows.map((r) => ({
-        kind: 'CONSULTATION',
-        userId: r.user.id,
-        name: r.user.name,
-        photoUrl: r.user.photoUrl,
-        consultationId: r.id,
-        gymId: r.orderItem.order.gymId, // the gym that will pay this consultant's payout
-        gymName: r.orderItem.order.gym.name,
-        startsAt: r.startsAt,
-        expiresAt: r.expiresAt,
-    }));
-    return paginated(items, total, pg);
+    const byMember = new Map();
+    for (const row of rows) {
+        if (!byMember.has(row.userId)) byMember.set(row.userId, []);
+        byMember.get(row.userId).push(row);
+    }
+
+    const items = [...byMember.values()].map((accesses) => {
+        const latest = accesses[0]; // ordered by expiry descending
+        const gyms = [...new Map(accesses.map((r) => [r.orderItem.order.gymId, {
+            id: r.orderItem.order.gymId,
+            name: r.orderItem.order.gym.name,
+        }])).values()];
+        return {
+            kind: 'CONSULTATION',
+            userId: latest.user.id,
+            name: latest.user.name,
+            photoUrl: latest.user.photoUrl,
+            consultationId: latest.id,
+            consultationIds: accesses.map((r) => r.id),
+            activeConsultationCount: accesses.length,
+            gymId: latest.orderItem.order.gymId,
+            gymName: latest.orderItem.order.gym.name,
+            gyms,
+            startsAt: accesses.reduce((earliest, r) => r.startsAt < earliest ? r.startsAt : earliest, latest.startsAt),
+            expiresAt: latest.expiresAt,
+        };
+    });
+    return paginateMembers(items, pg);
 }
 
 /** auth = req.auth (role + providerId). */

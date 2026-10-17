@@ -292,6 +292,8 @@ app.post(
 );
 
 app.use(express.json());
+// Accept standard HTML form submissions as well as JSON for provider portal forms.
+app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

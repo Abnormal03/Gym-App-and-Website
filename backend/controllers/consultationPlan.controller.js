@@ -13,16 +13,17 @@ exports.get = asyncHandler(async (req, res) => {
 /**
  * PUT /api/me/consultation-plan
  * Body: { consultationPrice?: number|null, chatDays?: number|null }
- *   - omit a field to leave it unchanged
- *   - send null to reset a field back to the platform default
+ * Pass null to reset a field to the platform default.
  */
 exports.update = asyncHandler(async (req, res) => {
-    const { consultationPrice, chatDays } = req.body ?? {};
+    const body = req.body?.plan ?? req.body?.consultationPlan ?? req.body?.data ?? req.body ?? {};
+    const consultationPrice = body.consultationPrice ?? body.price;
+    const chatDays = body.chatDays ?? body.chatAccessDays;
 
     // Build input object only from keys the caller actually sent
     const input = {};
-    if ('consultationPrice' in (req.body ?? {})) input.consultationPrice = consultationPrice ?? null;
-    if ('chatDays' in (req.body ?? {})) input.chatDays = chatDays ?? null;
+    if ('consultationPrice' in body || 'price' in body) input.consultationPrice = consultationPrice ?? null;
+    if ('chatDays' in body || 'chatAccessDays' in body) input.chatDays = chatDays ?? null;
 
     const plan = await updateConsultationPlan(req.auth.providerId, input);
     return ok(res, plan);
