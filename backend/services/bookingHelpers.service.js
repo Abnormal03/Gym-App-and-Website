@@ -58,9 +58,26 @@ const expireStale = async (tx, opts = {}) => {
     return { expiredCount: 0 };
   }
 
-  await tx.booking.updateMany({
+  const expiredBookings = await tx.booking.updateManyAndReturn({
     where: {
       id: { in: bookingIds },
+      status: "pending",
+    },
+    data: { status: "expired" },
+    select: { id: true },
+  });
+
+  const expiredBookingIds = expiredBookings.map((booking) => booking.id);
+
+  if (expiredBookingIds.length === 0) {
+    return { expiredCount: 0 };
+  }
+
+  // Keep the payment ledger in sync while retaining a distinct expired state.
+  // Late Chapa callbacks can still be verified and handled by payment.service.
+  await tx.payment.updateMany({
+    where: {
+      bookingId: { in: expiredBookingIds },
       status: "pending",
     },
     data: { status: "expired" },
@@ -68,7 +85,7 @@ const expireStale = async (tx, opts = {}) => {
 
   await tx.trainingSession.updateMany({
     where: {
-      bookingId: { in: bookingIds },
+      bookingId: { in: expiredBookingIds },
       status: "HELD",
     },
     data: {
@@ -82,7 +99,7 @@ const expireStale = async (tx, opts = {}) => {
       status: "PENDING",
       orderItem: {
         order: {
-          bookingId: { in: bookingIds },
+          bookingId: { in: expiredBookingIds },
         },
       },
     },
@@ -94,7 +111,7 @@ const expireStale = async (tx, opts = {}) => {
       status: "PENDING",
       orderItem: {
         order: {
-          bookingId: { in: bookingIds },
+          bookingId: { in: expiredBookingIds },
         },
       },
     },
@@ -104,12 +121,12 @@ const expireStale = async (tx, opts = {}) => {
   await tx.memberPackage.updateMany({
     where: {
       status: "PENDING",
-      purchaseBookingId: { in: bookingIds },
+      purchaseBookingId: { in: expiredBookingIds },
     },
     data: { status: "EXPIRED" },
   });
 
-  return { expiredCount: bookingIds.length };
+  return { expiredCount: expiredBookingIds.length };
 };
 
 const getUsedCapacity = async (tx, gymId, start, end) => {

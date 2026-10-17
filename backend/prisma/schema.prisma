@@ -178,6 +178,7 @@ enum PaymentStatus {
   success
   failed
   refunded
+  expired
 }
 
 enum ProviderType {

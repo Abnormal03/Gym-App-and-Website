@@ -1,4 +1,16 @@
-const { createSessionReview } = require("../services/review.service");
+const { createSessionReview, getMemberSessionReviews } = require("../services/review.service");
+
+const getMemberSessionReviewsController = async (req, res, next) => {
+  try {
+    const reviews = await getMemberSessionReviews(req.user.id);
+    return res.status(200).json({ success: true, reviews });
+  } catch (error) {
+    if (error.code === "BAD_REQUEST") {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return next(error);
+  }
+};
 
 const createSessionReviewController = async (req, res, next) => {
   try {
@@ -53,4 +65,4 @@ const createSessionReviewController = async (req, res, next) => {
   }
 };
 
-module.exports = { createSessionReviewController };
+module.exports = { createSessionReviewController, getMemberSessionReviewsController };

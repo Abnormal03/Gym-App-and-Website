@@ -771,6 +771,9 @@ const getSessionsForUser = async (userId, role, status) => {
         },
       },
       purchase: true,
+      review: {
+        select: { id: true, rating: true, comment: true, createdAt: true },
+      },
       user: {
         select: {
           id: true,

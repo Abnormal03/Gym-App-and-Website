@@ -142,4 +142,37 @@ async function createSessionReview(userId, sessionId, input) {
   }
 }
 
-module.exports = { createSessionReview };
+async function getMemberSessionReviews(userId) {
+  const memberId = Number(userId);
+  if (!Number.isSafeInteger(memberId) || memberId <= 0) {
+    throw serviceError("BAD_REQUEST", "Invalid member ID");
+  }
+
+  return prisma.review.findMany({
+    where: { userId: memberId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      sessionId: true,
+      providerId: true,
+      rating: true,
+      comment: true,
+      createdAt: true,
+      provider: { select: { id: true, name: true, type: true, photoUrl: true } },
+      session: {
+        select: {
+          startsAt: true,
+          endsAt: true,
+          booking: {
+            select: {
+              gym: { select: { id: true, name: true } },
+              package: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+module.exports = { createSessionReview, getMemberSessionReviews };
