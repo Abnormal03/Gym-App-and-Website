@@ -441,7 +441,33 @@ const activateMemberPackage = async (tx, order, paidAt) => {
     },
   });
 
-  if (!memberPackage || memberPackage.status === "ACTIVE") {
+  if (!memberPackage) {
+    // Older or in-flight orders may predate checkout creating the pending
+    // entitlement. Create it at payment confirmation so the purchase is not
+    // silently lost and the member appears in their gym's active-member list.
+    const booking = await tx.booking.findUnique({
+      where: { id: order.bookingId },
+      include: { package: true },
+    });
+
+    if (!booking?.package) return;
+
+    await tx.memberPackage.create({
+      data: {
+        userId: order.userId,
+        gymId: order.gymId,
+        packageId: booking.package.id,
+        purchaseBookingId: booking.id,
+        startsAt: paidAt,
+        endsAt: addDays(paidAt, booking.package.durationDays),
+        maxVisits: booking.package.maxVisits,
+        status: "ACTIVE",
+      },
+    });
+    return;
+  }
+
+  if (memberPackage.status === "ACTIVE") {
     return;
   }
 

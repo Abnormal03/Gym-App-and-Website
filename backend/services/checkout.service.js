@@ -617,6 +617,25 @@ const createCheckout = async (request) => {
         },
       });
 
+      // Create the gym-package entitlement before payment confirmation.
+      // Payment activation looks this record up by purchaseBookingId and
+      // changes PENDING to ACTIVE after the whole order is paid. Existing
+      // memberships used to cover this booking are not new purchases.
+      if (!quote.membership) {
+        await tx.memberPackage.create({
+          data: {
+            userId: input.userId,
+            gymId: input.gymId,
+            packageId: quote.gymPackage.id,
+            purchaseBookingId: booking.id,
+            startsAt: now,
+            endsAt: addDays(now, quote.gymPackage.durationDays),
+            maxVisits: quote.gymPackage.maxVisits,
+            status: "PENDING",
+          },
+        });
+      }
+
       // Create related records for order items.
       for (const item of order.items) {
         if (item.type === "PROVIDER_PACKAGE") {
