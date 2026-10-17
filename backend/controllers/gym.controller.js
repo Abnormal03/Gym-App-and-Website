@@ -27,6 +27,7 @@ const sendError = (res, error, fallbackMessage) => {
     "Opening time and closing time are required",
     "Invalid opening time",
     "Invalid closing time",
+    "isActive must be a boolean",
     "Photos must be an array",
     "Amenities must be an array",
     "No gym details provided to update",
@@ -37,7 +38,10 @@ const sendError = (res, error, fallbackMessage) => {
     "No gym details provided to update",
   ];
 
-  if (badRequestErrors.includes(message)) {
+  if (
+    badRequestErrors.includes(message) ||
+    message.startsWith("Unsupported gym fields:")
+  ) {
     return res.status(400).json({
       success: false,
       message,

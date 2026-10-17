@@ -213,6 +213,7 @@ const UpdateDetails = async (input) => {
     "capacity",
     "photos",
     "amenities",
+    "isActive",
   ];
 
   const suppliedFields = Object.keys(input || {});
@@ -308,6 +309,13 @@ const UpdateDetails = async (input) => {
       throw new Error("Amenities must be an array");
     }
     updateData.amenities = amenities;
+  }
+
+  if (isActive !== undefined) {
+    if (typeof isActive !== "boolean") {
+      throw new Error("isActive must be a boolean");
+    }
+    updateData.isActive = isActive;
   }
 
   if (Object.keys(updateData).length === 0) {
