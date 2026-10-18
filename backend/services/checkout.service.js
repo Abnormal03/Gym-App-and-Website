@@ -295,8 +295,15 @@ const validateInput = (request) => {
       throw new Error("Invalid consultation selection");
     }
 
-    if ("consultantId" in input.consultation || "consultationPrice" in input.consultation) {
-      throw new Error("The consultant is assigned automatically; use the consultation quote token");
+    if ("consultationPrice" in input.consultation) {
+      throw new Error("Consultation price is assigned by the server");
+    }
+
+    if (input.consultation.consultantId !== undefined) {
+      input.consultation.consultantId = validateId(
+        input.consultation.consultantId,
+        "consultant ID",
+      );
     }
 
     if (
@@ -327,8 +334,8 @@ const findCoveredMemberPackage = async (tx, input, gymPackage) => {
       userId: input.userId,
       gymId: input.gymId,
       status: "ACTIVE",
-      startsAt: { lte: now },
-      endsAt: { gt: now },
+      startsAt: { lte: input.start },
+      endsAt: { gt: input.start },
     },
     include: {
       package: true,
@@ -339,6 +346,12 @@ const findCoveredMemberPackage = async (tx, input, gymPackage) => {
   });
 
   for (const membership of memberships) {
+    // Only an entitlement for the exact selected package can cover this booking.
+    // Another active package at the same gym must not make this package free.
+    if (membership.packageId !== gymPackage.id) {
+      continue;
+    }
+
     // Skip a membership whose visit limit has already been reached.
     if (
       membership.maxVisits !== null &&
@@ -346,7 +359,6 @@ const findCoveredMemberPackage = async (tx, input, gymPackage) => {
     ) {
       continue;
     }
-
     // Include future reservations that have not yet consumed a visit.
     const futureBookings = await tx.booking.count({
       where: {
