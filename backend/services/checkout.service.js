@@ -339,6 +339,13 @@ const findCoveredMemberPackage = async (tx, input, gymPackage) => {
     },
     include: {
       package: true,
+      purchaseBooking: {
+        select: {
+          status: true,
+          payment: { select: { status: true } },
+          order: { select: { totalAmount: true } },
+        },
+      },
     },
     orderBy: {
       endsAt: "asc",
@@ -349,6 +356,19 @@ const findCoveredMemberPackage = async (tx, input, gymPackage) => {
     // Only an entitlement for the exact selected package can cover this booking.
     // Another active package at the same gym must not make this package free.
     if (membership.packageId !== gymPackage.id) {
+      continue;
+    }
+
+    // Only a completed purchase can cover a new checkout. The entitlement
+    // status can outlive its source booking if that booking was later cancelled.
+    const purchaseBooking = membership.purchaseBooking;
+    const sourceBookingIsValid =
+      purchaseBooking &&
+      ["confirmed", "checked_in"].includes(purchaseBooking.status);
+    const sourcePurchaseWasPaid =
+      purchaseBooking?.payment?.status === "success" ||
+      Number(purchaseBooking?.order?.totalAmount) === 0;
+    if (!sourceBookingIsValid || !sourcePurchaseWasPaid) {
       continue;
     }
 
@@ -592,6 +612,7 @@ const buildQuote = async (tx, input) => {
       type: "GYM_BOOKING",
       label: `Gym booking - ${gymPackage.name}`,
       amount: membership ? 0 : Number(gymPackage.price) * input.headcount,
+      coveredByMembership: Boolean(membership),
     },
   ];
 
@@ -652,6 +673,9 @@ const quoteCheckout = async (request) => {
           type: item.type,
           label: item.label,
           amount: Number(money(item.amount)),
+          ...(item.type === "GYM_BOOKING"
+            ? { coveredByMembership: item.coveredByMembership ?? false }
+            : {}),
         })),
         total: Number(money(quote.total)),
         ...(quote.consultationProvider
