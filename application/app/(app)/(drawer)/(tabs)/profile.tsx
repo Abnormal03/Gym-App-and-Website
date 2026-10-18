@@ -134,276 +134,283 @@ export default function ProfileScreen() {
       style={[styles.keyboardAvoiding, { backgroundColor: colors.bg }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.bg }]}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      {openProfile && (
-        <ProfilePicture
-          user={user}
-          onClose={() => {
-            setOpenProfile(false);
-          }}
-          onUploaded={loadUser}
-          profileLoading={loading}
-        />
-      )}
-      {/* Avatar */}
-      <View style={styles.avatarSection}>
-        <TouchableOpacity
-          onPress={() => {
-            setOpenProfile(!openProfile);
-          }}
-        >
-          <View style={styles.avatarWrapper}>
-            {user?.photoUrl ? (
-              <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
-            ) : (
-              <View
-                style={[
-                  styles.avatar,
-                  styles.avatarPlaceholder,
-                  { backgroundColor: theme.input },
-                ]}
-              >
-                <Text style={styles.avatarInitial}>
-                  {user?.name?.charAt(0).toUpperCase() ?? "U"}
-                </Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-        <Text style={[styles.avatarName, { color: colors.text }]}>
-          {user?.name}
-        </Text>
-        <Text style={[styles.avatarEmail, { color: colors.muted }]}>
-          {user?.email}
-        </Text>
-      </View>
-
-      {/* Feedback messages */}
-      {success && (
-        <View style={[styles.successBanner, { backgroundColor: theme.input }]}>
-          <Text style={[styles.successText, { color: theme.success }]}>
-            ✓ {success}
-          </Text>
-        </View>
-      )}
-      {error && (
-        <View style={[styles.errorBanner, { backgroundColor: theme.input }]}>
-          <Text style={[styles.errorText, { color: theme.error }]}>
-            {error}
-          </Text>
-        </View>
-      )}
-
-      {/* Personal Information */}
-      <Section title="Personal Information" colors={colors}>
-        <Field label="Full Name" colors={colors}>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            style={[
-              styles.input,
-              {
-                color: colors.text,
-                backgroundColor: colors.input,
-                borderColor: colors.inputBorder,
-              },
-            ]}
-            placeholder="Your full name"
-            placeholderTextColor={colors.muted}
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.bg }]}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {openProfile && (
+          <ProfilePicture
+            user={user}
+            onClose={() => {
+              setOpenProfile(false);
+            }}
+            onUploaded={loadUser}
+            profileLoading={loading}
           />
-        </Field>
-        <Field label="Phone" colors={colors}>
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            style={[
-              styles.input,
-              {
-                color: colors.text,
-                backgroundColor: colors.input,
-                borderColor: colors.inputBorder,
-              },
-            ]}
-            placeholder="Your phone number"
-            placeholderTextColor={colors.muted}
-            keyboardType="phone-pad"
-          />
-        </Field>
-        <Field label="Email" colors={colors}>
-          <Text
-            style={[
-              styles.readOnlyField,
-              {
-                color: colors.muted,
-                backgroundColor: colors.input,
-                borderColor: colors.inputBorder,
-              },
-            ]}
+        )}
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity
+            onPress={() => {
+              setOpenProfile(!openProfile);
+            }}
           >
+            <View style={styles.avatarWrapper}>
+              {user?.photoUrl ? (
+                <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
+              ) : (
+                <View
+                  style={[
+                    styles.avatar,
+                    styles.avatarPlaceholder,
+                    { backgroundColor: theme.input },
+                  ]}
+                >
+                  <Text style={styles.avatarInitial}>
+                    {user?.name?.charAt(0).toUpperCase() ?? "U"}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.avatarName, { color: colors.text }]}>
+            {user?.name}
+          </Text>
+          <Text style={[styles.avatarEmail, { color: colors.muted }]}>
             {user?.email}
           </Text>
-        </Field>
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={saving}
-          style={[
-            styles.saveBtn,
-            { backgroundColor: theme.primary },
-            saving && styles.saveBtnDisabled,
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator color={theme.card} size="small" />
-          ) : (
-            <Text style={styles.saveBtnText}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
-      </Section>
-
-      {/* Account */}
-      {passError && (
-        <View style={[styles.errorBanner, { backgroundColor: theme.input }]}>
-          <Text style={[styles.errorText, { color: theme.error }]}>
-            {passError}
-          </Text>
         </View>
-      )}
-      <Section title="Account" colors={colors}>
-        <TouchableOpacity
-          onPress={() => setShowPasswordSection(!showPasswordSection)}
-          style={[styles.accountItem, { borderBottomColor: colors.border }]}
-        >
-          <Text style={[styles.accountItemText, { color: colors.text }]}>
-            Change Password
-          </Text>
-          <Text style={{ color: colors.muted }}>
-            {showPasswordSection ? "▲" : "▶"}
-          </Text>
-        </TouchableOpacity>
 
-        {showPasswordSection && (
-          <View style={styles.passwordSection}>
-            <TextInput
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-              placeholder="Current password"
-              placeholderTextColor={colors.muted}
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  backgroundColor: colors.input,
-                  borderColor: colors.inputBorder,
-                },
-              ]}
-            />
-            <TextInput
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-              placeholder="New password"
-              placeholderTextColor={colors.muted}
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  backgroundColor: colors.input,
-                  borderColor: colors.inputBorder,
-                },
-              ]}
-            />
-            <TextInput
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              placeholder="Confirm new password"
-              placeholderTextColor={colors.muted}
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  backgroundColor: colors.input,
-                  borderColor: colors.inputBorder,
-                },
-              ]}
-            />
-            <TouchableOpacity
-              onPress={handleChangePassword}
-              disabled={savingPass}
-              style={[
-                styles.saveBtn,
-                { backgroundColor: theme.primary },
-                savingPass && styles.saveBtnDisabled,
-              ]}
-            >
-              {savingPass ? (
-                <ActivityIndicator color={theme.card} size="small" />
-              ) : (
-                <Text style={styles.saveBtnText}>Update Password</Text>
-              )}
-            </TouchableOpacity>
+        {/* Feedback messages */}
+        {success && (
+          <View
+            style={[styles.successBanner, { backgroundColor: theme.input }]}
+          >
+            <Text style={[styles.successText, { color: theme.success }]}>
+              ✓ {success}
+            </Text>
+          </View>
+        )}
+        {error && (
+          <View style={[styles.errorBanner, { backgroundColor: theme.input }]}>
+            <Text style={[styles.errorText, { color: theme.error }]}>
+              {error}
+            </Text>
           </View>
         )}
 
+        {/* Personal Information */}
+        <Section title="Personal Information" colors={colors}>
+          <Field label="Full Name" colors={colors}>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  backgroundColor: colors.input,
+                  borderColor: colors.inputBorder,
+                },
+              ]}
+              placeholder="Your full name"
+              placeholderTextColor={colors.muted}
+            />
+          </Field>
+          <Field label="Phone" colors={colors}>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  backgroundColor: colors.input,
+                  borderColor: colors.inputBorder,
+                },
+              ]}
+              placeholder="Your phone number"
+              placeholderTextColor={colors.muted}
+              keyboardType="phone-pad"
+            />
+          </Field>
+          <Field label="Email" colors={colors}>
+            <Text
+              style={[
+                styles.readOnlyField,
+                {
+                  color: colors.muted,
+                  backgroundColor: colors.input,
+                  borderColor: colors.inputBorder,
+                },
+              ]}
+            >
+              {user?.email}
+            </Text>
+          </Field>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={saving}
+            style={[
+              styles.saveBtn,
+              { backgroundColor: theme.primary },
+              saving && styles.saveBtnDisabled,
+            ]}
+          >
+            {saving ? (
+              <ActivityIndicator color={theme.card} size="small" />
+            ) : (
+              <Text style={styles.saveBtnText}>Save Changes</Text>
+            )}
+          </TouchableOpacity>
+        </Section>
+
+        {/* Account */}
+        {passError && (
+          <View style={[styles.errorBanner, { backgroundColor: theme.input }]}>
+            <Text style={[styles.errorText, { color: theme.error }]}>
+              {passError}
+            </Text>
+          </View>
+        )}
+        <Section title="Account" colors={colors}>
+          <TouchableOpacity
+            onPress={() => setShowPasswordSection(!showPasswordSection)}
+            style={[styles.accountItem, { borderBottomColor: colors.border }]}
+          >
+            <Text style={[styles.accountItemText, { color: colors.text }]}>
+              Change Password
+            </Text>
+            <Text style={{ color: colors.muted }}>
+              {showPasswordSection ? "▲" : "▶"}
+            </Text>
+          </TouchableOpacity>
+
+          {showPasswordSection && (
+            <View style={styles.passwordSection}>
+              <TextInput
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry
+                placeholder="Current password"
+                placeholderTextColor={colors.muted}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.input,
+                    borderColor: colors.inputBorder,
+                  },
+                ]}
+              />
+              <TextInput
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                placeholder="New password"
+                placeholderTextColor={colors.muted}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.input,
+                    borderColor: colors.inputBorder,
+                  },
+                ]}
+              />
+              <TextInput
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                placeholder="Confirm new password"
+                placeholderTextColor={colors.muted}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.input,
+                    borderColor: colors.inputBorder,
+                  },
+                ]}
+              />
+              <TouchableOpacity
+                onPress={handleChangePassword}
+                disabled={savingPass}
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: theme.primary },
+                  savingPass && styles.saveBtnDisabled,
+                ]}
+              >
+                {savingPass ? (
+                  <ActivityIndicator color={theme.card} size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Update Password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={() => router.push("/settings")}
+            style={[styles.accountItem, { borderBottomColor: colors.border }]}
+          >
+            <Text style={[styles.accountItemText, { color: colors.text }]}>
+              Notification Settings
+            </Text>
+            <Text style={{ color: colors.muted }}>▶</Text>
+          </TouchableOpacity>
+        </Section>
+
+        {/* Activity */}
+        <Section title="Activity" colors={colors}>
+          <View style={styles.activityRow}>
+            <View style={styles.activityItem}>
+              <Text style={[styles.activityValue, { color: colors.text }]}>
+                {user?.totalBookings ?? "—"}
+              </Text>
+              <Text style={[styles.activityLabel, { color: colors.muted }]}>
+                Total Bookings
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.activityDivider,
+                { backgroundColor: colors.border },
+              ]}
+            />
+            <View style={styles.activityItem}>
+              <Text style={[styles.activityValue, { color: colors.text }]}>
+                {user?.createdAt
+                  ? new Date(user.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "—"}
+              </Text>
+              <Text style={[styles.activityLabel, { color: colors.muted }]}>
+                Member Since
+              </Text>
+            </View>
+          </View>
+        </Section>
+
+        {/* Log Out */}
         <TouchableOpacity
-          onPress={() => router.push("/settings")}
-          style={[styles.accountItem, { borderBottomColor: colors.border }]}
+          onPress={handleLogout}
+          style={[
+            styles.logoutBtn,
+            { borderColor: theme.error, backgroundColor: theme.input },
+          ]}
         >
-          <Text style={[styles.accountItemText, { color: colors.text }]}>
-            Notification Settings
+          <Text style={[styles.logoutText, { color: theme.error }]}>
+            Log Out
           </Text>
-          <Text style={{ color: colors.muted }}>▶</Text>
         </TouchableOpacity>
-      </Section>
 
-      {/* Activity */}
-      <Section title="Activity" colors={colors}>
-        <View style={styles.activityRow}>
-          <View style={styles.activityItem}>
-            <Text style={[styles.activityValue, { color: colors.text }]}>
-              {user?.totalBookings ?? "—"}
-            </Text>
-            <Text style={[styles.activityLabel, { color: colors.muted }]}>
-              Total Bookings
-            </Text>
-          </View>
-          <View
-            style={[styles.activityDivider, { backgroundColor: colors.border }]}
-          />
-          <View style={styles.activityItem}>
-            <Text style={[styles.activityValue, { color: colors.text }]}>
-              {user?.createdAt
-                ? new Date(user.createdAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    year: "numeric",
-                  })
-                : "—"}
-            </Text>
-            <Text style={[styles.activityLabel, { color: colors.muted }]}>
-              Member Since
-            </Text>
-          </View>
-        </View>
-      </Section>
-
-      {/* Log Out */}
-      <TouchableOpacity
-        onPress={handleLogout}
-        style={[
-          styles.logoutBtn,
-          { borderColor: theme.error, backgroundColor: theme.input },
-        ]}
-      >
-        <Text style={[styles.logoutText, { color: theme.error }]}>Log Out</Text>
-      </TouchableOpacity>
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -450,7 +457,7 @@ const Field = ({
 const styles = StyleSheet.create({
   keyboardAvoiding: { flex: 1 },
   container: { flex: 1 },
-  content: { padding: 20 },
+  content: { padding: 20, paddingBottom: 100 },
 
   avatarSection: { alignItems: "center", paddingVertical: 28 },
   avatarWrapper: { marginBottom: 12 },

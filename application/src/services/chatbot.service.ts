@@ -24,7 +24,7 @@ export const chatbotService = {
       messages,
     });
 
-    const normalized = unwrapApiResponse(response) as ChatbotResponse;
+    const normalized = unwrapApiResponse( response.data || response) as ChatbotResponse;
     if (!normalized?.success || !normalized.reply) {
       throw new Error('No chatbot response was returned.');
     }

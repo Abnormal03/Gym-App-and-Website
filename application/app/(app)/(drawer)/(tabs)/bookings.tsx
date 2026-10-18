@@ -403,7 +403,7 @@ const EmptyState = ({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, paddingBottom: 100 },
   centered: {
     flex: 1,
     justifyContent: "center",

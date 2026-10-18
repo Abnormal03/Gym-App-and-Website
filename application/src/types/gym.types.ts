@@ -5,6 +5,7 @@ export interface Gym {
   address: string;
   latitude?: number;
   longitude?: number;
+  distanceKm?: number;
   openingTime: string;
   closingTime: string;
   capacity: number;

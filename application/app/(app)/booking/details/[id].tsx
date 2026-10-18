@@ -289,28 +289,6 @@ export default function BookingDetailsScreen() {
               ) : null}
             </View>
 
-            {canCancelBooking ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                disabled={cancelling}
-                onPress={cancelBooking}
-                style={[
-                  styles.action,
-                  {
-                    alignSelf: "center",
-                    backgroundColor: theme.card,
-                    borderColor: theme.error,
-                    borderWidth: 1,
-                    opacity: cancelling ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.cancelActionText, { color: theme.error }]}>
-                  {cancelling ? "Cancelling..." : "Cancel booking"}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-
             {booking.status === "confirmed" ? (
               <MemberPassQr
                 gymId={booking.gymId}
@@ -339,8 +317,29 @@ export default function BookingDetailsScreen() {
                 </Text>
               </View>
             )}
-
           </>
+        ) : null}
+
+        {canCancelBooking ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            disabled={cancelling}
+            onPress={cancelBooking}
+            style={[
+              styles.action,
+              {
+                alignSelf: "center",
+                backgroundColor: theme.card,
+                borderColor: theme.error,
+                borderWidth: 1,
+                opacity: cancelling ? 0.6 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.cancelActionText, { color: theme.error }]}>
+              {cancelling ? "Cancelling..." : "Cancel booking"}
+            </Text>
+          </TouchableOpacity>
         ) : null}
       </ScrollView>
     </SafeAreaView>

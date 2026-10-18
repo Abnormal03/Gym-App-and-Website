@@ -20,9 +20,15 @@ import { usePreference } from "../../src/hooks/usePreference";
 import { Preference } from "../../src/types/user.types";
 import { ScreenHeader } from "../../src/components/common/ScreenHeader";
 import { router } from "expo-router";
+import * as Notifications from "expo-notifications";
+import { userService } from "../../src/services/user.service";
 
 export default function SettingsScreen() {
-  const { theme, preference: themePreference, setPreference: setThemePreference } = useTheme();
+  const {
+    theme,
+    preference: themePreference,
+    setPreference: setThemePreference,
+  } = useTheme();
   const { user } = useAuthStore();
 
   // Notification preferences — default ON for important, OFF for promo
@@ -37,6 +43,46 @@ export default function SettingsScreen() {
   const [promotions, setPromotions] = useState<boolean>(
     user?.preference?.offersAndPromotions ?? false,
   );
+  const [pushEnabled, setPushEnabled] = useState(Boolean(user?.expoPushToken));
+  const [pushSaving, setPushSaving] = useState(false);
+
+  const updatePushRegistration = async (enabled: boolean) => {
+    if (pushSaving) return;
+    setPushSaving(true);
+    try {
+      let expoPushToken: string | null = null;
+      if (enabled) {
+        if (Platform.OS === "web") throw new Error("Device push notifications are available in the mobile app.");
+        const projectId =
+          Constants.expoConfig?.extra?.eas?.projectId ??
+          Constants.easConfig?.projectId ??
+          process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+        if (!projectId) throw new Error("Push notifications need the EAS project ID configured for this app.");
+        if (Platform.OS === "android") {
+          await Notifications.setNotificationChannelAsync("default", {
+            name: "Gym App notifications",
+            importance: Notifications.AndroidImportance.DEFAULT,
+          });
+        }
+        let { status } = await Notifications.getPermissionsAsync();
+        if (status !== "granted") ({ status } = await Notifications.requestPermissionsAsync());
+        if (status !== "granted") throw new Error("Allow notifications in your device settings to enable them.");
+        expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      }
+
+      await userService.updateProfile({ expoPushToken });
+      const current = useAuthStore.getState();
+      if (current.user && current.token) {
+        await current.updatePref({ ...current.user, expoPushToken }, current.token);
+      }
+      setPushEnabled(enabled);
+    } catch (error) {
+      Alert.alert(enabled ? "Could not enable notifications" : "Could not update notifications",
+        error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setPushSaving(false);
+    }
+  };
   const [hasChanges, setHasChanges] = useState(false);
   const pendingPreference = useRef<Preference | null>(null);
   const savingPreference = useRef(false);
@@ -91,26 +137,33 @@ export default function SettingsScreen() {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      "Delete Account",
-      "This will permanently delete your account and all your data. This action cannot be undone.",
+      "Deactivate Account",
+      "Your account will be deactivated and you will be signed out. Booking, payment, and review records are retained.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete Account",
+          text: "Deactivate",
           style: "destructive",
           onPress: () => {
-            // TODO: call DELETE /api/users/me when backend endpoint is ready
-            Alert.alert(
-              "Contact Support",
-              "Please contact support@gymapp.com to delete your account.",
-            );
+            void (async () => {
+              try {
+                await userService.deleteAccount();
+                await useAuthStore.getState().logout();
+                router.replace("/(auth)/login");
+              } catch (error) {
+                Alert.alert(
+                  "Unable to deactivate account",
+                  error instanceof Error ? error.message : "Please try again.",
+                );
+              }
+            })();
           },
         },
       ],
     );
   };
 
-  const appVersion = Constants.expoConfig?.version ?? "1.0.0";
+  const appVersion = Constants.expoConfig?.version ?? "2.1.0";
 
   return (
     <ScrollView
@@ -157,7 +210,9 @@ export default function SettingsScreen() {
             );
           })}
         </View>
-        <Text style={[styles.themeHint, { color: colors.muted }]}>Choose a theme for the app and sign-in screens.</Text>
+        <Text style={[styles.themeHint, { color: colors.muted }]}>
+          Choose a theme for the app and sign-in screens.
+        </Text>
       </SettingsSection>
 
       {/* Notifications */}
@@ -166,6 +221,15 @@ export default function SettingsScreen() {
         colors={colors}
         style={{ paddingHorizontal: 20 }}
       >
+        {Platform.OS !== "web" && (
+          <ToggleRow
+            label="Device notifications"
+            description={pushSaving ? "Updating device registration..." : "Allow booking and session alerts on this device"}
+            value={pushEnabled}
+            onChange={(enabled) => void updatePushRegistration(enabled)}
+            colors={colors}
+          />
+        )}
         <ToggleRow
           label="Booking confirmations"
           description="Get notified when a booking is confirmed"
@@ -214,7 +278,9 @@ export default function SettingsScreen() {
       )}
 
       {saving && (
-        <Text style={[styles.saveStatus, { color: theme.muted }]}>Saving your preferences…</Text>
+        <Text style={[styles.saveStatus, { color: theme.muted }]}>
+          Saving your preferences…
+        </Text>
       )}
 
       {success && (
@@ -279,7 +345,7 @@ export default function SettingsScreen() {
           onPress={handleDeleteAccount}
           style={[styles.dangerRow, { borderColor: colors.border }]}
         >
-          <Text style={styles.dangerText}>Delete Account</Text>
+          <Text style={styles.dangerText}>Deactivate Account</Text>
           <Text style={[styles.dangerArrow, { color: colors.muted }]}>▶</Text>
         </TouchableOpacity>
       </SettingsSection>

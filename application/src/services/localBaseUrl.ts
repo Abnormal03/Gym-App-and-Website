@@ -8,6 +8,6 @@ const LOCAL_API_URL = Platform.select({
 })!;
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
-const apiOrigin = configuredApiUrl || LOCAL_API_URL;
-// const apiOrigin = LOCAL_API_URL;
+// const apiOrigin = configuredApiUrl || LOCAL_API_URL;
+const apiOrigin = LOCAL_API_URL;
 export const BASE_URL = apiOrigin.endsWith('/api') ? apiOrigin : apiOrigin + '/api';

@@ -47,6 +47,13 @@ export function GymCard({ gym, theme, mode, onPress }: Props) {
           <Text style={[styles.meta, { color: theme.muted }]}>
             Amenities: {amenitiesText}
           </Text>
+          {typeof gym.distanceKm === "number" ? (
+            <Text style={[styles.distance, { color: theme.primary }]}>
+              {gym.distanceKm < 1
+                ? `${Math.round(gym.distanceKm * 1000)} m away`
+                : `${gym.distanceKm.toFixed(1)} km away`}
+            </Text>
+          ) : null}
 
           <View style={styles.capacityContainer}>
             <Text style={[styles.capacity, { color: theme.primary }]}>
@@ -125,6 +132,7 @@ const styles = StyleSheet.create({
   },
   gymName: { fontSize: 18 },
   meta: { fontSize: 15, marginTop: 12 },
+  distance: { fontSize: 14, marginTop: 8, fontWeight: "700" },
   capacity: {
     fontSize: 15,
     marginTop: 12,

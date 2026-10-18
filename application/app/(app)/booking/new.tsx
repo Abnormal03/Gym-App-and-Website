@@ -25,7 +25,7 @@ export default function BookingNewScreen() {
   const styles = createStyles(theme);
   const [loading, setLoading] = useState(false);
 
-  const [step, setStep] = useState<"idle" | "creating" | "initializing">(
+  const [step, setStep] = useState<"idle" | "creating">(
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
@@ -172,8 +172,16 @@ export default function BookingNewScreen() {
     setError(null);
     try {
       setStep("creating");
-      const checkoutResponse =
-        await bookingService.createCheckout(checkoutRequest);
+      const checkoutRequestForCreation = checkoutRequest.consultation
+        ? {
+            ...checkoutRequest,
+            consultation: { assignmentToken: quote.consultationAssignmentToken },
+          }
+        : checkoutRequest;
+      if (checkoutRequest.consultation && !quote.consultationAssignmentToken) {
+        throw new Error("The consultant quote expired. Please refresh the quote.");
+      }
+      const checkoutResponse = await bookingService.createCheckout(checkoutRequestForCreation);
       if (!checkoutResponse.success || !checkoutResponse.data?.bookingId)
         throw new Error("The server did not create the booking checkout.");
       if (!checkoutResponse.data.requiresPayment) {
@@ -184,10 +192,10 @@ export default function BookingNewScreen() {
         router.replace("/(drawer)/(tabs)/bookings");
         return;
       }
-      setStep("initializing");
-      const paymentResponse = await bookingService.initializePayment(
-        checkoutResponse.data.bookingId,
-      );
+      const paymentResponse = checkoutResponse.data;
+      if (!paymentResponse.txRef || !paymentResponse.checkoutUrl) {
+        throw new Error("The server did not return payment details.");
+      }
       const serverExpiry = checkoutResponse.data.expiresAt;
       const expiresAt =
         serverExpiry && Number.isFinite(new Date(serverExpiry).getTime())
@@ -227,7 +235,6 @@ export default function BookingNewScreen() {
   // Dynamic button label that reflects what's currently happening
   const buttonLabel = () => {
     if (step === "creating") return "Creating booking...";
-    if (step === "initializing") return "Setting up payment...";
     if (quoteLoading) return "Calculating total...";
     return "Confirm & Proceed to Payment";
   };
@@ -307,15 +314,22 @@ export default function BookingNewScreen() {
             Checkout total
           </Text>
           {quote.items.map((item, index) => (
-            <View key={item.type + index} style={styles.pendingAddonRow}>
-              <Text style={[styles.pendingAddonLabel, { color: theme.muted }]}>
-                {item.label}
-              </Text>
-              <Text
-                style={[styles.pendingAddonPrice, { color: theme.foreground }]}
-              >
-                ETB {Number(item.amount).toFixed(2)}
-              </Text>
+            <View key={item.type + index}>
+              <View style={styles.pendingAddonRow}>
+                <Text style={[styles.pendingAddonLabel, { color: theme.muted }]}>
+                  {item.label}
+                </Text>
+                <Text
+                  style={[styles.pendingAddonPrice, { color: theme.foreground }]}
+                >
+                  ETB {Number(item.amount).toFixed(2)}
+                </Text>
+              </View>
+              {item.type === "GYM_BOOKING" && item.coveredByMembership && (
+                <Text style={{ color: theme.muted, fontSize: 11, paddingHorizontal: 10 }}>
+                  Covered by your active gym package
+                </Text>
+              )}
             </View>
           ))}
           <Divider theme={theme} />

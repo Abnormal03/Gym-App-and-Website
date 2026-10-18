@@ -13,13 +13,14 @@ export interface CheckoutRequest {
     providerPackageId: number;
     firstSessionStartsAt: string;
   };
-  consultation?: { consultantId: number };
+  consultation?: { consultantId?: number; assignmentToken?: string };
 }
 
 export interface CheckoutQuoteItem {
   type: string;
   label: string;
   amount: number | string;
+  coveredByMembership?: boolean;
 }
 
 export interface CheckoutQuoteResponse {
@@ -27,6 +28,7 @@ export interface CheckoutQuoteResponse {
   data: {
     items: CheckoutQuoteItem[];
     total: number | string;
+    consultationAssignmentToken?: string;
   };
 }
 
@@ -41,6 +43,7 @@ export interface CreateCheckoutResponse {
     expiresAt: string;
     items: Array<{ id: number; orderId: number; type: string; amount: number | string }>;
     checkoutUrl: string | null;
+    txRef?: string;
     requiresPayment: boolean;
   };
 }

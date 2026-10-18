@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   Platform,
+  ActivityIndicator,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -36,6 +38,11 @@ export function HomeScreen() {
     searching,
     searchError,
     searchGymByNameAndLocation,
+    getGymsNearMe,
+    nearMe,
+    nearMeLoading,
+    nearMeError,
+    nearMeExpanded,
   } = useGyms();
 
   useEffect(() => {
@@ -90,6 +97,53 @@ export function HomeScreen() {
             style={styles.mapButton}
           />
         </View>
+        <View style={styles.nearMeRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: nearMe, disabled: nearMeLoading }}
+            disabled={nearMeLoading}
+            onPress={() => {
+              setSearch("");
+              if (nearMe) void getGyms();
+              else void getGymsNearMe();
+            }}
+            style={[
+              styles.nearMeButton,
+              {
+                backgroundColor: nearMe ? theme.primary : theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            {nearMeLoading ? (
+              <ActivityIndicator
+                size="small"
+                color={nearMe ? theme.foreground : theme.primary}
+              />
+            ) : (
+              <MaterialIcons
+                name="near-me"
+                size={19}
+                color={nearMe ? theme.foreground : theme.primary}
+              />
+            )}
+            <Text
+              style={{
+                color: nearMe ? theme.foreground : theme.text,
+                fontWeight: "700",
+              }}
+            >
+              {nearMe
+                ? "Near me · " + (nearMeExpanded ? 25 : 10) + " km"
+                : "Near me"}
+            </Text>
+          </Pressable>
+          {nearMeError ? (
+            <Text style={[styles.nearMeError, { color: theme.error }]}>
+              {nearMeError}
+            </Text>
+          ) : null}
+        </View>
         {searchError && (
           <View>
             <View
@@ -124,26 +178,29 @@ export function HomeScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={
-            <RefreshControl refreshing={isLoading} onRefresh={getGyms} />
+            <RefreshControl
+              refreshing={isLoading || nearMeLoading}
+              onRefresh={nearMe ? getGymsNearMe : getGyms}
+            />
           }
           showsVerticalScrollIndicator={false}
         >
           {isLoading ? (
             <SkeletonList theme={theme} />
           ) : (
-            <View style={styles.gymList}>
-              {gyms.map((gym) => (
-                <GymCard
-                  key={gym.id}
-                  gym={gym}
-                  theme={theme}
-                  mode={mode}
-                  onPress={() => {
-                    handlePress(gym.id);
-                  }}
-                />
-              ))}
-            </View>
+            <>
+              <View style={styles.gymList}>
+                {gyms.map((gym) => (
+                  <GymCard
+                    key={gym.id}
+                    gym={gym}
+                    theme={theme}
+                    mode={mode}
+                    onPress={() => handlePress(gym.id)}
+                  />
+                ))}
+              </View>
+            </>
           )}
           {error && (
             <View style={styles.errorState}>
@@ -167,7 +224,13 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  viewport: { flex: 1, width: "100%", maxWidth: 640, alignSelf: "center" },
+  viewport: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+    paddingBottom: 100,
+  },
   header: {
     height: 76,
     flexDirection: "row",
@@ -184,6 +247,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 15,
     marginTop: Platform.OS === "web" ? 20 : 0,
+    marginBottom: 10,
   },
   searchBox: {
     flex: 1,
@@ -210,7 +274,26 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 17,
   },
-  gymList: { gap: 22 },
+  gymList: { gap: 22, marginTop: 10 },
+  nearMeRow: {
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    position: "absolute",
+    top: 75,
+    zIndex: 100,
+    right: 10,
+  },
+  nearMeButton: {
+    alignSelf: "flex-start",
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 15,
+    borderRadius: 22,
+    borderWidth: 1,
+  },
+  nearMeError: { marginTop: 8, fontSize: 13 },
   errorState: { alignItems: "center", gap: 12, paddingVertical: 24 },
   errorText: { textAlign: "center", fontSize: 16 },
   retryButton: { minHeight: 48, borderRadius: 9 },

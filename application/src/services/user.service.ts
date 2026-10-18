@@ -13,4 +13,7 @@ export const userService = {
 
   changePassword: (data: ChangePasswordDTO): Promise<{ success: boolean }> =>
     api.put('/users/change-password', data),
+
+  deleteAccount: (): Promise<{ success: boolean; message: string }> =>
+    api.delete('/users/me'),
 };

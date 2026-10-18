@@ -61,30 +61,30 @@ export default function ChatsScreen() {
     [conversations, filter, normalizedQuery],
   );
 
-  const startableContacts = useMemo(
-    () => {
-      if (filter === "unread") return [];
-      const existingProviders = new Set(
-        conversations.map((conversation) => String(conversation.contact.id)),
-      );
-      const seenProviders = new Set<string>();
+  const startableContacts = useMemo(() => {
+    if (filter === "unread") return [];
+    const existingProviders = new Set(
+      conversations.map((conversation) => String(conversation.contact.id)),
+    );
+    const seenProviders = new Set<string>();
 
-      return eligibleContacts.filter((contact) => {
-        const providerId = String(contact.id);
-        if (
-          !contact.eligible ||
-          existingProviders.has(providerId) ||
-          seenProviders.has(providerId)
-        ) return false;
-        seenProviders.add(providerId);
-        return !normalizedQuery ||
-          `${contact.name} ${contact.type}`
-            .toLocaleLowerCase()
-            .includes(normalizedQuery);
-      });
-    },
-    [conversations, eligibleContacts, filter, normalizedQuery],
-  );
+    return eligibleContacts.filter((contact) => {
+      const providerId = String(contact.id);
+      if (
+        !contact.eligible ||
+        existingProviders.has(providerId) ||
+        seenProviders.has(providerId)
+      )
+        return false;
+      seenProviders.add(providerId);
+      return (
+        !normalizedQuery ||
+        `${contact.name} ${contact.type}`
+          .toLocaleLowerCase()
+          .includes(normalizedQuery)
+      );
+    });
+  }, [conversations, eligibleContacts, filter, normalizedQuery]);
 
   const navigateToConversation = (conversation: ChatConversation) => {
     router.push(`/chats/${encodeURIComponent(String(conversation.id))}`);
@@ -455,7 +455,13 @@ function getConversationActivityTime(conversation: ChatConversation) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  viewport: { flex: 1, width: "100%", maxWidth: 640, alignSelf: "center" },
+  viewport: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+    paddingBottom: 100,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",

@@ -39,11 +39,34 @@ export function MemberPassQr({ gymId, slotStart, slotEnd, theme }: Props) {
 
   const refresh = useCallback(async () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (!Number.isFinite(slotStartMs)) {
+      setPass(null);
+      setError("This booking has no valid check-in time.");
+      setLoading(false);
+      return;
+    }
     if (Number.isFinite(slotEndMs) && Date.now() > slotEndMs) {
       setPass(null);
       setLoading(false);
       return;
     }
+
+    // The member-pass endpoint may return a general active-membership pass.
+    // A booking QR must remain hidden until this booking's own 30-minute window.
+    const now = Date.now();
+    const checkInOpensAt = slotStartMs - 30 * 60_000;
+    if (now < checkInOpensAt) {
+      setPass(null);
+      setError(null);
+      setLoading(false);
+      const remaining = checkInOpensAt - now;
+      timeoutRef.current = setTimeout(
+        () => void refresh(),
+        Math.min(remaining, 2_147_000_000),
+      );
+      return;
+    }
+
     try {
       setError(null);
       const next = await checkInService.getMyPass(gymId);
@@ -94,19 +117,19 @@ export function MemberPassQr({ gymId, slotStart, slotEnd, theme }: Props) {
   const checkInOpensAt = slotStartMs - 30 * 60_000;
   const isTooEarly =
     Number.isFinite(slotStartMs) && Date.now() < checkInOpensAt;
-  const message = bookingWindowEnded
-    ? "This booking’s check-in window has ended."
-    : pass?.state === "CHECKED_IN"
-      ? "You are already checked in for today."
-      : pass?.state === "EXPIRED"
-        ? "This gym package has expired or has no visits remaining."
-        : pass?.state === "NOT_VALID_TODAY"
-          ? isTooEarly
-            ? `Your check-in QR becomes available 30 minutes before your booking (${new Date(checkInOpensAt).toLocaleString("en-ET", { timeZone: "Africa/Addis_Ababa" })}).`
-            : pass.reason === "OUTSIDE_HOURS"
+  const message = isTooEarly
+    ? `Your check-in QR becomes available 30 minutes before your booking (${new Date(checkInOpensAt).toLocaleString("en-ET", { timeZone: "Africa/Addis_Ababa" })}).`
+    : bookingWindowEnded
+      ? "This booking’s check-in window has ended."
+      : pass?.state === "CHECKED_IN"
+        ? "You are already checked in for today."
+        : pass?.state === "EXPIRED"
+          ? "This gym package has expired or has no visits remaining."
+          : pass?.state === "NOT_VALID_TODAY"
+            ? pass.reason === "OUTSIDE_HOURS"
               ? "Your booking is outside the gym’s check-in hours. Please contact the gym."
               : "There is no active booking or package available for check-in right now."
-          : null;
+            : null;
 
   return (
     <View
@@ -119,7 +142,7 @@ export function MemberPassQr({ gymId, slotStart, slotEnd, theme }: Props) {
         Check-in QR code
       </Text>
       {loading ? <ActivityIndicator color={theme.primary} /> : null}
-      {!loading && !bookingWindowEnded && pass?.state === "READY" ? (
+      {!loading && !bookingWindowEnded && !isTooEarly && pass?.state === "READY" ? (
         <View style={styles.qr}>
           <QRCode value={pass.qrToken} size={220} backgroundColor="#FFFFFF" />
         </View>

@@ -5,6 +5,7 @@ export interface User {
     email: string;
     photoUrl?: string;
     fcmToken?: string;
+    expoPushToken?: string | null;
     totalBookings?:number;
     createdAt: string;   
     preference: Preference 
@@ -38,6 +39,7 @@ export interface UpdateProfileDTO {
   name?: string;
   phone?: string;
   photoUrl?: string;
+  expoPushToken?: string | null;
 }
 
 export interface ChangePasswordDTO {
