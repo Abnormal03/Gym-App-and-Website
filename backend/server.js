@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const express = require("express");
+const { sendDueMemberReminders } = require("./services/pushNotification.service");
 const http = require("http");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
@@ -462,6 +463,22 @@ httpServer.listen(PORT, () => {
   void expirePendingOrders();
 
   setInterval(expirePendingOrders, ORDER_EXPIRATION_INTERVAL);
+
+  let memberReminderJobRunning = false;
+  const runMemberReminders = async () => {
+    if (memberReminderJobRunning) return;
+    memberReminderJobRunning = true;
+    try {
+      const result = await sendDueMemberReminders();
+      if (result.sentCount) console.log("[Member Reminders] Sent", result.sentCount);
+    } catch (error) {
+      console.error("[Member Reminders] Failed:", error.message);
+    } finally {
+      memberReminderJobRunning = false;
+    }
+  };
+  void runMemberReminders();
+  setInterval(runMemberReminders, 60 * 1000);
 
   const TRAINER_SESSION_EXPIRATION_INTERVAL = 60 * 1000;
   setInterval(async () => {

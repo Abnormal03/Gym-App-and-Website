@@ -2,6 +2,7 @@ const { z } = require('zod');
 const prismaModule = require('../config/prisma');
 const prisma = prismaModule.prisma || prismaModule;
 const { AppError } = require('../utils/errors');
+const { isExpoPushToken, sendExpoPush } = require('./pushNotification.service');
 
 let firebaseAdmin = null;
 try {
@@ -60,7 +61,7 @@ async function ensureThreadMembership(auth, threadId) {
     const thread = await prisma.chatThread.findUnique({
         where: { id: threadIdNumber },
         include: {
-            user: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
+            user: { select: { id: true, name: true, photoUrl: true, fcmToken: true, expoPushToken: true } },
             provider: { select: { id: true, name: true, photoUrl: true, type: true, fcmToken: true } },
         },
     });
@@ -155,6 +156,7 @@ function isUserOnline(io, userId, providerId) {
 }
 
 async function sendPushNotification(token, title, body, payload = {}) {
+    if (isExpoPushToken(token)) return sendExpoPush(token, { title, body, data: { ...payload, url: '/chats/' + payload.threadId } });
     if (!token || !firebaseAdmin || !firebaseAdmin.messaging || !firebaseAdmin.apps?.length) {
         return false;
     }
@@ -185,7 +187,7 @@ async function listThreads(auth) {
         where,
         orderBy: { createdAt: 'desc' },
         include: {
-            user: { select: { id: true, name: true, photoUrl: true, fcmToken: true } },
+            user: { select: { id: true, name: true, photoUrl: true, fcmToken: true, expoPushToken: true } },
             provider: { select: { id: true, name: true, photoUrl: true, type: true, fcmToken: true } },
             messages: { orderBy: { createdAt: 'desc' }, take: 1 },
         },
@@ -304,7 +306,7 @@ async function sendMessage(auth, threadId, rawBody, io = null) {
 
         const recipient = auth.role === 'MEMBER' ? thread.provider : thread.user;
         const recipientId = auth.role === 'MEMBER' ? thread.providerId : thread.userId;
-        const recipientFcmToken = auth.role === 'MEMBER' ? recipient?.fcmToken : recipient?.fcmToken;
+        const recipientFcmToken = auth.role === 'MEMBER' ? recipient?.fcmToken : (recipient?.expoPushToken || recipient?.fcmToken);
 
         const online = auth.role === 'MEMBER'
             ? isUserOnline(io, null, thread.providerId)

@@ -36,6 +36,8 @@ const getGymsService = async () => {
       id: true,
       name: true,
       address: true,
+      latitude: true,
+      longitude: true,
       openingTime: true,
       closingTime: true,
       capacity: true,

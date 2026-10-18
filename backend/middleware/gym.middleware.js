@@ -133,6 +133,11 @@ function makeAuthenticate({ allowPasswordChange = false } = {}) {
       else if (payload.role === 'GYM_STAFF') auth = await loadStaff(Number(payload.id));
       else auth = normalizeLegacyPayload(payload);
 
+      if (auth?.role === "MEMBER") {
+        const member = await prisma.user.findFirst({ where: { id: auth.id, deletedAt: null }, select: { id: true } });
+        if (!member) throw new AppError("UNAUTHORIZED", "Account is deactivated");
+      }
+
       if (!auth || !Number.isInteger(auth.id) || auth.id <= 0) throw new AppError('UNAUTHORIZED', 'Invalid token');
       if (auth.mustChangePassword && !allowPasswordChange) {
         throw new AppError('PASSWORD_CHANGE_REQUIRED', 'You must change your password first');

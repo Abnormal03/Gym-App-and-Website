@@ -14,6 +14,8 @@ model User {
   password          String
   photoUrl          String?
   fcmToken          String?
+  expoPushToken     String?
+  deletedAt         DateTime?
   createdAt         DateTime                  @default(now())
   bookings          Booking[]
   chatThreads       ChatThread[]
@@ -112,6 +114,8 @@ model Booking {
   createdAt        DateTime          @default(now())
   bookingType      BookingType       @default(SINGLE)
   headcount        Int               @default(1)
+  confirmationNotificationSentAt DateTime?
+  reminderNotificationSentAt DateTime?
   memberPackageId  Int?
   gym              Gym               @relation(fields: [gymId], references: [id])
   memberPackage    MemberPackage?    @relation("CoveredBookings", fields: [memberPackageId], references: [id])
@@ -319,6 +323,7 @@ model TrainingSession {
   cancelledAt  DateTime?
   createdAt    DateTime                @default(now())
   cancelReason String?
+  reminderNotificationSentAt DateTime?
   earnings     Earning?
   review       Review?
   booking      Booking                 @relation(fields: [bookingId], references: [id])

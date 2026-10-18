@@ -1,6 +1,7 @@
 const axios = require("axios");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const { notifyBookingConfirmed } = require("./pushNotification.service");
 const {
   bookingTransitionsFromPayment,
 } = require("../config/bookingTransitions");
@@ -918,7 +919,7 @@ const confirmFreeCheckout = async (bookingId, userId) => {
   bookingId = validateId(bookingId, "booking ID");
   userId = validateId(userId, "user ID");
 
-  return prisma.$transaction(
+  const result = await prisma.$transaction(
     async (tx) => {
       const booking = await tx.booking.findUnique({
         where: {
@@ -972,6 +973,10 @@ const confirmFreeCheckout = async (bookingId, userId) => {
       timeout: 30000,
     },
   );
+  if (result.booking?.status === "confirmed") {
+    void notifyBookingConfirmed(result.booking.id).catch((error) => console.error("[Booking Confirmation Push] Failed:", error.message));
+  }
+  return result;
 };
 
 const processPaymentResult = async (txRef) => {
@@ -1027,7 +1032,7 @@ const processPaymentResult = async (txRef) => {
     };
   }
 
-  return prisma.$transaction(
+  const result = await prisma.$transaction(
     async (tx) => {
       await tx.$queryRawUnsafe(
         'SELECT "id" FROM "Payment" WHERE "id" = $1 FOR UPDATE',
@@ -1205,6 +1210,10 @@ const processPaymentResult = async (txRef) => {
       timeout: 30000,
     },
   );
+  if (result.outcome === "success" && result.booking?.status === "confirmed") {
+    void notifyBookingConfirmed(result.booking.id).catch((error) => console.error("[Booking Confirmation Push] Failed:", error.message));
+  }
+  return result;
 };
 
 /* -------------------------------------------------------------------------- */

@@ -78,7 +78,7 @@ const login = async (req, res) => {
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+    if (!isMatch || user.deletedAt) {
       return res
         .status(401)
         .json({ success: false, message: "Invalid email or password" });

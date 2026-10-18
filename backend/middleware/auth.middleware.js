@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 
-const protect = (req, res, next) => {
+const protect = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -14,9 +14,25 @@ const protect = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const role = String(decoded.role || "").toUpperCase();
+    const memberId = Number(decoded.userId ?? decoded.id);
+
+    if (role === "MEMBER" || role === "USER") {
+      const member = await prisma.user.findFirst({
+        where: { id: memberId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!member) {
+        return res.status(401).json({
+          success: false,
+          message: "Account is deactivated",
+          code: "ACCOUNT_DEACTIVATED",
+        });
+      }
+    }
 
     req.user = {
-      id: decoded.userId,
+      id: decoded.userId ?? decoded.id,
       role: decoded.role,
     };
 
@@ -135,6 +151,11 @@ function makeAuthenticate({ allowPasswordChange = false } = {}) {
       else if (payload.role === "GYM_STAFF")
         auth = await loadStaff(Number(payload.id));
       else auth = normalizeLegacyPayload(payload);
+
+      if (auth?.role === "MEMBER") {
+        const member = await prisma.user.findFirst({ where: { id: auth.id, deletedAt: null }, select: { id: true } });
+        if (!member) throw new AppError("UNAUTHORIZED", "Account is deactivated");
+      }
 
       if (!auth || !Number.isInteger(auth.id) || auth.id <= 0)
         throw new AppError("UNAUTHORIZED", "Invalid token");

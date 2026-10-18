@@ -46,6 +46,7 @@ const getMeService = async (userId) => {
       photoUrl: true,
       createdAt: true,
       fcmToken: true,
+      expoPushToken: true,
       _count: {
         select: {
           bookings: {
@@ -74,7 +75,7 @@ const getMeService = async (userId) => {
 
 // Update only profile fields provided by the user.
 const updateMeService = async (userId, body = {}) => {
-  const { name, phone, photoUrl, fcmToken } = body;
+  const { name, phone, photoUrl, fcmToken, expoPushToken } = body;
   const data = {};
 
   if (name !== undefined) {
@@ -122,6 +123,13 @@ const updateMeService = async (userId, body = {}) => {
     data.fcmToken = fcmToken || null;
   }
 
+  if (expoPushToken !== undefined) {
+    if (expoPushToken !== null && (typeof expoPushToken !== "string" || expoPushToken.length > 4096)) {
+      throw createError("Invalid Expo push token", 400);
+    }
+    data.expoPushToken = expoPushToken || null;
+  }
+
   if (Object.keys(data).length === 0) {
     throw createError("Provide at least one profile field to update", 400);
   }
@@ -135,10 +143,28 @@ const updateMeService = async (userId, body = {}) => {
       email: true,
       phone: true,
       photoUrl: true,
+      expoPushToken: true,
     },
   });
 
   return user;
+};
+
+// Soft deactivate while retaining historical bookings, payments, reviews and chats.
+const deleteMyAccountService = async (userId) => {
+  const id = Number(userId);
+  if (!Number.isSafeInteger(id) || id <= 0) throw createError("Invalid user ID", 400);
+  const user = await prisma.user.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
+  if (!user) throw createError("Account not found or already deactivated", 404);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id }, data: { deletedAt: new Date(), expoPushToken: null, fcmToken: null } }),
+    prisma.userPreference.upsert({
+      where: { userId: id },
+      update: { bookingConfirm: false, sessionReminders: false, offersAndPromotions: false },
+      create: { userId: id, bookingConfirm: false, sessionReminders: false, offersAndPromotions: false },
+    }),
+  ]);
+  return { message: "Account deactivated" };
 };
 
 // Verify the current password and save the new hashed password.
@@ -266,6 +292,7 @@ const getPreferenceService = async (userId) => {
 module.exports = {
   getMeService,
   updateMeService,
+  deleteMyAccountService,
   changePasswordService,
   updateUserPreferenceService,
   getPreferenceService,

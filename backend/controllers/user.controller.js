@@ -68,6 +68,17 @@ const updateMe = async (req, res) => {
   }
 };
 
+const deleteMe = async (req, res) => {
+  try {
+    const userId = parseUserId(req.user?.id);
+    if (!userId) return res.status(401).json({ success: false, message: "Authentication required" });
+    const result = await userService.deleteMyAccountService(userId);
+    return res.status(200).json({ success: true, message: result.message });
+  } catch (error) {
+    return handleError(res, error, "Deactivate user account error");
+  }
+};
+
 const changePassword = async (req, res) => {
   try {
     const userId = parseUserId(req.user?.id);
@@ -146,6 +157,7 @@ const getPreference = async (req, res) => {
 module.exports = {
   updateMe,
   getMe,
+  deleteMe,
   changePassword,
   updateUserPreference,
   getPreference,
