@@ -23,6 +23,12 @@ function DrawerContent({ navigation }: DrawerContentProps) {
   const { theme } = useTheme();
 
   const pathName = usePathname();
+  const userInitials = user?.name
+    ?.trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "U";
 
   const navigate = (path: string) => {
     navigation.closeDrawer();
@@ -39,27 +45,21 @@ function DrawerContent({ navigation }: DrawerContentProps) {
     <DrawerContentScrollView
       contentContainerStyle={[
         styles.drawerContainer,
-        { backgroundColor: theme.background },
+        { backgroundColor: theme.card },
       ]}
     >
       {/* User Info Header */}
       <View
         style={[
           styles.userSection,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.border,
-            shadowColor: theme.primary,
-          },
+          { borderBottomColor: theme.border },
         ]}
       >
         <View
           style={[
             styles.avatarCircle,
             {
-              backgroundColor: theme.input,
-              borderColor: theme.primary,
-              shadowColor: theme.primary,
+              backgroundColor: `${theme.primary}18`,
             },
           ]}
         >
@@ -67,22 +67,24 @@ function DrawerContent({ navigation }: DrawerContentProps) {
             <Image source={{ uri: user.photoUrl }} style={styles.avatarImage} />
           ) : (
             <Text style={[styles.avatarInitial, { color: theme.primary }]}>
-              {user?.name?.charAt(0).toUpperCase() ?? "U"}
+              {userInitials}
             </Text>
           )}
         </View>
-        <Text
-          style={[styles.userName, { color: theme.foreground }]}
-          numberOfLines={1}
-        >
-          {user?.name ?? "User"}
-        </Text>
-        <Text
-          style={[styles.userEmail, { color: theme.muted }]}
-          numberOfLines={1}
-        >
-          {user?.email ?? ""}
-        </Text>
+        <View style={styles.userDetails}>
+          <Text
+            style={[styles.userName, { color: theme.foreground }]}
+            numberOfLines={1}
+          >
+            {user?.name ?? "User"}
+          </Text>
+          <Text
+            style={[styles.userEmail, { color: theme.muted }]}
+            numberOfLines={1}
+          >
+            {user?.email ?? ""}
+          </Text>
+        </View>
       </View>
 
       {/* Main Navigation */}
@@ -166,10 +168,7 @@ function DrawerContent({ navigation }: DrawerContentProps) {
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
         <TouchableOpacity
           onPress={handleLogout}
-          style={[
-            styles.logoutBtn,
-            { backgroundColor: theme.input, borderColor: theme.error + "55" },
-          ]}
+          style={styles.logoutBtn}
         >
           <MaterialIcons name="logout" size={21} color={theme.error} />
           <Text style={[styles.logoutText, { color: theme.error }]}>
@@ -211,15 +210,14 @@ const DrawerItem = ({
       style={[
         styles.drawerItem,
         isActive && {
-          backgroundColor: theme.primary + "14",
-          borderColor: theme.primary + "66",
+          backgroundColor: `${theme.primary}18`,
         },
       ]}
     >
       <View
         style={[
           styles.drawerItemIcon,
-          { backgroundColor: isActive ? theme.primary + "20" : theme.input },
+          { backgroundColor: "transparent" },
         ]}
       >
         <MaterialIcons
@@ -250,7 +248,7 @@ export default function DrawerLayout() {
         headerShown: false,
         drawerStyle: {
           width: 300,
-          backgroundColor: theme.background,
+          backgroundColor: theme.card,
           borderRightColor: theme.border,
           borderRightWidth: 1,
           elevation: 14,
@@ -264,72 +262,66 @@ export default function DrawerLayout() {
 }
 
 const styles = StyleSheet.create({
-  drawerContainer: { flex: 1 },
+  drawerContainer: { flexGrow: 1 },
 
   userSection: {
-    margin: 12,
-    marginTop: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderRadius: 18,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
+    minHeight: 88,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 18,
+    marginHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
-    elevation: 5,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
+    overflow: "hidden",
   },
-  avatarImage: { width: 60, height: 60, borderRadius: 30 },
-  avatarInitial: { fontSize: 24, fontWeight: "700" },
-  userName: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  userEmail: { fontSize: 13 },
+  avatarImage: { width: 44, height: 44, borderRadius: 22 },
+  avatarInitial: { fontSize: 14, fontWeight: "700" },
+  userDetails: { flex: 1, minWidth: 0 },
+  userName: { fontSize: 13, fontWeight: "700", marginBottom: 2 },
+  userEmail: { fontSize: 10 },
 
-  divider: { height: 1, marginHorizontal: 16 },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   navSection: { paddingVertical: 8 },
 
   drawerItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    minHeight: 38,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     marginHorizontal: 12,
-    marginVertical: 3,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "transparent",
-    gap: 16,
+    marginVertical: 1,
+    borderRadius: 10,
+    gap: 11,
   },
   drawerItemIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
+    width: 22,
+    height: 24,
+    borderRadius: 0,
     alignItems: "center",
     justifyContent: "center",
   },
-  drawerItemLabel: { fontSize: 15, fontWeight: "600" },
+  drawerItemLabel: { fontSize: 12, fontWeight: "500" },
 
-  logoutSection: { marginTop: "auto", paddingBottom: 32 },
+  logoutSection: { marginTop: "auto", paddingBottom: 16 },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    minHeight: 42,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     marginHorizontal: 12,
     marginTop: 12,
-    borderWidth: 1,
-    borderRadius: 14,
-    gap: 16,
+    borderRadius: 10,
+    gap: 11,
   },
-  logoutText: { fontSize: 15, fontWeight: "500" },
+  logoutText: { fontSize: 12, fontWeight: "600" },
 });

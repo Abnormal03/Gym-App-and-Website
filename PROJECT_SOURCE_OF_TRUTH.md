@@ -2,7 +2,7 @@
 
 **Purpose:** Coordinate mobile app, backend, and web work from the same description of the current system and the agreed future scope.
 
-**Last reviewed:** 2026-10-26  
+**Last reviewed:** 2026-10-28
 **Status:** Baseline captured; roadmap items are proposals until their decision records are completed.  
 **Maintainer:** Product/engineering team. The mobile app developer maintains this document with input from backend and web owners.
 
@@ -18,7 +18,7 @@
 
 | Project | Location | Current role |
 |---|---|---|
-| Member mobile application | `Gym-App-and-Website/application` (this repo, branch `app/v2features`) | Expo / React Native member app |
+| Member mobile application | `Gym-App-and-Website/application` (this repo, branch `app/V3Features`) | Expo / React Native member app |
 | Backend | `~/projects/gym-backend/backend` (separate repo, observed branch `backend`) | Express API, Prisma/PostgreSQL, JWT auth, payments, Socket.IO |
 | Web application | `~/projects/gym-web2/website` (observed branch `v2web`) | React / Vite portal for members, gym admins, providers, nutrition consultants, and staff |
 
@@ -61,6 +61,31 @@ Web auth supports member, admin, provider, and staff login entry points. It norm
 - Members can select a provider as part of a gym checkout/session flow.
 - Provider earnings and payout endpoints/UI exist. Gym admins have payout management in the web UI.
 - The reviewed model/routes do **not** establish the requested distinction among private-hired, gym-assigned, and independently registered trainers as full business relationships. Nor do they settle who collects/owes each payment in all three cases.
+
+## V3 mobile UI refresh: home and member navigation
+
+- **Status:** UI scope agreed from the supplied screenshots; implementation in progress.
+- **User outcome:** Members can find a gym quickly and reach their main destinations from the bottom navigation or drawer.
+- **Scope:** Refresh the existing gym home screen, custom bottom tab bar, and member drawer to follow the supplied reference. Booking flow is explicitly a later UI slice.
+- **Home behavior:** Show a greeting using the signed-in member's name, a gym search field, the existing near-me action, quick gym filters, a “Nearby gyms” list with “See all”, and gym cards showing the available gym information. Preserve current gym details navigation, loading, retry, and empty/error handling.
+- **Bottom navigation shown in reference:** Home, Feed, Bookings, Chats, Profile. Bookings, Chats, and Profile keep their existing routes. Feed opens a clearly labeled empty “Coming soon” state for this slice; content-sharing behavior remains a separate future feature.
+- **Drawer shown in reference:** Member initials/photo, name and email; Home, My Bookings, My Sessions, Payment History, My Ratings and Reviews, Settings, Help and Support, Terms of Service, Privacy Policy, and Log Out. Keep existing route/logout behavior unless a separate route contract is agreed.
+- **Existing app data shapes:** signed-in member from the auth store; gym cards use the existing `Gym` type. No mobile API, database, or payment contract change is part of this UI slice.
+- **Existing backend dependency (verified in source):** `GET /api/gyms` and `GET /api/gyms/search` provide the current gym list/search flow; the app already uses device location and gym detail requests for “Near me”. The list fields include name, address, hours, capacity, photos, and amenities.
+- **Known data gap:** The expanded backend's gym-list query does not include package data or a monthly price. Do not hard-code a sample price or silently add a request per gym. The card shows a monthly price only if monthly package data is already present on the gym object; current live gym-list responses therefore omit it.
+- **Working UI assumptions:** (1) Feed opens a labeled “Coming soon” empty state with no fabricated posts; (2) the 24/7 chip recognizes `00:00`–`23:59` hours because the current backend requires opening time to be earlier than closing time; (3) show a gym price only when the current list data includes a valid monthly package, and make no extra request per card. The current gym list contains no package data, so current live cards will omit the price. These assumptions can be changed by the project owner during review.
+- **Acceptance criteria:** Match the supplied home/drawer/tab visual hierarchy; remain usable in light and dark themes; provide accessible labels and selected states; preserve the live gym search, near-me, gym-detail, drawer navigation, and logout behavior; show correct loading, empty, and error/retry states; do not represent demo or placeholder content as live data.
+- **Implementation references:** `APPLICATION_DEV_CHECKLIST.md` (Phase A–E workflow); current implementation branch `app/V3Features`. Backend/web changes: none planned for this slice.
+
+## V3 mobile auth and drawer access refresh
+
+- **Status:** In progress; visual implementation follows the supplied light/dark sign-in reference.
+- **Scope:** Restyle existing member sign-in and sign-up screens with Bole Elite branding, light/dark selection, language affordance, password visibility control, and inline auth error presentation. Make drawer access explicit with a hamburger on Home while keeping the avatar as a profile shortcut.
+- **Visual system:** Use the shared light/dark theme palette across auth and Home. Keep a common type hierarchy (page titles, supporting text, field labels/input text, and controls) and match the supplied proportions, including larger gym imagery and readable bottom-tab labels.
+- **Behavior and contracts:** Existing `/api/auth/login` and `/api/auth/register` service calls, payloads, session persistence, and post-auth navigation remain unchanged. Auth errors stay client presentation state; no API or backend contract changes are part of this UI update. The sign-in screen shows a generic recoverable error banner and red input outlines when authentication fails.
+- **Acceptance criteria:** Auth screens follow the provided light/dark hierarchy; error feedback is visible above the form and invalid fields are highlighted; password visibility remains controllable; the Home hamburger opens the existing member drawer and profile avatar opens Profile.
+- **Open limitation:** The existing “Forgot password?” link has no implemented route or backend contract, so this visual pass does not add a recovery flow.
+- **Implementation references:** `application/app/(app)/(auth)/login.tsx`, `application/app/(app)/(auth)/Signup.tsx`, and `application/app/(app)/(drawer)/(tabs)/index.tsx`. No backend or web changes planned.
 
 ## Cross-client API conventions
 
