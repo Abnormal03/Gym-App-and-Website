@@ -2,7 +2,7 @@
 
 **Purpose:** Coordinate mobile app, backend, and web work from the same description of the current system and the agreed future scope.
 
-**Last reviewed:** 2026-10-26  
+**Last reviewed:** 2026-11-15
 **Status:** Baseline captured; roadmap items are proposals until their decision records are completed.  
 **Maintainer:** Product/engineering team. The mobile app developer maintains this document with input from backend and web owners.
 
@@ -20,7 +20,7 @@
 |---|---|---|
 | Member mobile application | `Gym-App-and-Website/application` (this repo, branch `app/v2features`) | Expo / React Native member app |
 | Backend | `~/projects/gym-backend/backend` (separate repo, observed branch `backend`) | Express API, Prisma/PostgreSQL, JWT auth, payments, Socket.IO |
-| Web application | `~/projects/gym-web2/website` (observed branch `v2web`) | React / Vite portal for members, gym admins, providers, nutrition consultants, and staff |
+| Web application | `~/projects/gym-website/website` (observed branch `v2web`) | React / Vite portal for members, gym admins, providers, nutrition consultants, and staff |
 
 The `backend/` folder and `backend` branch inside the mobile repository are an older, reduced snapshot. Use `~/projects/gym-backend` as the backend implementation reference unless the team explicitly changes that source. Do not copy an API contract from the old snapshot without checking the expanded backend.
 
@@ -110,6 +110,13 @@ Copy this section for each feature before implementation. Keep the record in thi
 - **Implementation references:** backend PR, web PR, mobile PR, release:
 
 ## Change coordination checklist
+
+### Checkout consistency, duplicate reservations, and refund display
+
+- **Status:** Implemented locally across mobile, web, and backend; Render deployment verification pending
+- **Web contract:** Send `expectedTotal` from the current quote to checkout and pass the quote's consultation assignment token. Use the combined checkout response URL without initializing twice; if initialization is pending, retry against the returned booking ID. Refresh and require another user confirmation when checkout returns `QUOTE_CHANGED`. Use the saved booking ID for payment retry, permit cancellation and retry for future `payment_failed` bookings, show manual refund review separately from payment status, display the recorded paid amount, and flag disagreement with order totals/items.
+- **Backend contract:** Reject overlapping active bookings by one member at a gym. Require `expectedTotal` on `POST /api/checkout`; return HTTP 409 with `QUOTE_CHANGED` for a stale amount or `DUPLICATE_BOOKING` for an overlapping booking. Preserve the configured HTTPS payment return for web. If Chapa initialization fails after persistence, return the saved booking/order IDs for retry. Include associated order totals, refund-review fields, and order items on booking list/detail responses. No migration; financial history is never rewritten.
+- **Acceptance:** Match mobile/backend quote, retry, cancellation, and refund display behavior; never create a second booking for payment retry; show a useful mismatch warning without changing the recorded payment.
 
 For any cross-project change:
 

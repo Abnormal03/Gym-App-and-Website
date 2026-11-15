@@ -12,6 +12,8 @@ const FRIENDLY = {
   PACKAGE_RESTRICTED: 'This package does not allow the chosen day, time or group size.',
   SESSION_OUTSIDE_BOOKING: 'The session must fit inside your gym booking window.',
   OUTSIDE_GYM_OPENING_HOURS: 'The chosen time is outside the gym opening hours.',
+  DUPLICATE_BOOKING: 'You already have a booking at this gym that overlaps this time. Choose another time or manage your existing booking.',
+  QUOTE_CHANGED: 'The checkout price changed. Review the updated total before paying.',
 };
 
 /** Normalised error thrown by every API call. */
@@ -52,7 +54,7 @@ export function toApiError(err) {
   // V1 checkout errors put an upper-case code in `message`; V2 uses error.code.
   const rawMessage = v2?.message || body.message || '';
   const v1Code = /^[A-Z_]{4,}$/.test(rawMessage) ? rawMessage : null;
-  const code = v2?.code || v1Code || null;
+  const code = v2?.code || body.code || v1Code || null;
   const url = err?.config?.url || '';
   const unavailable = res.status === 404 && url.includes('/api/v1/') && !v2?.code;
   const message = v1Code && FRIENDLY[v1Code] ? FRIENDLY[v1Code] : rawMessage || friendlyMessage(code, `Request failed (${res.status}).`);

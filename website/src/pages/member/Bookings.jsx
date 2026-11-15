@@ -106,7 +106,16 @@ export function BookingDetail() {
   if (booking.error) return <ErrorState error={booking.error} onRetry={booking.reload} title="Could not load this booking" />;
   const b = { ...booking.data, ...(extras.data || {}) };
   const sessions = extras.data?.sessions || [];
-  const cancellable = ['pending', 'confirmed'].includes(b.status) && isFuture(b.slotStart);
+  const amountOrNull = (value) => value == null || value === '' ? null : Number(value);
+  const paymentAmount = amountOrNull(b.payment?.amount);
+  const orderTotal = amountOrNull(b.order?.totalAmount);
+  const itemAmounts = (b.order?.items || []).map((item) => amountOrNull(item.amount)).filter((value) => value !== null && Number.isFinite(value));
+  const itemTotal = itemAmounts.length ? Number(itemAmounts.reduce((sum, amount) => sum + amount, 0).toFixed(2)) : null;
+  const amountCandidates = [paymentAmount, orderTotal, itemTotal].filter((value) => value !== null && Number.isFinite(value));
+  const amountMismatch = amountCandidates.some((value) => Math.abs(value - amountCandidates[0]) >= 0.01);
+  const paid = ['success', 'refunded'].includes(b.payment?.status);
+  const displayedAmount = paid && paymentAmount !== null ? paymentAmount : orderTotal ?? itemTotal;
+  const cancellable = ['pending', 'payment_failed', 'confirmed'].includes(b.status) && isFuture(b.slotStart);
 
   const doCancel = async () => {
     const ok = await cancel.run(() => bookingsApi.cancel(b.id), { success: 'Booking cancelled' });
@@ -124,7 +133,7 @@ export function BookingDetail() {
         title={b.gym?.name || 'Booking'}
         subtitle={formatRange(b.slotStart, b.slotEnd)}
         actions={<>
-          {b.status === 'pending' && <Button icon={CreditCard} onClick={doPay} loading={pay.pending}>Pay now</Button>}
+          {['pending', 'payment_failed'].includes(b.status) && <Button icon={CreditCard} onClick={doPay} loading={pay.pending}>Pay now</Button>}
           {b.status === 'confirmed' && isFuture(b.slotStart) && <Button variant="secondary" icon={Plus} onClick={() => setAddOpen(true)}>Add coaching session</Button>}
           {cancellable && <Button variant="dangerOutline" icon={XCircle} onClick={() => setConfirmCancel(true)}>Cancel booking</Button>}
         </>}
@@ -137,8 +146,11 @@ export function BookingDetail() {
             <InfoRow label="Package">{b.packageName || b.package?.name}{b.package?.price ? ` (${formatMoney(b.package.price)})` : ''}</InfoRow>
             <InfoRow label="Type">{b.bookingType === 'GROUP' ? `Group of ${b.headcount}` : 'Single'}</InfoRow>
             <InfoRow label="Payment">{b.payment?.status ? <StatusBadge status={b.payment.status} /> : 'Not paid yet'}</InfoRow>
-            <InfoRow label="Order">{b.order ? `#${b.order.id} · ${b.order.status}` : '-'}</InfoRow>
+            <InfoRow label="Order">{b.order ? `#${b.order.id}` : '-'}</InfoRow>
+            {b.order && displayedAmount !== null && <InfoRow label={paid ? 'Amount paid' : 'Order total'}>{formatMoney(displayedAmount)}</InfoRow>}
+            {b.order?.needsManualRefund && <InfoRow label="Refund">Refund under review{b.order.refundNote ? <span className="block text-sm text-amber-800">{b.order.refundNote}</span> : null}</InfoRow>}
           </dl>
+          {amountMismatch && <p role="status" className="mt-3 text-sm text-amber-800">The payment amount, order total and order items do not match. The amount shown uses the recorded payment when one is available.</p>}
         </Card>
         <Card title="Coaching sessions">
           {sessions.length === 0 ? <p className="text-ink-500">No coaching sessions attached to this booking.</p> : (

@@ -314,9 +314,27 @@ function SummaryStep({ gym, pkg, draft, body, startsAt, endIso, onBack, onEditSl
 
   const pay = async () => {
     const result = await run(async () => {
-      const created = order || (await checkoutApi.create(body));
+      if (order) {
+        const init = await checkoutApi.initPayment(order.bookingId);
+        return { url: init.checkoutUrl };
+      }
+      const request = { ...body, expectedTotal: Number(quote.data.total) };
+      if (body.consultation) {
+        request.consultation = { assignmentToken: quote.data.consultationAssignmentToken };
+      }
+      let created;
+      try {
+        created = await checkoutApi.create(request);
+      } catch (err) {
+        if (err.code === 'QUOTE_CHANGED') {
+          quote.reload();
+          throw new Error('The price changed. Review the updated quote before paying.');
+        }
+        throw err;
+      }
       setOrder(created);
       if (created.requiresPayment === false) return { free: true };
+      if (created.checkoutUrl) return { url: created.checkoutUrl };
       const init = await checkoutApi.initPayment(created.bookingId);
       return { url: init.checkoutUrl };
     }, { silent: true });
