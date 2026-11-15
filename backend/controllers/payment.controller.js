@@ -84,9 +84,20 @@ const initializePaymentController = async (req, res) => {
       });
     }
 
+    if (
+      req.body?.returnToApp !== undefined &&
+      typeof req.body.returnToApp !== "boolean"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "returnToApp must be a boolean",
+      });
+    }
+
     const payment = await paymentService.initializePayment(
       bookingId,
       req.user.id,
+      { returnToApp: req.body?.returnToApp === true },
     );
 
     return res.status(201).json({

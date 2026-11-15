@@ -2,7 +2,7 @@
 
 **Purpose:** Coordinate mobile app, backend, and web work from the same description of the current system and the agreed future scope.
 
-**Last reviewed:** 2026-10-26  
+**Last reviewed:** 2026-11-15
 **Status:** Baseline captured; roadmap items are proposals until their decision records are completed.  
 **Maintainer:** Product/engineering team. The mobile app developer maintains this document with input from backend and web owners.
 
@@ -20,7 +20,7 @@
 |---|---|---|
 | Member mobile application | `Gym-App-and-Website/application` (this repo, branch `app/v2features`) | Expo / React Native member app |
 | Backend | `~/projects/gym-backend/backend` (separate repo, observed branch `backend`) | Express API, Prisma/PostgreSQL, JWT auth, payments, Socket.IO |
-| Web application | `~/projects/gym-web2/website` (observed branch `v2web`) | React / Vite portal for members, gym admins, providers, nutrition consultants, and staff |
+| Web application | `~/projects/gym-website/website` (observed branch `v2web`) | React / Vite portal for members, gym admins, providers, nutrition consultants, and staff |
 
 The `backend/` folder and `backend` branch inside the mobile repository are an older, reduced snapshot. Use `~/projects/gym-backend` as the backend implementation reference unless the team explicitly changes that source. Do not copy an API contract from the old snapshot without checking the expanded backend.
 
@@ -110,6 +110,13 @@ Copy this section for each feature before implementation. Keep the record in thi
 - **Implementation references:** backend PR, web PR, mobile PR, release:
 
 ## Change coordination checklist
+
+### Checkout consistency, duplicate reservations, and refund display
+
+- **Status:** Implemented locally across mobile, web, and backend; Render deployment verification pending
+- **Backend contract:** Reject overlapping pending, payment-failed, confirmed, or checked-in reservations by the same member at the same gym. Pending and payment-failed bookings hold capacity until backend expiry; retry cannot revive an expired booking. Membership coverage is limited to single-person bookings. A booking that already consumes a package cannot create or qualify as the source of a second entitlement. An order flagged for manual refund review cannot cover new bookings. Local expiry releases booking capacity but does not mark payment failed before Chapa verification; verified late success may confirm only a future booking that still passes availability checks, otherwise it is recorded as paid and flagged for manual refund review. Mobile may opt in with `returnToApp: true` on checkout/payment initialization; only then return to the registered `gym-mobile://booking/confirmation` URI with the tx reference. Web callers keep the configured HTTPS return target. Require `expectedTotal` on `POST /api/checkout`; return HTTP 409 `QUOTE_CHANGED` when the reviewed total is stale and HTTP 409 `DUPLICATE_BOOKING` for an overlapping reservation. If Chapa initialization fails after persistence, return booking/order IDs with `paymentInitializationPending: true` so the existing payment initialization endpoint can retry. Booking list/detail responses include order totals, refund-review fields, and order items. Unpaid cancellation expires pending gym, provider-package, and consultation entitlements without consuming provider sessions. A consultant selected at checkout remains eligible for that in-flight purchase if later deactivated. Payment verification returns the recorded amount and persisted refund-review flag. Permit members to cancel future `payment_failed` bookings. Refund review remains separate from payment status and never changes recorded amounts.
+- **Client coordination:** Mobile and web send the reviewed quote total, refresh/reconfirm after quote changes, retry payment on the saved booking, and display refund review separately from the actual paid amount.
+- **Acceptance:** No duplicate active overlap; payment-failed retries hold capacity only until expiry and cannot overbook; group bookings are not covered by a single-person entitlement; covered bookings cannot create new entitlements; expired payments are verified with Chapa before being marked failed; late payment never confirms a past slot; unpaid cancellation expires pending entitlements without consuming provider sessions; consultant deactivation cannot abort verification for an in-flight checkout; mobile quote-change errors trigger quote refresh; pending add-ons are scoped to one gym; pending/payment-failed booking details offer payment retry; mobile payment return can deep-link to the app; no silent price changes; no duplicate booking on retry; server-side cancellation of holds; and amount discrepancies surfaced without rewriting financial history. No migration.
 
 For any cross-project change:
 

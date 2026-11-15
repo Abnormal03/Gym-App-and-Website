@@ -158,6 +158,7 @@ const getMyBookings = async (userId) => {
       gym: true,
       package: true,
       payment: true,
+      order: { include: { items: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -173,6 +174,7 @@ const getBookingById = async (id, userId, role) => {
       gym: true,
       package: true,
       payment: true,
+      order: { include: { items: true } },
     },
   });
 
@@ -609,8 +611,8 @@ const cancelMemberBooking = async (id, userId) => {
         throw new Error("Bookings with a check-in cannot be cancelled");
       }
 
-      if (!["pending", "confirmed"].includes(booking.status)) {
-        throw new Error("Only pending or confirmed bookings can be cancelled");
+      if (!["pending", "payment_failed", "confirmed"].includes(booking.status)) {
+        throw new Error("Only pending, payment-failed, or confirmed bookings can be cancelled");
       }
 
       if (new Date(booking.slotStart) <= new Date()) {
@@ -618,6 +620,9 @@ const cancelMemberBooking = async (id, userId) => {
       }
 
       const now = new Date();
+      const isUnpaidBooking =
+        ["pending", "payment_failed"].includes(booking.status) &&
+        booking.payment?.status !== "success";
 
       for (const session of booking.sessions) {
         if (!["HELD", "SCHEDULED"].includes(session.status)) {
@@ -628,8 +633,9 @@ const cancelMemberBooking = async (id, userId) => {
           (new Date(session.startsAt).getTime() - now.getTime()) /
           (1000 * 60 * 60);
 
-        // Preserve the original session-credit policy.
-        if (hoursUntilSession < cancelHours) {
+        // Unpaid cancellations must not consume a purchased session credit.
+        // Preserve the existing late-cancellation policy for paid bookings.
+        if (!isUnpaidBooking && hoursUntilSession < cancelHours) {
           await tx.providerPackagePurchase.update({
             where: { id: session.purchaseId },
             data: {
@@ -644,6 +650,32 @@ const cancelMemberBooking = async (id, userId) => {
             status: "CANCELLED",
             cancelledAt: now,
           },
+        });
+      }
+
+      if (isUnpaidBooking) {
+        await tx.memberPackage.updateMany({
+          where: {
+            purchaseBookingId: booking.id,
+            status: "PENDING",
+          },
+          data: { status: "EXPIRED" },
+        });
+      }
+      if (isUnpaidBooking && booking.order?.id) {
+        await tx.providerPackagePurchase.updateMany({
+          where: {
+            orderItem: { is: { orderId: booking.order.id } },
+            status: "PENDING",
+          },
+          data: { status: "EXPIRED" },
+        });
+        await tx.consultationAccess.updateMany({
+          where: {
+            orderItem: { is: { orderId: booking.order.id } },
+            status: "PENDING",
+          },
+          data: { status: "EXPIRED" },
         });
       }
 

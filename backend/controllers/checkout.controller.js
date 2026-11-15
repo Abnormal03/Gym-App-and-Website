@@ -22,10 +22,13 @@ const quoteCheckoutController = async (req, res) => {
       "SESSION_OUTSIDE_BOOKING",
       "NO_CONSULTANT_AVAILABLE",
       "OUTSIDE_GYM_OPENING_HOURS",
+      "DUPLICATE_BOOKING",
     ]);
 
-    return res.status(400).json({
+    const conflict = error.message === "DUPLICATE_BOOKING";
+    return res.status(conflict ? 409 : 400).json({
       success: false,
+      ...(conflict ? { code: error.message } : {}),
       message: clientErrorCodes.has(error.message)
         ? error.message
         : clientMessage(error, "Failed to calculate the price"),
@@ -44,8 +47,10 @@ const createCheckoutController = async (req, res) => {
   } catch (error) {
     console.error("Create checkout error:", error);
 
-    return res.status(400).json({
+    const conflict = ["DUPLICATE_BOOKING", "QUOTE_CHANGED"].includes(error.message);
+    return res.status(conflict ? 409 : 400).json({
       success: false,
+      ...(conflict ? { code: error.message } : {}),
       message: clientMessage(
         error,
         "Payment could not be initialized. Please retry.",

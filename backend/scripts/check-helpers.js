@@ -47,7 +47,7 @@ assert.equal(
 );
 assert.equal(
   isWithinGymOpeningHours(
-    parseUtcInstant("2026-10-16T04:00:00"),
+    parseUtcInstant("2026-10-16T02:00:00"),
     parseUtcInstant("2026-10-16T05:00:00"),
     "6:00",
     "22:00",
@@ -58,7 +58,7 @@ assert.equal(
   isWithinGymOpeningHours(
     utcSlotRange.start,
     utcSlotRange.end,
-    "11:00",
+    "14:00",
     "22:00",
   ),
   false,

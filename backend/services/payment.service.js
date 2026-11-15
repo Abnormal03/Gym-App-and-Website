@@ -202,17 +202,29 @@ const recordInitializationFailure = async ({
 /* -------------------------------------------------------------------------- */
 /* Chapa payment initialization                                               */
 /* -------------------------------------------------------------------------- */
-const initializePayment = async (bookingId, userId) => {
+const initializePayment = async (bookingId, userId, options = {}) => {
   if (!process.env.CHAPA_SECRET_KEY) {
     throw new Error("CHAPA_SECRET_KEY is missing");
   }
 
-  if (!process.env.CHAPA_CALLBACK_URL || !process.env.CHAPA_RETURN_URL) {
+  if (
+    !process.env.CHAPA_CALLBACK_URL ||
+    (!options.returnToApp && !process.env.CHAPA_RETURN_URL)
+  ) {
     throw new Error("Chapa callback and return URLs must be configured");
   }
 
   bookingId = validateId(bookingId, "booking ID");
   userId = validateId(userId, "user ID");
+
+  if (
+    options.returnToApp !== undefined &&
+    typeof options.returnToApp !== "boolean"
+  ) {
+    throw new Error("Invalid payment return preference");
+  }
+
+  await expireStale(prisma, { userId });
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -263,7 +275,9 @@ const initializePayment = async (bookingId, userId) => {
 
   const txRef = `booking-${bookingId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
-  const returnUrl = new URL(process.env.CHAPA_RETURN_URL);
+  const returnUrl = options.returnToApp
+    ? new URL("gym-mobile://booking/confirmation")
+    : new URL(process.env.CHAPA_RETURN_URL);
   returnUrl.searchParams.set("tx_ref", txRef);
 
   let chapaResponse;
@@ -442,17 +456,33 @@ const activateMemberPackage = async (tx, order, paidAt) => {
     },
   });
 
+  const booking = await tx.booking.findUnique({
+    where: { id: order.bookingId },
+    select: { memberPackageId: true, package: true },
+  });
+
+  if (!booking?.package) return;
+
+  if (booking.memberPackageId) {
+    // A covered booking consumes its linked package; any separate entitlement
+    // previously minted from that booking is invalid and must not stay active.
+    if (
+      memberPackage &&
+      memberPackage.id !== booking.memberPackageId &&
+      memberPackage.status === "ACTIVE"
+    ) {
+      await tx.memberPackage.update({
+        where: { id: memberPackage.id },
+        data: { status: "EXPIRED" },
+      });
+    }
+    return;
+  }
+
   if (!memberPackage) {
     // Older or in-flight orders may predate checkout creating the pending
     // entitlement. Create it at payment confirmation so the purchase is not
     // silently lost and the member appears in their gym's active-member list.
-    const booking = await tx.booking.findUnique({
-      where: { id: order.bookingId },
-      include: { package: true },
-    });
-
-    if (!booking?.package) return;
-
     await tx.memberPackage.create({
       data: {
         userId: order.userId,
@@ -596,7 +626,10 @@ const selectConsultant = async (tx, requestedConsultantId) => {
   const consultants = await tx.provider.findMany({
     where: {
       type: "NUTRITION_CONSULTANT",
-      isActive: true,
+      // A consultant explicitly selected and persisted at checkout remains
+      // valid for that in-flight purchase if later deactivated. New automatic
+      // assignments still use active consultants only.
+      ...(!requestedConsultantId ? { isActive: true } : {}),
       ...(requestedConsultantId ? { id: requestedConsultantId } : {}),
     },
     select: {
@@ -748,6 +781,9 @@ const lockProvider = async (tx, providerId) => {
 };
 
 const canHonorLatePayment = async (tx, booking) => {
+  const now = new Date();
+  if (booking.slotStart <= now || booking.slotEnd <= now) return false;
+
   await lockGym(tx, booking.gymId);
 
   const gym = await tx.gym.findUnique({
@@ -993,16 +1029,8 @@ const processPaymentResult = async (txRef) => {
     throw new Error("Payment not found");
   }
 
-  // A locally failed payment does not need another Chapa verification.
-  if (payment.status === "failed") {
-    return {
-      localStatus: payment.status,
-      chapaStatus: null,
-      bookingStatus: payment.booking?.status ?? null,
-      qrCode: payment.booking?.qrCode ?? null,
-      expired: payment.booking?.status === "expired",
-    };
-  }
+  // Local failure/expiry is not proof of the gateway outcome. Always verify
+  // with Chapa so a late success can be honored or sent for refund review.
 
   const verification = await verifyChapaTransaction(txRef);
   const chapaStatus = getChapaStatus(verification);
@@ -1275,7 +1303,11 @@ const checkPaymentStatus = async (txRef, userId) => {
       chapaTxRef: txRef,
     },
     include: {
-      booking: true,
+      booking: {
+        include: {
+          order: { select: { needsManualRefund: true } },
+        },
+      },
     },
   });
 
@@ -1294,23 +1326,14 @@ const checkPaymentStatus = async (txRef, userId) => {
   if (payment.status === "success") {
     return {
       localStatus: "success",
+      paymentAmount: payment.amount.toString(),
       chapaStatus: null,
       bookingStatus: payment.booking?.status ?? null,
       qrCode: payment.booking?.qrCode ?? null,
       expired: payment.booking?.status === "expired",
+      ...(payment.booking?.order?.needsManualRefund ? { needsManualRefund: true } : {}),
       verificationNote:
         "Local payment is marked successful; current Chapa status was not checked.",
-    };
-  }
-
-  // A failed payment should not be re-verified with Chapa.
-  if (payment.status === "failed") {
-    return {
-      localStatus: "failed",
-      chapaStatus: null,
-      bookingStatus: payment.booking?.status ?? null,
-      qrCode: payment.booking?.qrCode ?? null,
-      expired: payment.booking?.status === "expired",
     };
   }
 
@@ -1331,23 +1354,8 @@ const checkPaymentStatus = async (txRef, userId) => {
             gymId: payment.booking.gymId,
           });
 
-          const freshBooking = await tx.booking.findUnique({
-            where: {
-              id: payment.bookingId,
-            },
-          });
-
-          if (freshBooking?.status === "expired") {
-            await tx.payment.updateMany({
-              where: {
-                id: payment.id,
-                status: "pending",
-              },
-              data: {
-                status: "failed",
-              },
-            });
-          }
+          // Expiry releases the booking hold, but it does not establish the
+          // payment provider's outcome. Keep expired payments verifiable.
         },
         {
           maxWait: 10000,
@@ -1364,7 +1372,11 @@ const checkPaymentStatus = async (txRef, userId) => {
       chapaTxRef: txRef,
     },
     include: {
-      booking: true,
+      booking: {
+        include: {
+          order: { select: { needsManualRefund: true } },
+        },
+      },
     },
   });
 
@@ -1372,32 +1384,23 @@ const checkPaymentStatus = async (txRef, userId) => {
     throw new Error("Payment not found");
   }
 
-  // Expiry handling may have changed the payment status.
-  // Report the locally stored status without inventing a Chapa result.
+  // Expiry handling can change pending to expired, but the gateway remains
+  // authoritative for whether funds were captured.
   if (payment.status === "success") {
     return {
       localStatus: "success",
+      paymentAmount: payment.amount.toString(),
       chapaStatus: null,
       bookingStatus: payment.booking?.status ?? null,
       qrCode: payment.booking?.qrCode ?? null,
       expired: payment.booking?.status === "expired",
+      ...(payment.booking?.order?.needsManualRefund ? { needsManualRefund: true } : {}),
       verificationNote:
         "Local payment is marked successful; current Chapa status was not checked.",
     };
   }
 
-  if (payment.status === "failed") {
-    return {
-      localStatus: "failed",
-      chapaStatus: null,
-      bookingStatus: payment.booking?.status ?? null,
-      qrCode: payment.booking?.qrCode ?? null,
-      expired: payment.booking?.status === "expired",
-    };
-  }
-
-  // Verify pending payments with Chapa.
-  // Verify pending payments with Chapa.
+  // Verify the payment with Chapa, including after local expiry.
   let result;
 
   try {
@@ -1427,6 +1430,7 @@ const checkPaymentStatus = async (txRef, userId) => {
 
   return {
     localStatus: result.payment?.status ?? freshPayment.status,
+    paymentAmount: freshPayment.amount.toString(),
     chapaStatus: result.chapaStatus,
     bookingStatus: freshPayment.booking?.status ?? null,
     qrCode: freshPayment.booking?.qrCode ?? null,

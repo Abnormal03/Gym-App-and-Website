@@ -10,7 +10,9 @@ const {
 const DEFAULT_ORDER_EXPIRY_MINUTES = 30;
 const SESSION_START_INTERVAL_MINUTES = 30;
 
-const ACTIVE_CAPACITY_STATUSES = ["pending", "confirmed", "checked_in"];
+// A failed payment can be retried while its booking hold is still valid, so
+// it must continue consuming capacity until expireStale releases it.
+const ACTIVE_CAPACITY_STATUSES = ["pending", "payment_failed", "confirmed", "checked_in"];
 
 const ACTIVE_SESSION_STATUSES = ["HELD", "SCHEDULED"];
 
@@ -31,7 +33,7 @@ const expireStale = async (tx, opts = {}) => {
   const expiryCutoff = new Date(now.getTime() - expiryMinutes * 60_000);
 
   const where = {
-    status: "pending",
+    status: { in: ["pending", "payment_failed"] },
     order: {
       is: {
         createdAt: { lt: expiryCutoff },
@@ -61,7 +63,7 @@ const expireStale = async (tx, opts = {}) => {
   const expiredBookings = await tx.booking.updateManyAndReturn({
     where: {
       id: { in: bookingIds },
-      status: "pending",
+      status: { in: ["pending", "payment_failed"] },
     },
     data: { status: "expired" },
     select: { id: true },
@@ -78,7 +80,7 @@ const expireStale = async (tx, opts = {}) => {
   await tx.payment.updateMany({
     where: {
       bookingId: { in: expiredBookingIds },
-      status: "pending",
+      status: { in: ["pending", "failed"] },
     },
     data: { status: "expired" },
   });

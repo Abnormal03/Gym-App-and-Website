@@ -205,10 +205,16 @@ const validateInput = (request) => {
     durationMinutes,
     provider,
     consultation,
+    expectedTotal,
+    returnToApp,
   } = request;
 
   if (!startsAt) {
     throw new Error("Booking start time is required");
+  }
+
+  if (returnToApp !== undefined && typeof returnToApp !== "boolean") {
+    throw new Error("Invalid payment return preference");
   }
 
   const start = parseUtcInstant(startsAt);
@@ -227,10 +233,17 @@ const validateInput = (request) => {
     start,
     provider: provider ?? null,
     consultation: consultation == null ? null : { ...consultation },
+    expectedTotal: expectedTotal == null ? null : Number(expectedTotal),
+    returnToApp: returnToApp === true,
   };
 
   if (!["SINGLE", "GROUP"].includes(input.bookingType)) {
     throw new Error("Invalid booking type");
+  }
+
+  if (input.expectedTotal !== null &&
+      (!Number.isFinite(input.expectedTotal) || input.expectedTotal < 0)) {
+    throw new Error("Invalid expected checkout total");
   }
 
   if (
@@ -322,6 +335,11 @@ const validateInput = (request) => {
 // --------------------------------------------------
 
 const findCoveredMemberPackage = async (tx, input, gymPackage) => {
+  // An individual member package cannot pay for multiple group attendees.
+  if (input.bookingType !== "SINGLE" || input.headcount !== 1) {
+    return null;
+  }
+
   // Daily packages must always be paid for.
   if (gymPackage.type === "daily") {
     return null;
@@ -342,8 +360,9 @@ const findCoveredMemberPackage = async (tx, input, gymPackage) => {
       purchaseBooking: {
         select: {
           status: true,
+          memberPackageId: true,
           payment: { select: { status: true } },
-          order: { select: { totalAmount: true } },
+          order: { select: { totalAmount: true, needsManualRefund: true } },
         },
       },
     },
@@ -366,8 +385,10 @@ const findCoveredMemberPackage = async (tx, input, gymPackage) => {
       purchaseBooking &&
       ["confirmed", "checked_in"].includes(purchaseBooking.status);
     const sourcePurchaseWasPaid =
-      purchaseBooking?.payment?.status === "success" ||
-      Number(purchaseBooking?.order?.totalAmount) === 0;
+      purchaseBooking?.memberPackageId == null &&
+      purchaseBooking?.order?.needsManualRefund !== true &&
+      (purchaseBooking?.payment?.status === "success" ||
+        Number(purchaseBooking?.order?.totalAmount) === 0);
     if (!sourceBookingIsValid || !sourcePurchaseWasPaid) {
       continue;
     }
@@ -551,6 +572,18 @@ const selectConsultantForCheckout = async (tx, assignedConsultantId = null) => {
 // --------------------------------------------------
 
 const buildQuote = async (tx, input) => {
+  const existing = await tx.booking.findFirst({
+    where: {
+      userId: input.userId,
+      gymId: input.gymId,
+      status: { in: ["pending", "payment_failed", "confirmed", "checked_in"] },
+      slotStart: { lt: input.end },
+      slotEnd: { gt: input.start },
+    },
+    select: { id: true },
+  });
+  if (existing) throw new Error("DUPLICATE_BOOKING");
+
   const gym = await tx.gym.findUnique({
     where: {
       id: input.gymId,
@@ -666,6 +699,7 @@ const quoteCheckout = async (request) => {
 
   return prisma.$transaction(
     async (tx) => {
+      await expireStale(tx, { userId: input.userId, gymId: input.gymId });
       const quote = await buildQuote(tx, input);
 
       return {
@@ -702,6 +736,7 @@ const quoteCheckout = async (request) => {
 
 const createCheckout = async (request) => {
   const input = validateInput(request);
+  if (input.expectedTotal === null) throw new Error("Expected checkout total is required");
 
   if (input.consultation !== null) {
     const assignment = verifyConsultationAssignment(
@@ -734,6 +769,10 @@ const createCheckout = async (request) => {
 
       // Revalidate everything inside the transaction.
       const quote = await buildQuote(tx, input);
+
+      if (Math.round(quote.total * 100) !== Math.round(input.expectedTotal * 100)) {
+        throw new Error("QUOTE_CHANGED");
+      }
 
       const capacity = Number(quote.gym.capacity);
 
@@ -919,14 +958,24 @@ const createCheckout = async (request) => {
   // transaction has committed.
   let payment;
   try {
-    payment = await initializePayment(response.bookingId, input.userId);
+    payment = await initializePayment(response.bookingId, input.userId, {
+      returnToApp: input.returnToApp,
+    });
   } catch (error) {
     // The order and booking are already saved. Keep the full error in the server log.
     console.error(
       `Checkout: order ${response.orderId} (booking ${response.bookingId}) was created but payment initialization failed:`,
       error,
     );
-    throw error;
+    return {
+      ...response,
+      status: "PAYMENT_INITIALIZATION_PENDING",
+      checkoutUrl: null,
+      txRef: null,
+      requiresPayment: true,
+      paymentInitializationPending: true,
+      paymentInitializationMessage: "Your booking was saved. Payment setup needs a retry.",
+    };
   }
 
   return {
@@ -937,22 +986,6 @@ const createCheckout = async (request) => {
     requiresPayment: true,
   };
 
-  return {
-    orderId: order.id,
-    bookingId: booking.id,
-
-    // Return the actual times saved in the database.
-    slotStart: booking.slotStart,
-    slotEnd: booking.slotEnd,
-
-    totalAmount: order.totalAmount.toString(),
-    currency: "ETB",
-    status: requiresPayment ? "PENDING" : "CONFIRMED",
-    expiresAt,
-    items: order.items,
-    total: quote.total,
-    requiresPayment,
-  };
 };
 
 module.exports = {
