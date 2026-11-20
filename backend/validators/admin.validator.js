@@ -130,3 +130,14 @@ module.exports = {
     createProvider, updateProvider, listProvidersQuery,
     createGymPackage, updateGymPackage, listGymPackagesQuery,
 };
+
+const adminProfileUpdate = z.object({ name }).strict();
+function validateAdminProfileUpdate(req, res, next) {
+    const parsed = adminProfileUpdate.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid admin profile', errors: parsed.error.flatten() });
+    }
+    req.body = parsed.data;
+    next();
+}
+module.exports.validateAdminProfileUpdate = validateAdminProfileUpdate;

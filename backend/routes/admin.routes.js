@@ -1,4 +1,5 @@
 const express = require("express");
+const { validateAdminProfileUpdate } = require("../validators/admin.validator.js");
 
 const {
   getDashboard,
@@ -6,6 +7,7 @@ const {
   getUserById,
   deleteUser,
   getAdminProfile,
+  updateAdminProfile,
 
   getPendingTrainers,
   getTrainerForVerification,
@@ -37,6 +39,7 @@ router.get("/users/:id", protect, adminOnly, getUserById);
 router.delete("/users/:id", protect, adminOnly, deleteUser);
 
 router.get("/profile", protect, adminOnly, getAdminProfile);
+router.patch("/profile", protect, adminOnly, validateAdminProfileUpdate, updateAdminProfile);
 
 const staff = require('../controllers/adminStaff.controller');
 const prov = require('../controllers/adminProvider.controller');

@@ -1,3 +1,4 @@
+const prisma = require("../config/prisma");
 const {
   getDashboardData,
   getAllUsers: getAllUsersService,
@@ -157,6 +158,22 @@ const deleteUser = async (req, res) => {
       success: false,
       message: "Failed to delete user",
     });
+  }
+};
+
+const updateAdminProfile = async (req, res) => {
+  try {
+    const adminId = Number(req.auth.adminId ?? req.auth.id);
+    const name = req.body.name.trim();
+    const admin = await prisma.gymAdmin.update({
+      where: { id: adminId },
+      data: { name },
+      select: { id: true, name: true, email: true, createdAt: true },
+    });
+    res.status(200).json({ success: true, admin });
+  } catch (error) {
+    console.log("Update Admin Profile Error:", error.message);
+    res.status(500).json({ success: false, message: "Failed to update admin profile" });
   }
 };
 
@@ -379,6 +396,7 @@ module.exports = {
   deleteUser,
 
   getAdminProfile,
+  updateAdminProfile,
 
   getPendingTrainers,
   getTrainerForVerification,
