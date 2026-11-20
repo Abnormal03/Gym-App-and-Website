@@ -14,7 +14,7 @@ const PROFILE_PATH = {
   NUTRITION_CONSULTANT: '/nutrition/profile',
   GYM_STAFF: '/staff/account',
 };
-function NavList({ items, onNavigate }) {
+function NavList({ items, onNavigate, adminMode = false }) {
   return (
     <nav aria-label="Main" className="space-y-0.5 px-3">
       {items.map(({ to, label, icon: Icon, end }) => (
@@ -24,7 +24,7 @@ function NavList({ items, onNavigate }) {
           end={end}
           onClick={onNavigate}
           className={({ isActive }) =>
-`flex items-center gap-3 rounded-md px-3 py-2 text-[15px] transition-colors ${isActive ? 'bg-black/10 text-black/100 shadow-[inset_3px_0_0_#000]' : 'text-black hover:bg-white/10'}`          }
+`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors ${adminMode ? (isActive ? 'bg-brand-50 font-semibold text-brand' : 'text-ink-600 hover:bg-ink-50 hover:text-ink') : (isActive ? 'bg-brand-50 font-semibold text-brand' : 'text-ink-600 hover:bg-ink-50 hover:text-ink')}`          }
         >
           <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
           {label}
@@ -48,11 +48,12 @@ export default function AppShell({ nav, headerExtra, portal }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
 
+  const adminMode = role === 'GYM_ADMIN';
   const sidebar = (onNavigate) => (
-    <div className="flex h-full flex-col bg-[#2E68F4] py-5">
-      <div className="px-6 pb-6"><Logo light /></div>
-      <p className="px-6 pb-2 text-sm text-black">{portal || ROLE_LABEL[role]}</p>
-      <div className="flex-1 overflow-y-auto pb-4"><NavList items={nav} onNavigate={onNavigate} /></div>
+    <div className="flex h-full flex-col border-r border-ink-200 bg-white py-5">
+      <div className="px-6 pb-7"><Logo /></div>
+      <p className="px-6 pb-3 text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">{portal || ROLE_LABEL[role]}</p>
+      <div className="flex-1 overflow-y-auto pb-4"><NavList items={nav} onNavigate={onNavigate} adminMode={adminMode} /></div>
     </div>
   );
 

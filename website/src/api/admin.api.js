@@ -7,6 +7,9 @@ dashboard: async () =>
 profile: async () =>
 (await api.get('/api/admin/profile')).admin,
 
+updateProfile: async (body) =>
+(await api.patch('/api/admin/profile', body)).admin,
+
 // Load gyms belonging to the authenticated admin.
 gyms: async () => {
 const result = await api.get('/api/admin/gyms');
