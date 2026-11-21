@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const prisma = require("../config/prisma.js");
 const {
   checkExist,
   createUser,
@@ -56,6 +57,21 @@ const register = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+// POST /api/auth/super-admin/login — super-admins are provisioned out of band.
+const superAdminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ success: false, message: "Email and password are required" });
+    const account = await prisma.superAdmin.findUnique({ where: { email: String(email).trim().toLowerCase() } });
+    const isMatch = account && await bcrypt.compare(password, account.password);
+    if (!account || !isMatch || !account.isActive) return res.status(401).json({ success: false, message: "Invalid email or password" });
+    const token = jwt.sign({ role: "SUPER_ADMIN", id: account.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "7d" });
+    return res.json({ success: true, user: { id: account.id, name: account.name, email: account.email, role: "SUPER_ADMIN" }, token });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -168,6 +184,7 @@ const me = asyncHandler(async (req, res) => ok(res, await service.getMe(req.auth
 
 module.exports = {
   adminLogin,
+  superAdminLogin,
   register,
   login,
   providerLogin,

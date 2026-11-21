@@ -130,6 +130,12 @@ async function loadStaff(id) {
   };
 }
 
+async function loadSuperAdmin(id) {
+  const actor = await prisma.superAdmin.findUnique({ where: { id }, select: { id: true, isActive: true } });
+  if (!actor || !actor.isActive) throw new AppError('UNAUTHORIZED', 'Super-admin account is not active');
+  return { role: 'SUPER_ADMIN', id: actor.id, superAdminId: actor.id };
+}
+
 function makeAuthenticate({ allowPasswordChange = false } = {}) {
   return async function authenticate(req, _res, next) {
     try {
@@ -146,7 +152,8 @@ function makeAuthenticate({ allowPasswordChange = false } = {}) {
       }
 
       let auth;
-      if (PROVIDER_ROLES.includes(payload.role))
+      if (payload.role === 'SUPER_ADMIN') auth = await loadSuperAdmin(Number(payload.id));
+      else if (PROVIDER_ROLES.includes(payload.role))
         auth = await loadProvider(Number(payload.id));
       else if (payload.role === "GYM_STAFF")
         auth = await loadStaff(Number(payload.id));

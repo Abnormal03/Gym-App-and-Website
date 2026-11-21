@@ -9,7 +9,8 @@
     "dev": "nodemon server.js",
     "seed:v2": "tsx prisma/seed-v2.js",
     "seed:v2:core": "tsx prisma/seed-v2.js --core-only",
-    "check:helpers": "tsx scripts/check-helpers.js"
+    "check:helpers": "tsx scripts/check-helpers.js",
+    "provision:super-admin": "node scripts/provision-super-admin.js"
   },
   "keywords": [],
   "author": "",

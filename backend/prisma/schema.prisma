@@ -54,11 +54,45 @@ model GymAdmin {
   refunds         Payment[]       @relation("PaymentRefundedBy")
 }
 
+
+model SuperAdmin {
+  id        Int                @id @default(autoincrement())
+  name      String
+  email     String             @unique
+  password  String
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  decisions GymApprovalAudit[]
+}
+
+model GymApprovalAudit {
+  id            Int           @id @default(autoincrement())
+  gymId         Int
+  superAdminId  Int
+  decision      GymApprovalStatus
+  reason        String?
+  createdAt     DateTime      @default(now())
+  gym           Gym           @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  superAdmin    SuperAdmin    @relation(fields: [superAdminId], references: [id])
+
+  @@index([gymId, createdAt])
+  @@index([superAdminId, createdAt])
+}
+
+enum GymApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Gym {
   id             Int             @id @default(autoincrement())
   adminId        Int
   name           String
   address        String
+  approvalStatus GymApprovalStatus @default(APPROVED)
+  approvalAudits GymApprovalAudit[]
   latitude       Float?
   longitude      Float?
   openingTime    String

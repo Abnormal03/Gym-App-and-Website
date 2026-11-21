@@ -1,0 +1,10 @@
+const express = require('express');
+const { requireRole } = require('../middleware/auth.middleware');
+const controller = require('../controllers/superAdmin.controller');
+const router = express.Router();
+const guard = requireRole('SUPER_ADMIN');
+router.get('/profile', ...guard, controller.profile);
+router.get('/registrations', ...guard, controller.list);
+router.post('/registrations/:gymId/approve', ...guard, controller.approve);
+router.post('/registrations/:gymId/reject', ...guard, controller.reject);
+module.exports = router;

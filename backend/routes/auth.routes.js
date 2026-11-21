@@ -1,5 +1,5 @@
 const express = require('express');
-const { register, login, adminLogin, providerLogin, staffLogin, changePassword, me } = require('../controllers/auth.controller.js');
+const { register, login, adminLogin, superAdminLogin, providerLogin, staffLogin, changePassword, me } = require('../controllers/auth.controller.js');
 const { authenticateAllowingPasswordChange } = require('../middleware/gym.middleware.js');
 
 const router = express.Router();
@@ -7,6 +7,7 @@ const router = express.Router();
 router.post('/register', register);
 router.post('/login', login);
 router.post('/admin/login', adminLogin);
+router.post('/super-admin/login', superAdminLogin);
 
 
 //version 2

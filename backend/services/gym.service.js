@@ -31,6 +31,7 @@ const getGymsService = async () => {
   return prisma.gym.findMany({
     where: {
       isActive: true,
+      approvalStatus: "APPROVED",
     },
     select: {
       id: true,
@@ -57,6 +58,7 @@ const gymDetails = async (id) => {
     where: {
       id: gymId,
       isActive: true,
+      approvalStatus: "APPROVED",
     },
     include: {
       packages: {
