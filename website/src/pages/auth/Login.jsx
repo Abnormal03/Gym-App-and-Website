@@ -11,12 +11,14 @@ import { ROLE_HOME } from '../../config/roles';
 
 const KINDS = [
   { value: 'admin', label: 'Gym admin' },
+  { value: 'superAdmin', label: 'Platform admin' },
   { value: 'provider', label: 'Coach' },
   { value: 'staff', label: 'Gym staff' },
 ];
 const KIND_HINT = {
   member: 'Book gyms, coaches and nutrition plans.',
   admin: 'Manage your gyms, packages, bookings and team.',
+  superAdmin: 'Review gym registrations across the platform.',
   provider: 'Trainers, physiotherapists and nutrition consultants.',
   staff: 'Front-desk accounts created by a gym admin.',
 };
@@ -107,7 +109,7 @@ export default function Login() {
                 </button>
               </div>
               {error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error.message}</p>}
-              <div role="radiogroup" aria-label="Account type" className="mt-5 grid grid-cols-2 gap-1 rounded-lg bg-ink-100 p-1 sm:grid-cols-4">
+              <div role="radiogroup" aria-label="Account type" className="mt-5 grid grid-cols-2 gap-1 rounded-lg bg-ink-100 p-1">
                 {KINDS.map((k) => (
                   <button key={k.value} type="button" role="radio" aria-checked={kind === k.value} onClick={() => setKind(k.value)} className={`rounded-md px-2 py-1.5 text-sm font-medium ${kind === k.value ? 'bg-white shadow-sm' : 'text-ink-500 hover:text-ink'}`}>
                     {k.label}

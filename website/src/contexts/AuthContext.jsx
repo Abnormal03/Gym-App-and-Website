@@ -10,6 +10,7 @@ const AuthContext = createContext(null);
 function parseLogin(kind, res) {
   if (kind === 'member') return { token: res.token, role: 'MEMBER', user: res.user, mustChangePassword: false };
   if (kind === 'admin') return { token: res.token, role: 'GYM_ADMIN', user: res.admin, mustChangePassword: false };
+  if (kind === 'superAdmin') return { token: res.token, role: 'SUPER_ADMIN', user: res.user, mustChangePassword: false };
   // provider + staff: V2 envelope already unwrapped to { token, mustChangePassword, user }
   return {
     token: res.token,
@@ -82,7 +83,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(
     async (kind, credentials) => {
-      const call = { member: authApi.memberLogin, admin: authApi.adminLogin, provider: authApi.providerLogin, staff: authApi.staffLogin }[kind];
+      const call = { member: authApi.memberLogin, admin: authApi.adminLogin, superAdmin: authApi.superAdminLogin, provider: authApi.providerLogin, staff: authApi.staffLogin }[kind];
       const parsed = parseLogin(kind, await call(credentials));
       if (!parsed.token) throw new Error('The server did not return a token.');
       setSessionExpired(false);

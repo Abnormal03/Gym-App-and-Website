@@ -8,6 +8,7 @@ export const authApi = {
   register: (body) => api.post('/api/auth/register', body, open),
   // V1 envelope: { success, admin, token }
   adminLogin: (body) => api.post('/api/auth/admin/login', body, open),
+  superAdminLogin: (body) => api.post('/api/auth/super-admin/login', body, open),
   // V2 envelope -> { token, mustChangePassword, user }
   providerLogin: (body) => api.post('/api/auth/provider/login', body, open),
   staffLogin: (body) => api.post('/api/auth/staff/login', body, open),

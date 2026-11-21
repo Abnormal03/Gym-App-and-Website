@@ -9,6 +9,7 @@ import { Avatar } from '../common/Layout';
 const PROFILE_PATH = {
   MEMBER: '/app/profile',
   GYM_ADMIN: '/admin/profile',
+  SUPER_ADMIN: '/platform/profile',
   TRAINER: '/trainer/profile',
   PHYSIOTHERAPIST: '/physio/profile',
   NUTRITION_CONSULTANT: '/nutrition/profile',

@@ -34,6 +34,9 @@ import AdminStaff from './pages/admin/Staff';
 import AdminPayouts from './pages/admin/Payouts';
 import AdminLeaderboard from './pages/admin/Leaderboard';
 import AdminProfile from './pages/admin/Profile';
+import SuperAdminRegistrations from './pages/admin/SuperAdminRegistrations';
+import SuperAdminProfile from './pages/admin/SuperAdminProfile';
+import { SUPER_ADMIN_NAV } from './config/navigation';
 
 import ProviderDashboard from './pages/provider/Dashboard';
 import ProviderProfile from './pages/provider/Profile';
@@ -120,6 +123,15 @@ export default function App() {
             <Route path="payouts" element={<AdminPayouts />} />
             <Route path="leaderboard" element={<AdminLeaderboard />} />
             <Route path="profile" element={<AdminProfile />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Route>
+
+
+        <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} />}>
+          <Route path="platform" element={<AppShell nav={SUPER_ADMIN_NAV} portal="Platform administration" />}>
+            <Route index element={<SuperAdminRegistrations />} />
+            <Route path="profile" element={<SuperAdminProfile />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Route>

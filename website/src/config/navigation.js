@@ -1,6 +1,6 @@
 import {
   Apple, Bot, Building2, CalendarCheck, CalendarClock, ClipboardList, Dumbbell, Flame, HeartPulse, KeyRound, LayoutDashboard,
-  MessageSquare, Package, ScanLine,Star, Trophy, UserCog, UserRound, Users, Wallet,
+  MessageSquare, Package, ScanLine,Star, Trophy, UserCog, UserRound, Users, Wallet, ShieldCheck,
 } from 'lucide-react';
 
 export const MEMBER_NAV = [
@@ -56,3 +56,8 @@ export const NUTRITION_NAV = [
      { to: '/staff/checkin', label: 'Check-in', icon: ScanLine },
      { to: '/staff/account', label: 'Password', icon: KeyRound },
    ];
+
+export const SUPER_ADMIN_NAV = [
+  { to: '/platform', label: 'Gym registrations', icon: Building2, end: true },
+  { to: '/platform/profile', label: 'Profile', icon: UserRound },
+];
